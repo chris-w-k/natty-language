@@ -23,14 +23,29 @@ const MODEL       = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const TTS_MODEL   = process.env.TTS_MODEL || 'gemini-2.5-flash-preview-tts';
 /* One prebuilt voice per speaker. Swap freely — the names are Gemini's.
    If a name is wrong the call fails and the client falls back to the
-   browser's own synthesis, so a bad value is never fatal. */
+   browser's own synthesis, so a bad value is never fatal.
+
+   Axel gets Zubenelgenubi: that is the voice jailbreak-camera uses for its
+   teenage punk, so he already sounds like the character Chris drew. The
+   others are picked to sit away from him — a door you have to get past, a
+   bar you have to order at, and the child's own echo. */
 const VOICES = {
-  axel:      process.env.VOICE_AXEL      || 'Puck',
+  axel:      process.env.VOICE_AXEL      || 'Zubenelgenubi',
   bouncer:   process.env.VOICE_BOUNCER   || 'Charon',
   bartender: process.env.VOICE_BARTENDER || 'Aoede',
-  learner:   process.env.VOICE_LEARNER   || 'Zubenelgenubi',
+  learner:   process.env.VOICE_LEARNER   || 'Leda',
 };
-const TTS_STYLE = process.env.TTS_STYLE || 'Say this warmly and clearly, to a child learning the language:';
+
+/* Gemini TTS reads a leading "Say X:" as a delivery instruction rather than
+   as words to speak — the jailbreak-camera trick for steering a prebuilt
+   voice without SSML. One per speaker, so Axel coaches and the bouncer
+   does not. */
+const STYLES = {
+  axel:      process.env.STYLE_AXEL      || 'Say in a warm, cocky, laddish teenage-punk voice, like a big brother coaching a kid through it — encouraging, never babyish, and clear enough to copy:',
+  bouncer:   process.env.STYLE_BOUNCER   || 'Say in a deep, gruff, slightly bored doorman voice, unhurried and a little intimidating but not unkind:',
+  bartender: process.env.STYLE_BARTENDER || 'Say in a brisk, friendly voice over a noisy bar, cheerful and quick:',
+  learner:   process.env.STYLE_LEARNER   || 'Say clearly and simply, at a learner\'s pace, like a child repeating a phrase they have just worked out:',
+};
 const ACCESS_CODE = (process.env.ACCESS_CODE || '').trim();
 const MOCK        = process.env.MOCK === '1' || !API_KEY;
 
@@ -71,6 +86,20 @@ function tokenValid(tok) {
   if (sig.length !== want.length) return false;
   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want));
 }
+
+/* The token rides in an HttpOnly cookie, as it does in jailbreak-camera, so
+   no page script ever holds it. A body token is still accepted for anything
+   calling the API directly (curl, a test harness, a future webview host). */
+const COOKIE = 'natty_auth';
+function cookieToken(req) {
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === COOKIE) return decodeURIComponent(v.join('='));
+  }
+  return '';
+}
+const authed = (req, b) => tokenValid(cookieToken(req) || (b && b.token));
 
 /* ---------- gemini transport (verbatim shape) ---------- */
 async function gemini(model, body, { tries = 3 } = {}) {
@@ -231,16 +260,19 @@ const ttsCache = new Map();   // "speaker|text" -> base64 wav
 async function speak(text, speaker) {
   const key = speaker + '|' + text;
   if (ttsCache.has(key)) return ttsCache.get(key);
+  const style = STYLES[speaker] || STYLES.axel;
   const data = await gemini(TTS_MODEL, {
-    contents: [{ parts: [{ text: `${TTS_STYLE} "${text}"` }] }],
+    contents: [{ parts: [{ text: `${style} "${text}"` }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES[speaker] || VOICES.axel } } },
     },
   }, { tries: 2 });
-  const b64 = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
-  if (!b64) throw new Error('no audio returned');
-  const out = wav(Buffer.from(b64, 'base64')).toString('base64');
+  const part = (data?.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.data);
+  if (!part) throw new Error('no audio returned (' + (data?.candidates?.[0]?.finishReason || 'unknown') + ')');
+  // the rate comes back on the mime type; do not assume it
+  const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || '')?.[1]) || 24000;
+  const out = wav(Buffer.from(part.inlineData.data, 'base64'), rate).toString('base64');
   if (ttsCache.size < 500) ttsCache.set(key, out);
   return out;
 }
@@ -279,7 +311,7 @@ http.createServer(async (req, res) => {
 
   if (url === '/api/health') {
     return json(res, 200, {
-      ok: true, mock: MOCK, locked: !!ACCESS_CODE,
+      ok: true, mock: MOCK, locked: !!ACCESS_CODE, unlocked: authed(req, null),
       model: MOCK ? 'local' : MODEL,
       tts: MOCK ? null : TTS_MODEL,
     });
@@ -288,16 +320,20 @@ http.createServer(async (req, res) => {
   if (url === '/api/unlock' && req.method === 'POST') {
     try {
       const b = await readBody(req);
-      if (!ACCESS_CODE) return json(res, 200, { token: '' });
+      if (!ACCESS_CODE) return json(res, 200, { token: '', unlocked: true });
       if (String(b.code || '').trim() !== ACCESS_CODE) return json(res, 401, { error: 'Wrong code.' });
-      return json(res, 200, { token: mintToken() });
+      const tok = mintToken();
+      const secure = String(req.headers['x-forwarded-proto'] || '').includes('https') ? '; Secure' : '';
+      res.setHeader('Set-Cookie',
+        `${COOKIE}=${encodeURIComponent(tok)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${TOKEN_TTL_MS / 1000}${secure}`);
+      return json(res, 200, { token: tok, unlocked: true });
     } catch { return json(res, 400, { error: 'bad request' }); }
   }
 
   if (url === '/api/evaluate' && req.method === 'POST') {
     try {
       const b = await readBody(req);
-      if (!tokenValid(b.token)) return json(res, 401, { error: 'Locked. Reload and enter the access code.' });
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked. Reload and enter the access code.' });
       if (MOCK) return json(res, 200, { mock: true, target_produced: null });
       checkRate(req);
       const out = await evaluateAnswer(b);
@@ -310,7 +346,7 @@ http.createServer(async (req, res) => {
   if (url === '/api/turn' && req.method === 'POST') {
     try {
       const b = await readBody(req);
-      if (!tokenValid(b.token)) return json(res, 401, { error: 'Locked.' });
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
       if (MOCK) return json(res, 200, { mock: true });
       checkRate(req);
       return json(res, 200, await generateTurn(b));
@@ -323,7 +359,7 @@ http.createServer(async (req, res) => {
   if (url === '/api/tts' && req.method === 'POST') {
     try {
       const b = await readBody(req);
-      if (!tokenValid(b.token)) return json(res, 401, { error: 'Locked.' });
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
       if (MOCK) return json(res, 200, { audio: null, mock: true });
       const text = String(b.text || '').slice(0, 300);
       if (!text) return json(res, 400, { error: 'no text' });

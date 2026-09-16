@@ -31,7 +31,8 @@
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
 
   --stage-char-height:56%;   /* character height as a share of the stage */
-  --stage-char-anchor:6%;    /* distance from the stage floor */
+  --stage-char-anchor:118px; /* distance from the stage floor — measured against
+                                the coach bubble at runtime, see trackCoach() */
 }
 
 *{box-sizing:border-box;}
@@ -69,7 +70,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ink);outli
 }
 
 /* 2. character — fixed anchor so real art drops in without relayout */
-#layer-char{display:flex;align-items:flex-end;justify-content:center;padding-bottom:var(--stage-char-anchor);pointer-events:none;}
+#layer-char{display:flex;align-items:flex-end;justify-content:center;padding-bottom:var(--stage-char-anchor);pointer-events:none;transition:padding-bottom .2s ease;}
 #character{
   height:var(--stage-char-height);aspect-ratio:2/3;
   border:1.5px dashed var(--line);background:var(--fill-2);
@@ -207,3 +208,13 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
 
 /* end card */
 #end .big{font-size:34px;font-weight:600;letter-spacing:-.02em;}
+
+/* ---------- access-code gate ---------- */
+#gate .body{display:flex;flex-direction:column;gap:12px;padding-top:24px;}
+#gate input{
+  font-family:var(--mono);font-size:16px;letter-spacing:.06em;color:var(--ink);
+  border:1.5px solid var(--line);background:var(--paper);border-radius:var(--r-sm);
+  padding:14px 12px;width:100%;
+}
+#gate input:focus{outline:none;border-color:var(--coach);}
+#gate .msg{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);min-height:14px;}
