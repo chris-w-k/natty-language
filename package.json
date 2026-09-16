@@ -1,0 +1,11 @@
+{
+  "name": "natty-language",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mastery-gated language drilling prototype",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "mock": "MOCK=1 node server.js"
+  }
+}
