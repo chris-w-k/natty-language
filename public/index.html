@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1D1C19">
+<title>Axel goes to a gig</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="app">
+
+  <div id="rail"><i id="rail-fill"></i></div>
+
+  <div id="stage">
+    <div class="layer" id="layer-bg">
+      <img class="bgimg" alt="" hidden>
+      <span class="bglabel"></span>
+    </div>
+
+    <div class="layer" id="layer-char">
+      <div id="character">
+        <span class="ch-name"></span>
+        <span class="ch-state"></span>
+      </div>
+    </div>
+
+    <div class="layer" id="layer-ui">
+      <div class="hud-l">
+        <button class="sq" id="btn-pause" aria-label="Pause">
+          <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><rect x="1" y="1" width="4" height="14" fill="currentColor"></rect><rect x="9" y="1" width="4" height="14" fill="currentColor"></rect></svg>
+        </button>
+        <div class="sq round"><span style="font-family:var(--mono);font-size:7px;letter-spacing:.04em;color:var(--ink-2);text-align:center;line-height:1.3">NOVA<br>PALS</span></div>
+      </div>
+
+      <div class="hud-r">
+        <div class="coins"><i></i><b id="coins">0</b></div>
+        <div class="chipline"><span id="scenechip">SCENE 1 / 4</span></div>
+        <div class="chipline blue"><span id="mastery">MASTERY 0%</span></div>
+        <button class="sq" id="btn-sound" aria-label="Sound on or off">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a9 9 0 0 1 0 14"></path></svg>
+        </button>
+        <button class="sq" id="btn-progress" aria-label="Progress details">
+          <svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect y="0" width="16" height="2" fill="currentColor"></rect><rect y="6" width="16" height="2" fill="currentColor"></rect><rect y="12" width="16" height="2" fill="currentColor"></rect></svg>
+        </button>
+      </div>
+
+      <div id="coach" class="hidden">
+        <div class="bubble">
+          <span class="who">AXEL · COACH</span>
+          <span class="say" id="coach-say"></span>
+          <span class="hint" id="coach-hint"></span>
+        </div>
+        <button class="face" id="coach-face" aria-label="Ask Axel for help"><span>AXEL</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lower">
+    <div id="speech">
+      <span class="who" id="sp-who"></span>
+      <span class="line" id="sp-line"></span>
+    </div>
+
+    <div id="slot-label"></div>
+    <div id="slot"></div>
+    <div id="tray"></div>
+
+    <div id="mic-panel" class="hidden">
+      <div class="top"><span>MIC OPEN — TAP TO STOP</span><span style="color:var(--ink-3)">CHIPS HIDDEN</span></div>
+      <div id="wave">
+        <i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i>
+        <i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i>
+        <i style="animation-delay:.05s"></i><i style="animation-delay:.35s"></i><i style="animation-delay:.2s"></i>
+      </div>
+      <div class="heard" id="mic-heard"></div>
+    </div>
+
+    <div id="controls">
+      <button class="btn icon" id="btn-mic" aria-label="Speak instead">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v2a7 7 0 0 0 14 0v-2"></path><path d="M12 19v3"></path></svg>
+      </button>
+      <button class="btn" id="btn-clear" style="width:56px;flex:none"><span>CLR</span></button>
+      <button class="btn wide primary" id="btn-say"><span>SAY IT</span></button>
+    </div>
+
+    <div id="verdict"></div>
+  </div>
+
+  <div id="tip" class="hidden"></div>
+
+  <!-- coach sheet -->
+  <div class="sheet hidden" id="coach-sheet">
+    <div class="head">
+      <div><span class="eyebrow">Coach</span><h2>Need a hand?</h2></div>
+      <button class="sq" id="coach-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+    </div>
+    <div class="body" id="coach-rungs"></div>
+  </div>
+
+  <!-- progress sheet -->
+  <div class="sheet hidden" id="prog-sheet">
+    <div class="head">
+      <div><span class="eyebrow">Progress</span><h2>Axel goes to a gig</h2></div>
+      <button class="sq" id="prog-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+    </div>
+    <div class="body" id="prog-body"></div>
+    <div id="test-strip">
+      <span class="k">TEST MODE — HIDDEN FROM CHILDREN</span>
+      <span class="v">overall <b id="prog-overall">0%</b> · <span id="t-mode">evaluator: —</span> · turn <span id="t-turn">0/18</span></span>
+      <span class="v">objective <span id="t-obj">—</span> · scaffold <span id="t-scaf">—</span> · <span id="t-gen">generator: template</span></span>
+      <span class="v" id="t-delta">&nbsp;</span>
+    </div>
+  </div>
+
+  <!-- end card -->
+  <div class="sheet hidden" id="end">
+    <div class="head"><div><span class="eyebrow">Session over</span><h2 id="end-msg"></h2></div></div>
+    <div class="body" style="display:flex;flex-direction:column;gap:8px;padding-top:28px">
+      <span class="big" id="end-score"></span>
+      <span id="end-sub" style="color:var(--ink-2)"></span>
+      <button class="btn wide primary" id="btn-restart" style="margin-top:20px"><span>PLAY AGAIN</span></button>
+    </div>
+  </div>
+
+</div>
+
+<script src="content.js"></script>
+<script src="voice.js"></script>
+<script src="engine.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>
