@@ -31,6 +31,21 @@ The key is read server-side only. The browser never sees it.
 Point Render at the repo (`render.yaml` is included) and set `GEMINI_API_KEY`
 and `ACCESS_CODE` in the dashboard under Environment. Never commit `.env`.
 
+Build command: none. Start command: `node server.js`. There are no dependencies
+and no lockfile, so Render's `yarn` / `yarn start` defaults are wrong —
+`render.yaml` has the right ones if you create the service as a Blueprint.
+
+## Access code
+
+`ACCESS_CODE` gates `/api/evaluate`, `/api/turn` and `/api/tts`. The page asks
+for it once and `/api/unlock` returns an HMAC token in an **HttpOnly cookie**,
+as jailbreak-camera does, so no page script ever holds it. Leave `ACCESS_CODE`
+empty and the gate does not appear.
+
+`/api/health` reports `{ok, mock, locked, unlocked, model, tts}`. If `mock` is
+true the key did not land; if `locked` is true and `unlocked` is false the code
+has not been entered, and every model call would 401 into the fallbacks.
+
 ## What's where
 
 ```
@@ -136,18 +151,32 @@ moments, all in `voice.js`:
    in, so even a one-word rung ends with the finished thing. Skipped when the
    answer came in by mic.
 
-Server path is Gemini TTS through `/api/tts` (the jailbreak-camera call, with a
-WAV header added and a per-speaker voice). Fallback is the browser's own speech
-synthesis, so the prototype is never silent with no key. Every utterance races a
-timeout — a device with no installed voices never fires `onend`, and nothing is
-allowed to wait on a voice forever. Lines are queued, never awaited by the UI:
-a child who already knows the answer does not sit through the audio.
+Server path is Gemini TTS through `/api/tts` — the jailbreak-camera call shape,
+unchanged: `responseModalities: ['AUDIO']`, a `prebuiltVoiceConfig`, the line
+wrapped in quotes behind a delivery instruction, the returned PCM given a WAV
+header at the rate its own mime type declares. Fallback is the browser's own
+speech synthesis, so the prototype is never silent with no key. Every utterance
+races a timeout — a device with no installed voices never fires `onend`, and
+nothing is allowed to wait on a voice forever.
+
+Two properties make it feel like speech rather than a queue:
+
+- **Fetched in parallel, played in order.** Gemini takes a second or two a
+  line. Fetching inside the queue left audible holes between the character and
+  Axel, so `say()` starts the download the moment a line is queued and the
+  queue only orders playback. Clips are cached, so a repeated phrase is
+  instant.
+- **A tap is heard now.** `V.now()` drops whatever is queued and speaks
+  immediately — chip taps, word glosses, SAY IT and the coach sheet all use it.
+  A child who has stopped listening never waits out a sentence.
 
 Voices per speaker are env vars: `VOICE_AXEL`, `VOICE_BOUNCER`,
-`VOICE_BARTENDER`, `VOICE_LEARNER`. A wrong voice name just falls back.
+`VOICE_BARTENDER`, `VOICE_LEARNER`; delivery is `STYLE_*`. Axel defaults to
+**Zubenelgenubi**, the voice jailbreak-camera gives its teenage punk, so he
+already sounds like the character. A wrong voice name just falls back.
 
-`TTS_MODEL` defaults to `gemini-2.5-flash-preview-tts` and has not been
-verified against a live key — if TTS 404s, that is the value to change.
+`TTS_MODEL` defaults to `gemini-2.5-flash-preview-tts`. If TTS 404s, that is
+the value to change; it degrades to browser speech rather than breaking.
 
 ## Reskin later
 

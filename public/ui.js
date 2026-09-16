@@ -13,7 +13,7 @@
   const NL = () => Q.nativeLang;
 
   let state, current = null, plan = null, scaf = 0, placed = [], hinted = false;
-  let micOn = false, busy = false, recog = null, serverUp = false;
+  let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
   /* ---------- character renderer (STUB) ----------
      Swap the body for lottie-web at reskin time. The five state names are the
@@ -41,12 +41,45 @@
       clearTimeout(t);
       if (!r.ok) return;
       const j = await r.json();
+      health = j || {};
+      // Locked and no cookie yet means every API call would 401 and silently
+      // fall back — browser voice, template coach, local matcher. Gate first.
+      if (j && j.locked && !j.unlocked) { serverUp = false; V.setServer(false); return false; }
       serverUp = j && j.ok === true && !j.mock;
       V.setServer(serverUp);
       $('t-mode').textContent = serverUp
         ? 'evaluator: ' + j.model + ' · voice: ' + (j.tts || 'browser')
         : 'evaluator: local · voice: browser';
-    } catch { serverUp = false; }
+      return true;
+    } catch { serverUp = false; return true; }
+  }
+
+  /* ---------- access code ----------
+     The token comes back as an HttpOnly cookie, so nothing is stored here and
+     nothing is attached to later calls; they just carry it same-origin. */
+  function unlockGate() {
+    return new Promise(resolve => {
+      const sheet = $('gate'), input = $('gate-code'), msg = $('gate-msg');
+      sheet.classList.remove('hidden');
+      input.focus();
+      async function tryCode() {
+        const code = input.value.trim();
+        if (!code) return;
+        msg.textContent = 'checking…';
+        try {
+          const r = await fetch('/api/unlock', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+          if (!r.ok) { msg.textContent = 'That code is not right.'; input.select(); return; }
+          sheet.classList.add('hidden');
+          V.unlock();                      // this tap is the gesture iOS wants
+          resolve();
+        } catch { msg.textContent = 'Could not reach the server.'; }
+      }
+      $('gate-go').addEventListener('click', tryCode);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') tryCode(); });
+    });
   }
 
   async function evaluateSpoken(text, item) {
@@ -158,7 +191,7 @@
     const w = ev.target.closest && ev.target.closest('.w');
     if (!w) { $('tip').classList.add('hidden'); return; }
     showTip(w, w.dataset.w);
-    V.say(w.dataset.w, { speaker: 'axel', lang: TL() });
+    V.now(w.dataset.w, { speaker: 'axel', lang: TL() });
   });
 
   /* label by how many gaps there actually are, not by the level */
@@ -289,7 +322,7 @@
       b.addEventListener('click', () => {
         if (placed.length >= plan.gaps) return;
         placed.push(w);
-        V.say(w, { speaker: 'axel', lang: TL() });
+        V.now(w, { speaker: 'axel', lang: TL() });
         renderSlot(); renderTray();
       });
       tray.appendChild(b);
@@ -332,11 +365,17 @@
       : [...plan.locked, ...placed].join(' ');
   }
 
-  /* What gets read aloud on SAY IT: the complete target sentence. At L0 the
-     slot only holds one word, but the child should still hear all of it. */
+  /* What gets read aloud on SAY IT: always the complete sentence, never the
+     fragment the child tapped. The gaps are always the trailing chips, so the
+     words in front of them come from the item whether or not the rung shows
+     them — at L0 the slot holds one word and the frame is in English, and the
+     child still hears the whole Spanish line. Right answer reads the target
+     (so the punctuation and accents are the real ones); a wrong one reads back
+     what they actually built, which is the point of hearing it. */
   function spokenSentence() {
-    const right = E.checkGaps(placed, plan).target_produced;
-    return right ? current.item.target : fullSentence();
+    if (E.checkGaps(placed, plan).target_produced) return current.item.target;
+    const chips = current.item.chips;
+    return [...chips.slice(0, chips.length - plan.gaps), ...placed].join(' ');
   }
 
   async function submit(text, mode) {
@@ -348,7 +387,7 @@
 
     // Always the whole sentence, never just the words they filled in — the
     // point is to hear the finished thing, even at the one-word rungs.
-    if (mode === 'chips') V.say(spokenSentence(), { speaker: 'learner', lang: TL() });
+    if (mode === 'chips') V.now(spokenSentence(), { speaker: 'learner', lang: TL() });
 
     const res = mode === 'chips' ? E.checkGaps(placed, plan) : await evaluateSpoken(text, item);
 
@@ -451,7 +490,7 @@
       `<div class="rung"><span class="k">SUPPORT LEVEL</span><span class="v">L${scaffold} &mdash; ` +
       `${['one word, English frame', 'one word, Spanish frame', 'fill the gaps', 'whole sentence', 'whole sentence, no model'][scaffold]}</span></div>`;
     $('coach-sheet').classList.remove('hidden');
-    V.say(item.target, { speaker: 'axel', lang: TL() });
+    V.now(item.target, { speaker: 'axel', lang: TL() });
   }
 
   function openProgress() {
@@ -482,7 +521,10 @@
   async function boot() {
     state = E.createState(Q);
     $('t-mode').textContent = 'evaluator: local · voice: browser';
-    await probeServer();
+    if (!(await probeServer())) {   // locked: ask for the code, then re-probe
+      await unlockGate();
+      await probeServer();
+    }
     $('btn-mic').style.opacity = micAvailable() ? '' : '.4';
     step();
   }
@@ -503,6 +545,25 @@
 
   // iOS will not play audio until a gesture; the first touch anywhere opens it
   document.addEventListener('pointerdown', () => V.unlock(), { once: true });
+
+  /* Keep whoever we are speaking to clear of Axel's bubble. The coach box is
+     one, two or three lines deep depending on the turn, so the anchor is
+     measured rather than guessed — and it stays right when the dashed box is
+     swapped for real art. */
+  (function trackCoach() {
+    const coach = $('coach'), stage = $('stage');
+    const apply = () => {
+      const h = coach.classList.contains('hidden') ? 0 : coach.offsetHeight;
+      stage.style.setProperty('--stage-char-anchor', (h ? h + 22 : 24) + 'px');
+    };
+    try { new ResizeObserver(apply).observe(coach); } catch {}
+    try {
+      new MutationObserver(apply).observe(coach,
+        { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+    } catch {}
+    window.addEventListener('resize', apply);
+    apply();
+  })();
 
   // scriptable view of the same numbers the test strip shows
   window.__DEBUG = { plan: () => plan, item: () => current && current.item, state: () => state };
