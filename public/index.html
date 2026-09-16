@@ -93,6 +93,19 @@
 
   <div id="tip" class="hidden"></div>
 
+  <!-- access-code gate -->
+  <div class="sheet hidden" id="gate">
+    <div class="head">
+      <div><span class="eyebrow">Locked</span><h2>Access code</h2></div>
+    </div>
+    <div class="body">
+      <span style="color:var(--ink-2)">This prototype calls a paid API, so it asks for the code first.</span>
+      <input id="gate-code" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="code">
+      <span class="msg" id="gate-msg"></span>
+      <button class="btn wide primary" id="gate-go"><span>UNLOCK</span></button>
+    </div>
+  </div>
+
   <!-- coach sheet -->
   <div class="sheet hidden" id="coach-sheet">
     <div class="head">

@@ -1,15 +1,25 @@
 /* voice.js — everything the learner hears.
-   Server path: Gemini TTS via /api/tts (the jailbreak-camera call, one model,
-   one voice per speaker). Fallback: the browser's own speech synthesis, so the
-   prototype is never silent even with no key and no network.
+   Server path: Gemini TTS via /api/tts (the jailbreak-camera call shape, one
+   prebuilt voice and one delivery style per speaker). Fallback: the browser's
+   own speech synthesis, so the prototype is never silent with no key.
+
+   Two things matter for how this feels:
+   1. Lines are FETCHED in parallel and PLAYED in order. Gemini takes a second
+      or two per line; fetching them serially inside the queue left audible
+      holes between Axel and the character.
+   2. A tap must be heard immediately. say(..., {interrupt:true}) drops
+      whatever is queued and speaks now — that is what chip taps and SAY IT
+      use, so the child never waits out a sentence they have stopped listening
+      to.
    iOS will not play audio until a user gesture, so unlock() runs on first tap. */
 
 window.VOICE = (function () {
-  const cache = new Map();          // "speaker|text" -> objectURL
+  const cache = new Map();          // "speaker|text" -> Promise<objectURL>
   let unlocked = false;
   let serverTTS = false;
   let current = null;
   let enabled = true;
+  let chain = Promise.resolve();
 
   const LANG = { es: 'es-ES', en: 'en-GB' };
 
@@ -59,24 +69,39 @@ window.VOICE = (function () {
     });
   }
 
-  async function serverSay(text, speaker) {
+  /* Start the download without waiting for it. Returns a promise for an
+     object URL. Kept in the cache so the same line is only ever fetched once,
+     and so a line queued behind two others is already in flight by the time
+     its turn comes. The access-code token rides in an HttpOnly cookie, so
+     there is nothing to attach here. */
+  function fetchClip(text, speaker) {
     const key = speaker + '|' + text;
-    let url = cache.get(key);
-    if (!url) {
-      const r = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, speaker })
-      });
+    let p = cache.get(key);
+    if (p) return p;
+    p = fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, speaker })
+    }).then(r => {
       if (!r.ok) throw new Error('tts ' + r.status);
-      const { audio } = await r.json();
+      return r.json();
+    }).then(({ audio }) => {
       if (!audio) throw new Error('no audio');
       const bin = atob(audio);
       const buf = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-      url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-      cache.set(key, url);
-    }
+      return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+    }).catch(e => { cache.delete(key); throw e; });   // a failure must not be cached
+    if (cache.size < 400) cache.set(key, p);
+    return p;
+  }
+
+  function prefetch(text, speaker = 'axel') {
+    if (!serverTTS || !text) return;
+    try { fetchClip(text, speaker).catch(() => {}); } catch {}
+  }
+
+  function play(url) {
     return new Promise(resolve => {
       const a = new Audio(url);
       current = a;
@@ -86,29 +111,34 @@ window.VOICE = (function () {
     });
   }
 
-  /* say(text, {speaker, lang}) — queued, so a sequence of lines plays in order
-     and a caller never has to await one line before showing the next screen.
-     say.now() interrupts whatever is playing (used when the mic opens). */
-  let chain = Promise.resolve();
-
+  /* say(text, {speaker, lang, interrupt}) — queued, so a sequence of lines
+     plays in order and a caller never has to await one line before showing
+     the next screen. interrupt:true clears the queue and speaks now. */
   function say(text, opts = {}) {
     if (!enabled || !text) return chain;
-    const { speaker = 'axel', lang = 'es' } = opts;
+    const { speaker = 'axel', lang = 'es', interrupt = false } = opts;
+    if (interrupt) stop();
+    prefetch(text, speaker);          // start the download before we queue
     chain = chain.then(async () => {
       if (!enabled) return;
       unlock();
       if (serverTTS) {
-        try { if (await serverSay(text, speaker)) return; } catch { /* fall through */ }
+        try {
+          const url = await fetchClip(text, speaker);
+          if (await play(url)) return;
+        } catch { /* fall through to the browser */ }
       }
       await browserSay(text, LANG[lang] || lang);
     }).catch(() => {});
     return chain;
   }
 
+  const now = (text, opts = {}) => say(text, Object.assign({}, opts, { interrupt: true }));
+
   /* prime the voice list — Chrome populates it asynchronously */
   if ('speechSynthesis' in window) {
     try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => {}; } catch {}
   }
 
-  return { say, stop, unlock, setServer, setEnabled, isEnabled };
+  return { say, now, prefetch, stop, unlock, setServer, setEnabled, isEnabled };
 })();
