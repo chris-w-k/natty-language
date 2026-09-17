@@ -169,6 +169,18 @@ Every Spanish word on screen — the character's line, the coach's model — is 
 button. Tapping it shows its gloss and says it aloud. Glosses live in the
 `glossary` map in `content.js`; a word with no entry still speaks.
 
+## Getting in
+
+A title screen holds the first turn until START is pressed. That press is also
+the audio gesture iOS requires, so the first turn is never silent, and the
+Lottie rigs and the opening scene's voice clips load behind the title rather
+than leaving an empty room and a blank stage after the tap.
+
+Between turns the generator is a network round trip, so the panel locks and
+says what it is waiting for instead of leaving the previous turn live
+underneath. Each scene's words are prefetched as it begins — that scene's
+vocabulary only, since every clip is a Gemini call.
+
 ## Input lock
 
 While a character is delivering the opening of a turn the lower panel is dead
@@ -185,9 +197,11 @@ moments, all in `voice.js`:
 
 1. the scene line, the ask and the model when a turn appears
 2. each word as it is tapped
-3. the **whole target sentence** on SAY IT — not just the words they filled
-   in, so even a one-word rung ends with the finished thing. Skipped when the
-   answer came in by mic.
+3. the **whole sentence in the slot** on SAY IT — read back as it stands, in
+   whatever languages that is. At L0 the frame is English and only the gap is
+   Spanish, so the child hears "I am going to a concierto": their own
+   sentence, not a Spanish one they never wrote. Skipped when the answer came
+   in by mic.
 
 Server path is Gemini TTS through `/api/tts` — the jailbreak-camera call shape,
 unchanged: `responseModalities: ['AUDIO']`, a `prebuiltVoiceConfig`, the line

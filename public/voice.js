@@ -100,24 +100,42 @@ window.VOICE = (function () {
      and so a line queued behind two others is already in flight by the time
      its turn comes. The access-code token rides in an HttpOnly cookie, so
      there is nothing to attach here. */
+  function toObjectURL(b64) {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  /* One transient TTS failure used to drop that single line onto the browser's
+     own synthesis, so a character would suddenly be read by a stranger for one
+     clip and be themselves again on the next. /api/tts answers 200 with a null
+     body when Gemini declines, so a retry costs one round trip and keeps the
+     cast consistent. The browser is still there underneath if both fail. */
+  async function requestClip(text, speaker) {
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, speaker })
+        });
+        if (!r.ok) throw new Error('tts ' + r.status);
+        const { audio } = await r.json();
+        if (!audio) throw new Error('no audio');
+        return toObjectURL(audio);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+
   function fetchClip(text, speaker) {
     const key = speaker + '|' + text;
     let p = cache.get(key);
     if (p) return p;
-    p = fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, speaker })
-    }).then(r => {
-      if (!r.ok) throw new Error('tts ' + r.status);
-      return r.json();
-    }).then(({ audio }) => {
-      if (!audio) throw new Error('no audio');
-      const bin = atob(audio);
-      const buf = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-      return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-    }).catch(e => { cache.delete(key); throw e; });   // a failure must not be cached
+    p = requestClip(text, speaker)
+      .catch(e => { cache.delete(key); throw e; });   // a failure must not be cached
     if (cache.size < 400) cache.set(key, p);
     return p;
   }

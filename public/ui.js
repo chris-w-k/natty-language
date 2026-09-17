@@ -59,6 +59,18 @@
     return rig;
   }
 
+  /* Build every rig while the title screen is up. Each clip is a ~170KB fetch,
+     and mounting one on demand left the stage empty for the first second of
+     the first turn — the child pressed START and met an empty room. */
+  function preloadRigs() {
+    const host = $('character');
+    for (const name of Object.keys(ANIM)) {
+      if (rigs.has(name)) continue;
+      const r = buildRig(host, name);
+      if (r) r.root.hidden = true;
+    }
+  }
+
   function mountCharacter(el, { character, state: st }) {
     el.dataset.character = character;
     el.dataset.state = st;
@@ -103,6 +115,23 @@
         : 'evaluator: local · voice: browser';
       return true;
     } catch { serverUp = false; return true; }
+  }
+
+  /* ---------- title ----------
+     Also the audio gesture: iOS will not play a sound until the user has
+     touched something, so START doubles as the unlock and the child never
+     meets a silent first turn. */
+  function titleScreen() {
+    return new Promise(resolve => {
+      const sheet = $('title');
+      $('title-name').textContent = Q.title || 'Axel goes to a gig';
+      sheet.classList.remove('hidden');
+      $('title-go').addEventListener('click', () => {
+        V.unlock();
+        sheet.classList.add('hidden');
+        resolve();
+      }, { once: true });
+    });
   }
 
   /* ---------- access code ----------
@@ -302,12 +331,34 @@
     $('t-turn').textContent = state.turn + '/' + Q.session.turnBudget;
   }
 
+  /* Warm the voices for the scene we are about to play. Every clip is a Gemini
+     call, so this is the current scene's own words only — not the whole quest
+     — and it runs in the background. By the time the child reaches a phrase
+     the audio is usually already in the cache and plays instantly. */
+  let preloadedScene = -1;
+  function preloadScene() {
+    const scene = E.sceneOf(Q, state);
+    if (!scene || preloadedScene === state.sceneIndex) return;
+    preloadedScene = state.sceneIndex;
+    for (const it of scene.items) {
+      V.prefetch(it.target, 'axel');
+      for (const w of (it.chips || [])) V.prefetch(w, 'axel');
+    }
+  }
+
   async function renderTurn() {
     const { scene, item } = current;
     const scaffold = scaf = E.scaffoldFor(state, item);
     plan = E.buildPlan(item, scaffold);
     const nativeSpeaker = scene.onScreen.speaks === 'native';
+
+    // The generator is a network round trip. Hold the panel and say so, rather
+    // than leaving the previous turn live and tappable underneath.
+    setLocked(true);
+    $('turn-loading').classList.remove('hidden');
+    preloadScene();
     const gen = await generateTurn(scene, item, scaffold);
+    $('turn-loading').classList.add('hidden');
     $('t-gen').textContent = gen ? 'generator: gemini' : 'generator: template';
     const coach = coachCopy(item, scaffold, plan, gen);
     const sceneLine = gen ? gen.scene_line : scene.opening;
@@ -482,11 +533,18 @@
      child still hears the whole Spanish line. Right answer reads the target
      (so the punctuation and accents are the real ones); a wrong one reads back
      what they actually built, which is the point of hearing it. */
+  /* The echo reads back what is IN THE SLOT, in whatever languages that is.
+     At L0 the frame is the child's own language and only the gap is Spanish,
+     so they hear "I am going to a concierto" — the sentence they actually
+     built. Reading them a full Spanish sentence they never wrote was the coach
+     modelling, not an echo, and it made the rung feel harder than it is. */
   function spokenSentence() {
+    if (plan.mode === 'native-frame') return [plan.frame, ...placed].join(' ');
     if (E.checkGaps(placed, plan).target_produced) return current.item.target;
-    const chips = current.item.chips;
-    return [...chips.slice(0, chips.length - plan.gaps), ...placed].join(' ');
+    return [...plan.locked, ...placed].join(' ');
   }
+  // mixed lines are led by their frame; this only steers the browser fallback
+  function spokenLang() { return plan.mode === 'native-frame' ? NL() : TL(); }
 
   async function submit(text, mode) {
     if (busy || !current) return;
@@ -497,7 +555,7 @@
 
     // Always the whole sentence, never just the words they filled in — the
     // point is to hear the finished thing, even at the one-word rungs.
-    if (mode === 'chips') V.now(spokenSentence(), { speaker: 'learner', lang: TL() });
+    if (mode === 'chips') V.now(spokenSentence(), { speaker: 'learner', lang: spokenLang() });
 
     const res = mode === 'chips' ? E.checkGaps(placed, plan) : await evaluateSpoken(text, item);
 
@@ -634,7 +692,10 @@
   /* ---------- boot ---------- */
   async function boot() {
     state = E.createState(Q);
+    preloadedScene = -1;
     $('t-mode').textContent = 'evaluator: local · voice: browser';
+    preloadRigs();                    // loads behind the title screen
+    await titleScreen();
     if (!(await probeServer())) {   // locked: ask for the code, then re-probe
       await unlockGate();
       await probeServer();
