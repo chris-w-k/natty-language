@@ -277,3 +277,38 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
 #coach .bubble{margin-top:0;}
 #coach .face{width:52px;height:52px;}
 #lower #coach{margin-bottom:2px;}
+
+/* ---------- mastery gain ----------
+   The number moving is the point of the turn. The chip lights and the rail
+   sweeps once, then both settle back — visible without being a fireworks
+   display over a reading a child is meant to glance at. */
+.chipline.blue{transition:background .2s ease,border-color .2s ease,transform .2s ease;}
+.chipline.gained{
+  animation:chip-gain 1.1s cubic-bezier(.22,.9,.3,1);
+}
+.chipline.gained span{animation:chip-gain-ink 1.1s ease;}
+@keyframes chip-gain{
+  0%  {transform:scale(1);   background:var(--coach-soft); border-color:var(--coach);}
+  18% {transform:scale(1.13);background:var(--coach);      border-color:var(--coach);}
+  60% {transform:scale(1);   background:var(--coach);      border-color:var(--coach);}
+  100%{transform:scale(1);   background:var(--coach-soft); border-color:var(--coach);}
+}
+@keyframes chip-gain-ink{
+  0%{color:var(--coach);} 18%{color:var(--paper);} 60%{color:var(--paper);} 100%{color:var(--coach);}
+}
+
+#rail{position:relative;overflow:hidden;}
+#rail.gained::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,var(--coach),transparent);
+  transform:translateX(-100%);
+  animation:rail-sweep 1s cubic-bezier(.3,.8,.3,1);
+}
+@keyframes rail-sweep{to{transform:translateX(100%);}}
+#rail.gained > i{background:var(--coach);}
+
+@media (prefers-reduced-motion:reduce){
+  .chipline.gained,.chipline.gained span,#rail.gained::after{animation:none;}
+  .chipline.gained{background:var(--coach);border-color:var(--coach);}
+  .chipline.gained span{color:var(--paper);}
+}

@@ -171,10 +171,25 @@ button. Tapping it shows its gloss and says it aloud. Glosses live in the
 
 ## Getting in
 
-The character speaks first and Axel answers: the stage box is whoever is on
-screen, the coach box sits at the bottom right above the answer area, and it
-stays hidden until the character has finished. Showing both at once let a
-child read the hint before they had heard the question.
+A turn runs in three beats:
+
+1. the character appears and **speaks their line aloud** — the only voice in
+   the turn
+2. Axel's bubble opens with the hint, **read, not heard**
+3. the answer area unlocks
+
+Axel himself is on screen for all of it. Only his bubble waits: while the
+character is talking he is dimmed but present and still tappable for help.
+
+His hint is not spoken. Hearing it made every turn a wall of audio to sit
+through, and it is a hint sitting next to the answer box, not dialogue. The
+Spanish in it is still tappable and SAY IT still reads the sentence back, so
+nothing is lost that the child cannot ask for.
+
+A character speaking the child's own language gets **no** target-language
+latitude — one Spanish word is one too many, because models love opening a
+Spanish lesson on ¡Hola! to a child who has never seen the language. A hint
+still allows one shared word, since "a" is a coincidence in both.
 
 A title screen holds the first turn until START is pressed. That press is also
 the audio gesture iOS requires, so the first turn is never silent, and the
@@ -249,6 +264,16 @@ the dial, not the prompt.
 The generator also receives the conversation so far (what was said, what the
 child was asked for, whether they managed it), so a line continues the scene
 instead of restarting it.
+
+## Mastery gain
+
+The reading in the corner moving is the point of the turn, and it used to
+change silently. An earned gain lights the chip and sweeps the rail once.
+
+It fires when the child EARNS it, not whenever the number happens to rise:
+the passive credit for hearing a phrase nudges it up at the start of every
+turn, and flashing for that would be congratulating them for nothing. It
+respects `prefers-reduced-motion`.
 
 ## Input lock
 

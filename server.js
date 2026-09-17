@@ -250,8 +250,11 @@ at a high support level the character speaks in short bursts and the coach
 carries the meaning. The game counts the words and the unknown ones, and
 throws your line away if it breaks either rule.
 
-If the scene's character speaks the native language, write it in the native
-language instead, and the limits above do not apply.
+If the scene's character speaks the native language, write it entirely in the
+native language, with NOT ONE target-language word in it — no greeting, no
+flourish, nothing. A coach who opens on "¡Hola!" to a child who has never
+seen the language is showing off, not teaching, and the game will throw the
+line away. The word limits above do not apply to a native-language line.
 
 coach_ask: one short sentence from the coach, Axel, who has just heard the
 character speak and is helping. Where the character said something in the

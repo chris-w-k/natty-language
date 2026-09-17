@@ -293,8 +293,10 @@
         if (a.words > cap)     { lastGenWhy = 'too long'; return null; }
         if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
         if (a.fresh > 2)       { lastGenWhy = 'too many new words'; return null; }
-      } else if (looksTargetLanguage(j.scene_line)) {
-        lastGenWhy = 'wrong language';       // a native speaker drifting into Spanish
+      } else if (looksTargetLanguage(j.scene_line, 1)) {
+        // A character speaking the child's own language gets NO latitude: one
+        // Spanish word is one too many. Models love opening on "¡Hola!".
+        lastGenWhy = 'wrong language';
         return null;
       }
 
@@ -340,12 +342,12 @@
     return TL_VOCAB;
   }
 
-  function looksTargetLanguage(text) {
+  function looksTargetLanguage(text, limit = 2) {
     if (/[¿¡]/.test(text)) return true;                       // inverted punctuation
     if (/[áéíóúñü]/i.test(text)) return true;               // Spanish diacritics
     const v = targetVocab();
     const hits = String(text).split(/\s+/).filter(t => v.has(bare(t)));
-    return hits.length >= 2;                              // one shared word ("a") is coincidence
+    return hits.length >= limit;    // in a hint, one shared word ("a") is coincidence
   }
 
   function coachCopy(item, scaffold, p, gen) {
@@ -429,6 +431,19 @@
   }
 
   /* ---------- render ---------- */
+  /* The number moving is the point of the turn, and it was changing silently
+     in the corner. Fired deliberately when the child EARNS it, not whenever
+     the reading happens to rise — the passive credit for hearing a phrase
+     nudges it up at the start of every turn, and flashing for that would be
+     congratulating them for nothing. */
+  function pulseMastery() {
+    const chip = $('mastery').parentElement, rail = $('rail');
+    chip.classList.remove('gained'); rail.classList.remove('gained');
+    void chip.offsetWidth;                         // restart the animation
+    chip.classList.add('gained'); rail.classList.add('gained');
+    setTimeout(() => { chip.classList.remove('gained'); rail.classList.remove('gained'); }, 1200);
+  }
+
   function renderHud() {
     const o = E.overall(state, Q);
     $('rail-fill').style.width = (o * 100).toFixed(1) + '%';
@@ -491,10 +506,11 @@
       (nativeSpeaker ? '' : ' · ' + TL().toUpperCase());
     $('sp-line').innerHTML = nativeSpeaker ? esc(sceneLine) : spanishHTML(sceneLine);
 
-    // Axel waits his turn. Showing the hint at the same moment as the question
-    // let a child read the answer before they had heard what was asked.
-    $('coach').classList.add('hidden');
-    $('coach').classList.remove('silent');
+    /* Axel is present for the whole turn — only his bubble waits. `silent`
+       leaves the face on screen and dims it, so the child can see their pal is
+       there (and tap him for help) while the character is still speaking. */
+    $('coach').classList.remove('hidden');
+    $('coach').classList.add('silent');
     $('coach-say').innerHTML = coach.html;
     $('coach-hint').textContent = 'TAP AXEL FOR HELP';
     turnLine = sceneLine;
@@ -518,20 +534,21 @@
 
     // Speak the turn — queued, never awaited. The screen is usable immediately;
     // a child who already knows the answer does not wait for the audio.
+    /* One voice per turn: the character's. The coach's line is read, not
+       heard — it is a hint sitting next to the answer box, and hearing it
+       spoken made the turn a wall of audio the child had to sit through. The
+       Spanish in it is still tappable, and SAY IT still reads their sentence
+       back, so nothing is lost that they cannot ask for. */
     V.stop();
-    // say() hands back a promise for the line just queued, so this resolves
-    // when the character stops talking — not when the whole turn has played.
     const characterDone = V.say(sceneLine, {
       speaker: scene.onScreen.character, lang: nativeSpeaker ? NL() : TL()
     });
-    V.say(coach.askText, { speaker: 'axel', lang: NL() });
-    if (coach.spoken) V.say(coach.spoken, { speaker: 'axel', lang: TL() });
 
     let coachShown = false;
     const showCoach = () => {
       if (coachShown) return;
       coachShown = true;
-      $('coach').classList.remove('hidden');
+      $('coach').classList.remove('silent');
     };
     characterDone.then(showCoach);
     setTimeout(showCoach, 6000);   // a voice that never arrives must not hide the hint
@@ -692,8 +709,10 @@
     const res = mode === 'chips' ? E.checkGaps(placed, plan) : await evaluateSpoken(text, item);
 
     if (res.target_produced) {
+      const before = E.overall(state, Q);
       const d = E.applyCorrect(state, item, { mode, hinted, hints });
       pushDelta(d);
+      if (E.overall(state, Q) > before + 1e-6) pulseMastery();
       $('slot').classList.add('ok');
       $('verdict').textContent = '✓ ' + (hinted ? 'nice — that’s it' : 'spot on');
       $('verdict').className = 'good';
