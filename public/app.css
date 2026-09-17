@@ -107,7 +107,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ink);outli
 .coins b{font-family:var(--mono);font-size:12px;font-weight:500;}
 
 /* coach widget */
-#coach{position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:flex-end;gap:8px;}
+#coach{display:flex;align-items:flex-start;gap:9px;}
 #coach.hidden{display:none;}
 #coach .bubble{
   flex:1;min-width:0;border:1.5px solid var(--coach);background:var(--coach-soft);
@@ -144,7 +144,12 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
 /* ---------- lower ---------- */
 #lower{flex:none;display:flex;flex-direction:column;gap:9px;padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line-soft);background:var(--paper);}
 
-#speech{background:var(--bar);padding:11px 13px;border-radius:var(--r-md);display:flex;flex-direction:column;gap:5px;}
+#speech{
+  position:absolute;left:14px;right:14px;bottom:14px;
+  background:var(--bar);padding:11px 13px;border-radius:var(--r-md);
+  display:flex;flex-direction:column;gap:5px;
+}
+#speech.hidden{display:none;}
 #speech .who{font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--bar-dim);}
 #speech .line{font-size:14.5px;color:var(--bar-ink);line-height:1.45;}
 
@@ -264,3 +269,11 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
 #turn-loading .dots i:nth-child(2){animation-delay:.15s;}
 #turn-loading .dots i:nth-child(3){animation-delay:.3s;}
 @keyframes tl{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+
+/* ---------- swapped boxes ----------
+   Whoever is on screen speaks from the stage, in their own half. Axel coaches
+   from the bottom, right above the answer area, because his line is about what
+   the child is going to type next rather than about the scene. */
+#coach .bubble{margin-top:0;}
+#coach .face{width:52px;height:52px;}
+#lower #coach{margin-bottom:2px;}

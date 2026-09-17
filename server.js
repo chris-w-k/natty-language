@@ -199,15 +199,33 @@ const TURN_SYSTEM = `You write two short lines for a language game played by a 7
 You are given a scene, a character, a target phrase the child must produce, and
 a support level 0-4. You do NOT choose the target and you do NOT judge anything.
 
-scene_line: one short sentence the on-screen character says, in the TARGET
-language, that makes the target phrase the natural thing to say next. Use only
-words from the allowed list. If the scene's character speaks the native
-language, write it in the native language instead.
+scene_line: what the on-screen character says, which must make the target
+phrase the natural thing to say back. It continues the conversation you are
+shown — it does not restart it, greet someone already greeted, or ask
+something already answered.
 
-coach_ask: one short sentence from the coach telling the child what to
-communicate. Never write the target phrase itself here — the game shows that
-separately when the support level allows it. Never translate the target word
-for word.
+Two lists govern its vocabulary. Nothing outside the second list may appear
+at all: those are the only words the game can explain when the child taps
+them, and an unexplainable word is a dead end. Of the words that are in it
+but not yet in the first list, you may use at most two — they are new to this
+child. Reaching for a word they were never taught is worse than saying
+something simpler.
+
+It must also fit the word limit you are given. A fluent sentence is
+unreadable to a child three words into the language, however correct it is:
+at a high support level the character speaks in short bursts and the coach
+carries the meaning. The game counts the words and the unknown ones, and
+throws your line away if it breaks either rule.
+
+If the scene's character speaks the native language, write it in the native
+language instead, and the limits above do not apply.
+
+coach_ask: one short sentence from the coach, Axel, who has just heard the
+character speak and is helping. Where the character said something in the
+target language, Axel makes its meaning clear before telling the child what
+to say back — that is his job on the turn. Never write the target phrase
+itself here; the game shows that separately when the support level allows it.
+Never translate the target word for word.
 
 The support level decides how much of the child's own language you may lean
 on. It is not a style choice, it is the rule:
@@ -231,19 +249,31 @@ the adult. Vary the wording every time so it never reads like a template.
 Return JSON only.`;
 
 async function generateTurn(b) {
-  const { character, characterNote, sceneTitle, sceneSpeaks, target, native,
-          scaffold, nativeLang, targetLang, allowed, recent } = b;
+  const { character, characterNote, sceneTitle, sceneSpeaks, sceneGoal, target, native,
+          scaffold, maxSceneWords, nativeLang, targetLang, allowed, glossable, history, recent } = b;
   const lines = [
-    `Scene: ${sceneTitle}`,
+    `Scene: ${sceneTitle}${sceneGoal ? ' — ' + sceneGoal : ''}`,
     `On-screen character: ${character}${characterNote ? ' — ' + characterNote : ''}`,
     `That character speaks: ${sceneSpeaks === 'native' ? nativeLang + ' (they are the coach)' : targetLang}`,
     `Target phrase (${targetLang}): ${target}`,
     `Which means (${nativeLang}): ${native}`,
     `Support level: ${scaffold} of 4 (0 = brand new, 4 = nearly mastered)`,
-    `Allowed ${targetLang} words: ${(allowed || []).join(', ')}`,
+    `scene_line word limit: ${maxSceneWords || 12}`,
+    `Words this child has already met: ${(allowed || []).join(', ')}`,
+    `Words the game can explain at all — nothing outside this list may appear: ${(glossable || []).join(', ')}`,
   ];
+  if (history && history.length) {
+    lines.push('', 'The conversation so far, oldest first. Continue it:');
+    for (const h of history) {
+      lines.push(`- ${h.character} said: ${h.said}`);
+      if (h.coached) lines.push(`  coach: ${h.coached}`);
+      lines.push(`  the child was asked for "${h.wanted}" — ${h.got}`);
+    }
+  } else {
+    lines.push('', 'This is the first exchange of the scene.');
+  }
   if (recent && recent.length) {
-    lines.push('Lines already used this session, do not repeat them:');
+    lines.push('', 'Coach lines already used, do not repeat them:');
     for (const r of recent) lines.push('- ' + r);
   }
   const prompt = lines.join('\n');

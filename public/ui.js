@@ -14,6 +14,7 @@
 
   let state, current = null, plan = null, scaf = 0, placed = [], hinted = false, hints = 0;
   let inputLocked = false;
+  let turnLine = '', turnAsk = '';        // this turn's actual words, for the history
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
   /* ---------- character renderer ----------
@@ -186,27 +187,114 @@
      the model to write the words for it, and falls back to the templates in
      content.js when there is no server. Either way the numbers are the same. */
   const recentLines = [];
+  const history = [];          // what has actually been said in this scene
+
+  /* §10: the whitelist is absolute and outranks the scaffold, and it has two
+     tiers here.
+
+     GLOSSABLE is every word the game can explain — the glossary plus every
+     chip in the quest. A word outside it is one the child can tap and get
+     nothing back, so it must never reach the screen at all. (This is what the
+     hand-written openings are built from, which is why the first version of
+     this guard threw them away too.)
+
+     DRILL is the quest's own vocabulary — the words the child is actually
+     tested on. §10's "at most two new words per turn" is about these: meeting
+     a third drill word in a line you cannot answer yet is load, not exposure.
+
+     Everything else in GLOSSABLE is scene glue (§8: "already-mastered words may
+     appear as scene glue only") — sí, qué, hola. It is tappable, never tested,
+     and does not count against the cap. Counting it did: the first version of
+     this guard threw away the game's own hand-written openings. */
+  let GLOSSABLE = null;
+  function glossable() {
+    if (GLOSSABLE) return GLOSSABLE;
+    GLOSSABLE = new Set(Object.keys(Q.glossary || {}).map(bare));
+    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) GLOSSABLE.add(bare(w));
+    return GLOSSABLE;
+  }
+
+  let DRILL = null;
+  function drillWords() {
+    if (DRILL) return DRILL;
+    DRILL = new Set();
+    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) DRILL.add(bare(w));
+    return DRILL;
+  }
+
+  function metWords(item) {
+    const out = new Set(item.chips || []);
+    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) if (E.wordSeen(state, w)) out.add(w);
+    return [...out];
+  }
+
+  /* How long the character's line may be, by support level. A fluent sentence
+     is unreadable to a child three words into the language, however correct it
+     is; the coach carries the meaning until they have the words for it. */
+  const MAX_SCENE_WORDS = [4, 6, 8, 12, 16];
+
+  function audit(text, met) {
+    const known = new Set((met || []).map(bare));
+    const can = glossable();
+    const drill = drillWords();
+    let unglossable = 0, fresh = 0, words = 0;
+    for (const tok of String(text).split(/\s+/)) {
+      const w = bare(tok);
+      if (!w) continue;
+      words += 1;
+      if (!can.has(w)) unglossable += 1;
+      else if (drill.has(w) && !known.has(w)) fresh += 1;
+    }
+    return { words, unglossable, fresh };
+  }
 
   async function generateTurn(scene, item, scaffold) {
     if (!serverUp) return null;
+    const met = metWords(item);
     try {
-      const allowed = [...new Set(E.allItems(Q).flatMap(i => i.chips))];
       const r = await fetch('/api/turn', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character: scene.onScreen.character,
           characterNote: scene.onScreen.character === 'axel' ? 'a bubbly teenage punk musician, the coach' : '',
           sceneTitle: scene.title, sceneSpeaks: scene.onScreen.speaks,
+          sceneGoal: scene.goal || '',
           target: item.target, native: item.native, scaffold,
-          nativeLang: NL(), targetLang: TL(), allowed, recent: recentLines.slice(-6)
+          maxSceneWords: MAX_SCENE_WORDS[scaffold] ?? 12,
+          nativeLang: NL(), targetLang: TL(),
+          allowed: met, glossable: [...glossable()],
+          history: history.slice(-4), recent: recentLines.slice(-6)
         })
       });
       if (!r.ok) return null;
       const j = await r.json();
-      if (!j || !j.coach_ask) return null;
+      if (!j || !j.coach_ask || !j.scene_line) return null;
+
+      /* The prompt states both rules; a model still drifts, so they are
+         enforced here where it costs nothing. A rejected turn falls back to
+         the hand-written opening in content.js, which is always safe. */
+      if (scene.onScreen.speaks !== 'native') {
+        const cap = MAX_SCENE_WORDS[scaffold] ?? 12;
+        const a = audit(j.scene_line, met);
+        if (a.words > cap) return null;      // too long for this rung
+        if (a.unglossable > 0) return null;  // a word the child cannot look up
+        if (a.fresh > 2) return null;        // §10: two new words, no more
+      } else if (looksTargetLanguage(j.scene_line)) {
+        return null;                         // a native speaker drifting into Spanish
+      }
+
       recentLines.push(j.coach_ask);
       return j;
     } catch { return null; }
+  }
+
+  function recordTurn(scene, item, line, ask, produced) {
+    history.push({
+      character: scene.onScreen.character,
+      said: line, coached: ask,
+      wanted: item.target, got: produced ? 'the child said it' : 'not yet'
+    });
+    if (history.length > 8) history.shift();
   }
 
   /* ---------- what the coach says ----------
@@ -366,20 +454,23 @@
     mountBackground($('layer-bg'), scene.background);
     mountCharacter($('character'), { character: scene.onScreen.character, state: 'speak' });
 
-    if (nativeSpeaker) {
-      $('speech').classList.add('onbar');
-      $('sp-who').textContent = 'AXEL · COACH';
-      $('sp-line').innerHTML = coach.html;
-      $('coach').classList.add('hidden');
-    } else {
-      $('speech').classList.remove('onbar');
-      $('sp-who').textContent = scene.onScreen.character.toUpperCase() + ' · ' + TL().toUpperCase();
-      $('sp-line').innerHTML = spanishHTML(sceneLine);
-      $('coach').classList.remove('hidden');
-      $('coach').classList.remove('silent');
-      $('coach-say').innerHTML = coach.html;
-      $('coach-hint').textContent = 'TAP AXEL FOR HELP';
-    }
+    /* The stage box belongs to whoever is on screen; the coach box below
+       belongs to Axel. In the opening scene Axel is both, so he speaks from
+       the stage and still coaches from the bottom — one rule, no special
+       case for who happens to be standing there. */
+    $('speech').classList.toggle('onbar', nativeSpeaker);
+    $('sp-who').textContent = scene.onScreen.character.toUpperCase() +
+      (nativeSpeaker ? '' : ' · ' + TL().toUpperCase());
+    $('sp-line').innerHTML = nativeSpeaker ? esc(sceneLine) : spanishHTML(sceneLine);
+
+    // Axel waits his turn. Showing the hint at the same moment as the question
+    // let a child read the answer before they had heard what was asked.
+    $('coach').classList.add('hidden');
+    $('coach').classList.remove('silent');
+    $('coach-say').innerHTML = coach.html;
+    $('coach-hint').textContent = 'TAP AXEL FOR HELP';
+    turnLine = sceneLine;
+    turnAsk = coach.askText;
 
     if (coach.spoken) {
       const d = E.creditHeardItem(state, item);
@@ -400,9 +491,22 @@
     // Speak the turn — queued, never awaited. The screen is usable immediately;
     // a child who already knows the answer does not wait for the audio.
     V.stop();
-    if (!nativeSpeaker) V.say(sceneLine, { speaker: scene.onScreen.character, lang: TL() });
+    // say() hands back a promise for the line just queued, so this resolves
+    // when the character stops talking — not when the whole turn has played.
+    const characterDone = V.say(sceneLine, {
+      speaker: scene.onScreen.character, lang: nativeSpeaker ? NL() : TL()
+    });
     V.say(coach.askText, { speaker: 'axel', lang: NL() });
     if (coach.spoken) V.say(coach.spoken, { speaker: 'axel', lang: TL() });
+
+    let coachShown = false;
+    const showCoach = () => {
+      if (coachShown) return;
+      coachShown = true;
+      $('coach').classList.remove('hidden');
+    };
+    characterDone.then(showCoach);
+    setTimeout(showCoach, 6000);   // a voice that never arrives must not hide the hint
 
     // V.say('') returns the queue with this turn's lines already on it. The
     // panel unlocks when they have all played — or after a ceiling, because a
@@ -567,6 +671,7 @@
       $('verdict').className = 'good';
       mountCharacter($('character'), { character: current.scene.onScreen.character, state: 'pose' });
       renderHud();
+      recordTurn(current.scene, item, turnLine, turnAsk, true);
       setTimeout(() => { busy = false; step(); }, 900);
       return;
     }
@@ -578,6 +683,7 @@
     if (E.mercyDue(state, item, Q)) {
       const m = E.applyMercy(state, item);
       pushDelta(m);
+      recordTurn(current.scene, item, turnLine, turnAsk, false);
       $('verdict').textContent = '— Axel says it for you: ' + item.target;
       await V.say(item.target, { speaker: 'axel', lang: TL() });
       setTimeout(() => { busy = false; step(); }, 1200);
@@ -725,15 +831,18 @@
      one, two or three lines deep depending on the turn, so the anchor is
      measured rather than guessed — and it stays right when the dashed box is
      swapped for real art. */
-  (function trackCoach() {
-    const coach = $('coach'), stage = $('stage');
+  /* Keep the character clear of their own speech box, which now sits on the
+     stage where the coach used to be. Measured rather than guessed, because
+     the box is one to three lines deep depending on the line. */
+  (function trackSpeech() {
+    const speech = $('speech'), stage = $('stage');
     const apply = () => {
-      const h = coach.classList.contains('hidden') ? 0 : coach.offsetHeight;
+      const h = speech.classList.contains('hidden') ? 0 : speech.offsetHeight;
       stage.style.setProperty('--stage-char-anchor', (h ? h + 22 : 24) + 'px');
     };
-    try { new ResizeObserver(apply).observe(coach); } catch {}
+    try { new ResizeObserver(apply).observe(speech); } catch {}
     try {
-      new MutationObserver(apply).observe(coach,
+      new MutationObserver(apply).observe(speech,
         { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
     } catch {}
     window.addEventListener('resize', apply);
@@ -758,7 +867,10 @@
   });
 
   // scriptable view of the same numbers the test strip shows
-  window.__DEBUG = { plan: () => plan, item: () => current && current.item, state: () => state };
+  window.__DEBUG = {
+    plan: () => plan, item: () => current && current.item, state: () => state,
+    audit: (text, item) => audit(text, metWords(item || (current && current.item) || { chips: [] })),
+  };
 
   boot();
 })();

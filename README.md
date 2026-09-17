@@ -171,6 +171,11 @@ button. Tapping it shows its gloss and says it aloud. Glosses live in the
 
 ## Getting in
 
+The character speaks first and Axel answers: the stage box is whoever is on
+screen, the coach box sits at the bottom right above the answer area, and it
+stays hidden until the character has finished. Showing both at once let a
+child read the hint before they had heard the question.
+
 A title screen holds the first turn until START is pressed. That press is also
 the audio gesture iOS requires, so the first turn is never silent, and the
 Lottie rigs and the opening scene's voice clips load behind the title rather
@@ -180,6 +185,38 @@ Between turns the generator is a network round trip, so the panel locks and
 says what it is waiting for instead of leaving the previous turn live
 underneath. Each scene's words are prefetched as it begins — that scene's
 vocabulary only, since every clip is a Gemini call.
+
+## What the characters may say
+
+The generator writes two lines a turn and both are checked before they reach
+the screen, because a model drifts and a child cannot tell a hallucinated word
+from a real one.
+
+`scene_line` — what the on-screen character says — is held to three rules:
+
+- **Length by support level** (4, 6, 8, 12, 16 words for L0–L4). A fluent
+  sentence is unreadable to a child three words into the language however
+  correct it is; at a high support level the character speaks in bursts and
+  the coach carries the meaning.
+- **Nothing unglossable.** Every word must be in the glossary or in the
+  quest's own vocabulary. A word outside that is one the child can tap and get
+  nothing back.
+- **At most two new drill words** (§10). Drill words are the ones they are
+  tested on. Glossary-only words — sí, qué, hola — are scene glue (§8), always
+  tappable, never tested, and do not count against the cap.
+
+`coach_ask` must be in the child's own language at L0–L3 (§6). A line that
+fails any of these is thrown away and the hand-written opening in
+`content.js` is used instead, so a bad generation degrades to a good script
+rather than to nonsense.
+
+**The glossary is the leash.** It is the whole list of words the model is
+allowed to reach for. If the characters feel too terse, widen it — that is
+the dial, not the prompt.
+
+The generator also receives the conversation so far (what was said, what the
+child was asked for, whether they managed it), so a line continues the scene
+instead of restarting it.
 
 ## Input lock
 
