@@ -230,3 +230,14 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
 }
 #gate input:focus{outline:none;border-color:var(--coach);}
 #gate .msg{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);min-height:14px;}
+
+/* ---------- input lock ----------
+   The lower panel while a character is still speaking the opening of a turn.
+   Greyed rather than hidden, so nothing moves when it comes back. */
+#lower.locked #tray,
+#lower.locked #controls,
+#lower.locked #slot{opacity:.42;filter:saturate(.35);}
+#lower.locked #tray,
+#lower.locked #controls{pointer-events:none;}
+#lower.locked #slot-label{color:var(--ink-3);}
+#lower #tray,#lower #controls,#lower #slot{transition:opacity .18s ease,filter .18s ease;}

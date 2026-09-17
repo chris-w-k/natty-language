@@ -17,9 +17,11 @@ window.VOICE = (function () {
   const cache = new Map();          // "speaker|text" -> Promise<objectURL>
   let unlocked = false;
   let serverTTS = false;
-  let current = null;
+  let current = null;                // the <audio> playing right now, if any
+  let cancelCurrent = null;          // settles that audio's promise when we cut it off
   let enabled = true;
   let chain = Promise.resolve();
+  let gen = 0;                       // bumped by stop(); stale queue entries check it
 
   const LANG = { es: 'es-ES', en: 'en-GB' };
 
@@ -52,11 +54,20 @@ window.VOICE = (function () {
     } catch { /* no synthesis here; server audio still works after a gesture */ }
   }
 
+  /* Cutting speech off has to do three things, and the first version only did
+     one of them. Pausing the <audio> left its promise pending forever, so the
+     lines queued behind it stayed attached to the OLD chain and fired later,
+     on top of whatever had replaced them — which is the overlap. Now the
+     generation is bumped (every queued entry checks it and returns), the
+     in-flight promise is settled rather than abandoned, and the speaking flag
+     is cleared so a character is never left with its mouth moving. */
   function stop() {
+    gen += 1;
     if (talking) emit(talking, false);
     chain = Promise.resolve();
     try { window.speechSynthesis.cancel(); } catch {}
     if (current) { try { current.pause(); } catch {} current = null; }
+    if (cancelCurrent) { const c = cancelCurrent; cancelCurrent = null; c(false); }
   }
 
   /* A device with no installed voices, or with audio blocked, never fires
@@ -119,10 +130,20 @@ window.VOICE = (function () {
   function play(url) {
     return new Promise(resolve => {
       const a = new Audio(url);
+      let settled = false;
+      const done = v => {
+        if (settled) return;
+        settled = true;
+        if (current === a) current = null;
+        if (cancelCurrent === done) cancelCurrent = null;
+        resolve(v);
+      };
+      if (current) { try { current.pause(); } catch {} }   // belt and braces: never two at once
       current = a;
-      a.onended = () => resolve(true);
-      a.onerror = () => resolve(false);
-      a.play().catch(() => resolve(false));
+      cancelCurrent = done;
+      a.onended = () => done(true);
+      a.onerror = () => done(false);
+      a.play().catch(() => done(false));
     });
   }
 
@@ -134,17 +155,24 @@ window.VOICE = (function () {
     const { speaker = 'axel', lang = 'es', interrupt = false } = opts;
     if (interrupt) stop();
     prefetch(text, speaker);          // start the download before we queue
+    const mine = gen;                 // anything stop()ped after this point is stale
     chain = chain.then(async () => {
-      if (!enabled) return;
+      if (!enabled || mine !== gen) return;
       unlock();
       emit(speaker, true);
       try {
         if (serverTTS) {
           try {
             const url = await fetchClip(text, speaker);
+            // The fetch is an await, so a stop() can land while it is in
+            // flight. Without this second check a cancelled line still
+            // reaches play() and starts over the top of its replacement.
+            if (mine !== gen) return;
             if (await play(url)) return;
+            if (mine !== gen) return;
           } catch { /* fall through to the browser */ }
         }
+        if (mine !== gen) return;
         await browserSay(text, LANG[lang] || lang);
       } finally {
         emit(speaker, false);
@@ -160,5 +188,7 @@ window.VOICE = (function () {
     try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => {}; } catch {}
   }
 
-  return { say, now, prefetch, stop, unlock, onSpeaking, setServer, setEnabled, isEnabled };
+  const isSpeaking = () => talking !== null;
+
+  return { say, now, prefetch, stop, unlock, onSpeaking, isSpeaking, setServer, setEnabled, isEnabled };
 })();

@@ -12,7 +12,8 @@
   const TL = () => Q.targetLang;
   const NL = () => Q.nativeLang;
 
-  let state, current = null, plan = null, scaf = 0, placed = [], hinted = false;
+  let state, current = null, plan = null, scaf = 0, placed = [], hinted = false, hints = 0;
+  let inputLocked = false;
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
   /* ---------- character renderer ----------
@@ -183,10 +184,36 @@
      The ASK is always present, always in the native language: at no level is
      the learner left guessing what they are supposed to communicate.
      The MODEL is the Spanish, and that is what gets withdrawn as they climb. */
+  /* §6 makes the scaffold a rule about SUPPORT LANGUAGE, not just about how
+     many chips are blank: L0-L3 all keep the framing in the child's own
+     language, and only L4 withdraws it. The generator is told this, but a
+     model drifts — it handed back an all-Spanish ask on a rung that should
+     have been English, which is what made turn three unreadable. So the ask is
+     checked before it is used, and a drifting one falls back to the template. */
+  let TL_VOCAB = null;                        // built on first use: bare() is defined below
+  function targetVocab() {
+    if (TL_VOCAB) return TL_VOCAB;
+    TL_VOCAB = new Set();
+    for (const sc of Q.scenes) for (const it of sc.items) {
+      for (const w of (it.chips || [])) TL_VOCAB.add(bare(w));
+      for (const w of (it.distractors || [])) TL_VOCAB.add(bare(w));
+    }
+    for (const k of Object.keys(Q.glossary || {})) TL_VOCAB.add(bare(k));
+    return TL_VOCAB;
+  }
+
+  function looksTargetLanguage(text) {
+    if (/[¿¡]/.test(text)) return true;                       // inverted punctuation
+    if (/[áéíóúñü]/i.test(text)) return true;               // Spanish diacritics
+    const v = targetVocab();
+    const hits = String(text).split(/\s+/).filter(t => v.has(bare(t)));
+    return hits.length >= 2;                              // one shared word ("a") is coincidence
+  }
+
   function coachCopy(item, scaffold, p, gen) {
-    const ask = gen && gen.coach_ask
-      ? gen.coach_ask
-      : item.coachLine + ' “' + item.native + '”';
+    const template = item.coachLine + ' “' + item.native + '”';
+    let ask = gen && gen.coach_ask ? gen.coach_ask : template;
+    if (scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
     let model = '', spoken = '';
     if (scaffold === 0) {
       const w = p.answer.join(' ');
@@ -240,9 +267,22 @@
   document.addEventListener('click', ev => {
     const w = ev.target.closest && ev.target.closest('.w');
     if (!w) { $('tip').classList.add('hidden'); return; }
+    if (inputLocked) return;
     showTip(w, w.dataset.w);
     V.now(w.dataset.w, { speaker: 'axel', lang: TL() });
   });
+
+  /* ---------- input lock ----------
+     While a character is delivering the opening of a turn, the lower panel is
+     dead: no chips, no CLR, no SAY IT, no mic, no word glosses. Tapping a chip
+     mid-line used to start a second voice over the top of the first, and it
+     also let a child answer before they had heard the question. */
+  function setLocked(on) {
+    inputLocked = !!on;
+    $('lower').classList.toggle('locked', inputLocked);
+    for (const el of document.querySelectorAll('#tray .chip, #controls .btn')) el.disabled = inputLocked;
+    if (!inputLocked) $('btn-say').disabled = placed.length !== plan.gaps;
+  }
 
   /* label by how many gaps there actually are, not by the level */
   function slotLabel(p, n) {
@@ -264,7 +304,7 @@
 
   async function renderTurn() {
     const { scene, item } = current;
-    const scaffold = scaf = E.scaffoldFor(state, item.id);
+    const scaffold = scaf = E.scaffoldFor(state, item);
     plan = E.buildPlan(item, scaffold);
     const nativeSpeaker = scene.onScreen.speaks === 'native';
     const gen = await generateTurn(scene, item, scaffold);
@@ -297,6 +337,7 @@
 
     placed = [];
     hinted = false;
+    hints = 0;
     $('slot-label').textContent = slotLabel(plan, item.chips.length);
     renderSlot();
     renderTray();
@@ -311,7 +352,20 @@
     if (!nativeSpeaker) V.say(sceneLine, { speaker: scene.onScreen.character, lang: TL() });
     V.say(coach.askText, { speaker: 'axel', lang: NL() });
     if (coach.spoken) V.say(coach.spoken, { speaker: 'axel', lang: TL() });
-    V.say('').then(() => mountCharacter($('character'), { character: scene.onScreen.character, state: 'idle' }));
+
+    // V.say('') returns the queue with this turn's lines already on it. The
+    // panel unlocks when they have all played — or after a ceiling, because a
+    // voice that never arrives must not strand the child behind it.
+    setLocked(true);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      setLocked(false);
+      mountCharacter($('character'), { character: scene.onScreen.character, state: 'idle' });
+    };
+    V.say('').then(release);
+    setTimeout(release, 12000);
   }
 
   function renderSlot() {
@@ -355,7 +409,13 @@
     tray.innerHTML = '';
     // only the words still needed, plus decoys — never the words already locked in
     const needed = plan.answer.slice();
-    const decoys = (current.item.distractors || []).slice(0, E.DISTRACTORS_AT[scaf] ?? 2);
+    /* §8: "already-mastered words may appear as scene glue only", and §10 caps
+       new words per turn. A decoy the child has never met is a word they are
+       being asked to rule out without ever having been taught it, so the pool
+       is everything they have already produced or heard — nothing else. The
+       tray is simply shorter early on, which is correct. */
+    const pool = (current.item.distractors || []).filter(w => E.wordSeen(state, w) && !needed.includes(w));
+    const decoys = pool.slice(0, E.DISTRACTORS_AT[scaf] ?? 2);
     const all = [...needed, ...decoys];
     const words = all
       .map((w, i) => ({ w, k: (i * 7 + state.turn * 13 + w.length * 3) % all.length }))
@@ -370,7 +430,7 @@
       const i = used.indexOf(w);
       if (i >= 0) { used.splice(i, 1); b.disabled = true; }
       b.addEventListener('click', () => {
-        if (placed.length >= plan.gaps) return;
+        if (inputLocked || placed.length >= plan.gaps) return;
         placed.push(w);
         V.now(w, { speaker: 'axel', lang: TL() });
         renderSlot(); renderTray();
@@ -442,7 +502,7 @@
     const res = mode === 'chips' ? E.checkGaps(placed, plan) : await evaluateSpoken(text, item);
 
     if (res.target_produced) {
-      const d = E.applyCorrect(state, item, { mode, hinted });
+      const d = E.applyCorrect(state, item, { mode, hinted, hints });
       pushDelta(d);
       $('slot').classList.add('ok');
       $('verdict').textContent = '✓ ' + (hinted ? 'nice — that’s it' : 'spot on');
@@ -467,6 +527,7 @@
     }
 
     hinted = true;
+    hints += 1;
     const why = {
       word_order: 'Right words, wrong order.', missing_word: 'Something’s missing.',
       wrong_word: 'Not quite.', typo: 'So close.', native_fallback: 'In Spanish this time.', none: 'Almost.'
@@ -482,7 +543,8 @@
 
   function finish(msg) {
     state.finished = true;
-    const done = Object.values(state.items).filter(s => s.mastery >= Q.session.canUseBar).length;
+    // the 50/50 blend, not the pattern ledger alone — §2
+    const done = E.allItems(Q).filter(it => E.itemScore(state, it) >= Q.session.canUseBar).length;
     $('end-msg').textContent = msg;
     $('end-score').textContent = pct(E.overall(state, Q));
     $('end-sub').textContent = done + ' of ' + Object.keys(state.items).length +
@@ -532,6 +594,7 @@
     if (!current) return;
     const item = current.item;
     hinted = true;
+    hints += 1;
     const scaffold = scaf;
     $('coach-rungs').innerHTML =
       `<div class="rung"><span class="k">WHAT TO SAY</span><span class="v">${esc(item.native)}</span></div>` +
@@ -554,12 +617,13 @@
       body.appendChild(h);
       sc.items.forEach(it => {
         const st = state.items[it.id];
-        const lb = E.label(st.mastery, st.exposures > 0, Q);
+        const score = E.itemScore(state, it);
+        const lb = E.label(score, st.exposures > 0, Q);
         const r = document.createElement('div');
         r.className = 'row' + (i > state.sceneIndex ? ' locked' : '');
         r.innerHTML =
           `<div class="l"><span class="t">${esc(it.target)}</span><span class="m">${esc(it.native)}</span></div>` +
-          `<div class="r"><span class="pct">${pct(st.mastery)}</span><span class="pill ${lb.replace(' ', '')}">${lb}</span></div>`;
+          `<div class="r"><span class="pct">${pct(score)}</span><span class="pill ${lb.replace(' ', '')}">${lb}</span></div>`;
         body.appendChild(r);
       });
     });

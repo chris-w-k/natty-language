@@ -9,12 +9,27 @@ window.ENGINE = (function () {
      Tuned so THREE clean productions master an item, which is what makes the
      support ladder visible: one word, then most of the phrase, then all of it.
      Two productions was faster but skipped straight from L0 to L2. */
+  /* Mastery modelling v2 §3 keeps two ledgers, and they move at very different
+     speeds: the PATTERN (the phrase as a construction) creeps up, while the
+     WORDS in it rise fast once produced. That gap is the whole ramp — flat
+     per-phrase gains are what made turn three jump to a whole Spanish sentence.
+
+     The source's base pattern gain is +0.10, tuned for a trainer that spaces
+     retrieval over many sessions. This is one 24-turn sitting, so at +0.10 no
+     phrase would ever reach the bar. Patterns are scaled up to fit the budget;
+     the word gain, the passive-exposure gain and the hint damping are the
+     source's own numbers, and so is the gap between the two rates, which is
+     what actually shapes the ladder. */
   const GAIN = {
-    voice:  0.35,   // said the whole phrase aloud, no help
-    chips:  0.30,   // filled the gaps, no help
-    hinted: 0.20,   // correct after the coach modelled it
-    heard:  0.05    // appeared in a character's line
+    pattern: { voice: 0.25, chips: 0.20 },   // §3: produced the construction
+    word:    0.25,                            // §3: +0.25 per produced target word
+    heard:   0.05                             // §3: passive exposure, words only
   };
+  /* §4 hint damping. Hints reveal the construction more than the words, so
+     patterns are damped harder than vocabulary. */
+  const HINT_DAMP = { pattern: [1, 0.6, 0.3], word: [1, 0.75, 0.5] };
+  const damp = (kind, hints) => HINT_DAMP[kind][Math.min(hints, 2)];
+
   const DECAY_PER_WEEK = 0.05;  // written for the real system; inert here (no persistence)
 
   const clamp = v => Math.round(Math.max(0, Math.min(1, v)) * 1e4) / 1e4;
@@ -47,6 +62,9 @@ window.ENGINE = (function () {
       items[it.id] = { id: it.id, sceneId: it.sceneId, mastery: 0, exposures: 0, fails: 0, owed: false, lastTurn: -99 };
     }
     return {
+      // §1: two independent ledgers. A word absent from this map is UNSEEN,
+      // which is not the same as mastery 0 and is why it is created lazily.
+      words: {},
       turn: 0,
       sceneIndex: 0,
       sceneStartTurn: 0,
@@ -67,10 +85,18 @@ window.ENGINE = (function () {
     return mastery >= CAN_USE(quest) ? 'can use' : 'practising';
   }
 
+  /* §2: "Level mastery % shown in the UI = mean pattern mastery and mean word
+     mastery, weighted 50/50." Words the learner has not met yet count as 0,
+     so the bar reflects the whole curriculum rather than only what was tried. */
   function overall(state, quest) {
     const ids = Object.keys(state.items);
     if (!ids.length) return 0;
-    return ids.reduce((s, id) => s + state.items[id].mastery, 0) / ids.length;
+    const patternMean = ids.reduce((s, id) => s + state.items[id].mastery, 0) / ids.length;
+    const vocab = [];
+    for (const it of allItems(quest)) for (const w of (it.chips || [])) vocab.push(w);
+    if (!vocab.length) return patternMean;
+    const wordMean = vocab.reduce((s, w) => s + wordMastery(state, w), 0) / vocab.length;
+    return clamp((patternMean + wordMean) / 2);
   }
 
   /* ---------- scaffold ----------
@@ -78,9 +104,50 @@ window.ENGINE = (function () {
      and how many decoy chips are in the tray. */
   function bucket(m) { return m < 0.2 ? 0 : m < 0.4 ? 1 : m < 0.6 ? 2 : m < 0.8 ? 3 : 4; }
 
-  function scaffoldFor(state, itemId) {
-    const st = state.items[itemId];
-    return bucket(st ? st.mastery : 0);
+  /* §2 and §6 aggregate the two ledgers DIFFERENTLY, and conflating them was
+     half the problem. The scaffold takes the MINIMUM, so one unseen word keeps
+     the support up. Everything else — the bar, "can use", what to practise
+     next, the percentage on screen — takes the 50/50 MEAN, so steady progress
+     still reads as progress. */
+  function itemScore(state, item) {
+    const st = state.items[item.id];
+    const pattern = st ? st.mastery : 0;
+    const chips = item.chips || [];
+    if (!chips.length) return pattern;
+    const words = chips.reduce((a, w) => a + wordMastery(state, w), 0) / chips.length;
+    return clamp((pattern + words) / 2);
+  }
+
+  const wordKey = w => norm(w);
+  function wordMastery(state, w) {
+    const st = state.words[wordKey(w)];
+    return st ? st.mastery : 0;      // unseen reads as 0 — §6
+  }
+  function wordSeen(state, w) { return !!state.words[wordKey(w)]; }
+  function knownWords(state) { return Object.keys(state.words); }
+
+  function creditWord(state, w, gain) {
+    const k = wordKey(w);
+    if (!k) return null;
+    const st = state.words[k] || (state.words[k] = { word: k, mastery: 0, exposures: 0 });
+    const before = st.mastery;
+    st.mastery = clamp(st.mastery + gain);
+    st.exposures += 1;
+    return st.mastery === before ? null : { label: w, from: before, to: st.mastery };
+  }
+
+  /* §6: "A turn takes the MINIMUM mastery across its target pattern and target
+     words (an unseen word counts as 0), so one weak item keeps the support up."
+     This is the rule that was missing. Without it a phrase's own average could
+     carry the turn to L3 while it still contained words the child had never
+     met — exactly the turn-three screenshot. */
+  function scaffoldFor(state, item) {
+    const id = typeof item === 'string' ? item : item && item.id;
+    const st = state.items[id];
+    let m = st ? st.mastery : 0;
+    const chips = (typeof item === 'object' && item && item.chips) || [];
+    for (const w of chips) m = Math.min(m, wordMastery(state, w));
+    return bucket(m);
   }
 
   const DISTRACTORS_AT = [1, 2, 2, 3, 4];
@@ -127,10 +194,7 @@ window.ENGINE = (function () {
   function sceneOf(quest, state) { return quest.scenes[state.sceneIndex]; }
 
   function sceneDone(state, scene, quest) {
-    return scene.items.every(it => {
-      const st = state.items[it.id];
-      return st.owed || st.mastery >= BAR(quest);
-    });
+    return scene.items.every(it => state.items[it.id].owed || itemScore(state, it) >= BAR(quest));
   }
 
   function itemById(quest, id) {
@@ -149,19 +213,17 @@ window.ENGINE = (function () {
       const it = itemById(quest, id);
       if (it && !pool.some(p => p.id === id)) pool.push(it);
     }
-    const open = pool.filter(it => {
-      const st = state.items[it.id];
-      return !st.owed && st.mastery < BAR(quest);
-    });
+    const open = pool.filter(it => !state.items[it.id].owed && itemScore(state, it) < BAR(quest));
     if (!open.length) return null;
+    const score = new Map(open.map(it => [it.id, itemScore(state, it)]));
     const sorted = open.slice().sort((a, b) => {
-      const A = state.items[a.id], B = state.items[b.id];
-      if (Math.abs(A.mastery - B.mastery) > 1e-6) return A.mastery - B.mastery;
-      return A.lastTurn - B.lastTurn;
+      const d = score.get(a.id) - score.get(b.id);
+      if (Math.abs(d) > 1e-6) return d;
+      return state.items[a.id].lastTurn - state.items[b.id].lastTurn;
     });
     // avoid drilling the same item twice running when a sibling is available
-    if (sorted.length > 1 && sorted[0].lastTurn === state.turn - 1 &&
-        state.items[sorted[0].id].mastery === state.items[sorted[1].id].mastery) {
+    if (sorted.length > 1 && state.items[sorted[0].id].lastTurn === state.turn - 1 &&
+        Math.abs(score.get(sorted[0].id) - score.get(sorted[1].id)) < 1e-6) {
       return { scene, item: sorted[1] };
     }
     return { scene, item: sorted[0] };
@@ -177,12 +239,17 @@ window.ENGINE = (function () {
      than wrong must still get to see the gig — so a scene also has a ceiling.
      When it is hit, whatever is unfinished is marked owed and comes back in
      the final scene. This is the other half of "hybrid with a mercy rule". */
-  function sceneTurnCap(quest) {
-    return Math.ceil(quest.session.turnBudget / quest.scenes.length) + 1;
+  /* A flat quarter of the budget per scene let the one-phrase opening scene
+     burn six turns while a two-phrase scene got the same allowance. The clock
+     is shared out by how many phrases a scene actually holds. */
+  function sceneTurnCap(quest, scene) {
+    const total = allItems(quest).length || 1;
+    const here = (scene && scene.items ? scene.items.length : total / quest.scenes.length);
+    return Math.ceil(quest.session.turnBudget * here / total) + 1;
   }
 
   function sceneOverBudget(state, quest) {
-    return (state.turn - state.sceneStartTurn) >= sceneTurnCap(quest);
+    return (state.turn - state.sceneStartTurn) >= sceneTurnCap(quest, sceneOf(quest, state));
   }
 
   function oweRemaining(state, scene, quest) {
@@ -223,27 +290,44 @@ window.ENGINE = (function () {
   }
 
   /* ---------- applying outcomes ---------- */
+  /* §3: hearing the tutor say it is "reading credited far below production"
+     — words only, +0.05, and the pattern gets nothing. Seeing a word never
+     proves the learner can use it, so this must not move the construction. */
   function creditHeardItem(state, item) {
     const st = state.items[item.id];
     if (!st) return null;
-    const before = st.mastery;
     st.exposures += 1;
-    st.mastery = clamp(st.mastery + GAIN.heard);
-    return st.mastery === before ? null
-      : { label: item.target, from: before, to: st.mastery, why: 'heard' };
+    let from = 0, to = 0, moved = 0;
+    for (const w of (item.chips || [])) {
+      const d = creditWord(state, w, GAIN.heard);
+      if (d) { from += d.from; to += d.to; moved += 1; }
+    }
+    if (!moved) return null;
+    return { label: item.target, from: from / moved, to: to / moved, why: 'heard' };
   }
 
-  function applyCorrect(state, item, { mode, hinted }) {
+  /* §3: "mastery is earned only for what the learner actually produced".
+     Both ledgers move, at their own rates and with their own hint damping, so
+     the words they just said race ahead while the construction inches up. */
+  function applyCorrect(state, item, { mode, hinted, hints }) {
     const st = state.items[item.id];
+    const used = typeof hints === 'number' ? hints : (hinted ? 1 : 0);
     const before = st.mastery;
-    const gain = hinted ? GAIN.hinted : (mode === 'voice' ? GAIN.voice : GAIN.chips);
-    st.mastery = clamp(st.mastery + gain);
+
+    const base = mode === 'voice' ? GAIN.pattern.voice : GAIN.pattern.chips;
+    st.mastery = clamp(st.mastery + base * damp('pattern', used));
     st.exposures += 1;
     st.fails = 0;
     st.lastTurn = state.turn;
+
+    for (const w of (item.chips || [])) {
+      const d = creditWord(state, w, GAIN.word * damp('word', used));
+      if (d) state.log.push({ turn: state.turn, word: d.label, from: d.from, to: d.to, why: 'produced' });
+    }
+
     state.turn += 1;
-    state.coins += hinted ? 5 : 10;
-    const delta = { label: item.target, from: before, to: st.mastery, why: hinted ? 'correct (helped)' : `correct (${mode})` };
+    state.coins += used ? 5 : 10;
+    const delta = { label: item.target, from: before, to: st.mastery, why: used ? 'correct (helped)' : `correct (${mode})` };
     state.log.push({ turn: state.turn, item: item.id, ...delta });
     return delta;
   }
@@ -298,6 +382,7 @@ window.ENGINE = (function () {
     clamp, norm, fold, lev,
     allItems, createState, label, overall,
     bucket, scaffoldFor, gapCount, buildPlan, checkGaps,
+    itemScore, wordMastery, wordSeen, knownWords, creditWord, HINT_DAMP,
     sceneOf, sceneDone, pickNext, advanceScene, sceneTurnCap, sceneOverBudget, oweRemaining,
     evaluateLocal,
     creditHeardItem, applyCorrect, applyWrong, mercyDue, applyMercy, reopenOwed, applyDecay,

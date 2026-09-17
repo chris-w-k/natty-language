@@ -204,10 +204,27 @@ language, that makes the target phrase the natural thing to say next. Use only
 words from the allowed list. If the scene's character speaks the native
 language, write it in the native language instead.
 
-coach_ask: one short sentence from the coach, in the NATIVE language, telling
-the child what to communicate. Never write the target phrase itself here —
-the game shows that separately when the support level allows it. Never
-translate the target word for word.
+coach_ask: one short sentence from the coach telling the child what to
+communicate. Never write the target phrase itself here — the game shows that
+separately when the support level allows it. Never translate the target word
+for word.
+
+The support level decides how much of the child's own language you may lean
+on. It is not a style choice, it is the rule:
+
+  0  meaning carried entirely in the NATIVE language
+  1  a NATIVE-language sentence with the target words dropped into it
+  2  NATIVE language, plus at most one short phrase of the target language
+  3  NATIVE language for framing the situation only
+  4  no NATIVE-language help at all
+
+At levels 0-3 coach_ask is written in the NATIVE language. Only at level 4 may
+it be entirely in the target language. Writing the target language at a lower
+level makes the turn unreadable to a child who has not met those words, and
+the game will throw your line away and use its own.
+
+Introduce at most two target-language words the child has not already met, and
+never use a target-language word that is not in the allowed list.
 
 Stay in character. No stage directions, no emoji, no praise, no questions to
 the adult. Vary the wording every time so it never reads like a template.

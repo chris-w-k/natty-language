@@ -111,6 +111,33 @@ Simulated players, all of whom reach the final scene: perfect finishes in 21 of
 24 turns at 100%; one miss per phrase ends at 79%; getting nothing right at all
 still sees all four scenes and the ending.
 
+## The two ledgers
+
+Mastery modelling v2 §1 keeps two independent scores, and they move at very
+different speeds. The **pattern** — the phrase as a construction — creeps up
+(+0.20 produced). The **words** in it jump (+0.25 each, produced). Hearing the
+tutor say a phrase credits words only, +0.05: seeing a word never proves the
+learner can use it.
+
+The two are aggregated **differently depending on the question**, and
+conflating them is what made the ramp too steep:
+
+- **The support level takes the MINIMUM** across the pattern and every target
+  word, and an unseen word counts as 0 (§6). One word the child has not met
+  keeps the whole turn at L0. This is the rule that stops a phrase reaching
+  "whole sentence in Spanish" while it still contains unknown vocabulary.
+- **Everything else takes the 50/50 MEAN** (§2): the bar, "can use", which
+  phrase to practise next, and the percentage on screen. Steady work still
+  reads as progress.
+
+Hints damp both, patterns harder than words (§4): one hint ×0.6 / ×0.75, two
+or more ×0.3 / ×0.5. Wrong answers cost nothing and spend no turn — a
+deliberate departure, since the cost of being stuck here is the scene clock.
+
+Decoy chips are drawn only from words the learner has already produced or
+heard (§8, §10). Early trays are short, which is correct: a decoy you have
+never been taught is not a choice, it is a trick.
+
 ## Scaffold
 
 One number, two visible effects. The phrase's own mastery sets the support
@@ -141,6 +168,15 @@ withdrawn as the learner climbs.
 Every Spanish word on screen — the character's line, the coach's model — is a
 button. Tapping it shows its gloss and says it aloud. Glosses live in the
 `glossary` map in `content.js`; a word with no entry still speaks.
+
+## Input lock
+
+While a character is delivering the opening of a turn the lower panel is dead
+and visibly greyed: no chips, no CLR, no SAY IT, no mic, no word glosses. It
+releases when the queue drains, or after a 12s ceiling so a voice that never
+arrives cannot strand the child. Answering before you have heard the question
+is not a shortcut worth having, and tapping mid-line used to start a second
+voice over the first.
 
 ## Voice
 
