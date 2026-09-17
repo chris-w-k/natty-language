@@ -72,12 +72,21 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ink);outli
 /* 2. character — fixed anchor so real art drops in without relayout */
 #layer-char{display:flex;align-items:flex-end;justify-content:center;padding-bottom:var(--stage-char-anchor);pointer-events:none;transition:padding-bottom .2s ease;}
 #character{
+  position:relative;
   height:var(--stage-char-height);aspect-ratio:2/3;
   border:1.5px dashed var(--line);background:var(--fill-2);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   transition:transform .25s ease;
 }
 #character[data-state="speak"]{transform:translateY(-4px) scale(1.01);}
+/* with a rig mounted the placeholder chrome goes away and the art fills the slot */
+#character.rigged{border:0;background:none;transition:none;transform:none;}
+#character.rigged .ch-name,#character.rigged .ch-state{display:none;}
+#character .rig{position:absolute;inset:0;}
+#character .rig[hidden]{display:none;}
+#character .clip{position:absolute;inset:0;}
+#character .clip[hidden]{display:none;}
+#character .clip svg{display:block;width:100%;height:100%;}
 #character .ch-name{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink);}
 #character .ch-state{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;color:var(--ink-3);}
 
@@ -113,6 +122,9 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ink);outli
 }
 #coach.silent .bubble{display:none;}
 #coach.silent .face{border-color:var(--line-soft);background:var(--fill-2);opacity:.6;}
+#coach .face{overflow:hidden;position:relative;}
+#coach .face img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 42%;}
+/* the label is the fallback if the avatar fails to load; the image covers it */
 #coach .face span{font-family:var(--mono);font-size:8px;color:var(--coach);text-align:center;line-height:1.3;}
 
 /* tappable Spanish */

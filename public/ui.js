@@ -15,17 +15,67 @@
   let state, current = null, plan = null, scaf = 0, placed = [], hinted = false;
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
-  /* ---------- character renderer (STUB) ----------
-     Swap the body for lottie-web at reskin time. The five state names are the
-     slots Directus already stores on ai_tutor_characters:
-     idle | speak | intro | outro | pose                                      */
+  /* ---------- character renderer ----------
+     Lottie, one rig per character, both clips loaded once and kept. Swapping
+     visibility rather than reloading means a character can start and stop
+     talking mid-turn with no flash and no refetch.
+
+     The state names are the slots Directus already stores on
+     ai_tutor_characters: idle | speak | intro | outro | pose. Only idle and
+     speak have art so far; the rest resolve to idle, and a character with no
+     entry here falls back to the dashed placeholder box, which is how the
+     bartender still renders.
+
+     xMidYMax slice: the clips are 1920x1080 with the figure centred, and the
+     slot is portrait. Anchoring to the bottom keeps the character standing on
+     the stage floor and crops the empty sides instead of shrinking them in. */
+  const ANIM = {
+    axel:    { idle: 'anim/axel-idle.json',    speak: 'anim/axel-talk.json' },
+    bouncer: { idle: 'anim/bouncer-idle.json', speak: 'anim/bouncer-talk.json' },
+  };
+  const rigs = new Map();               // character -> { root, clips:{idle,speak} }
+
+  function buildRig(host, character) {
+    const src = ANIM[character];
+    if (!src || typeof window.lottie === 'undefined') return null;
+    const root = document.createElement('div');
+    root.className = 'rig';
+    root.dataset.character = character;
+    host.appendChild(root);
+    const clips = {};
+    for (const key of ['idle', 'speak']) {
+      const box = document.createElement('div');
+      box.className = 'clip';
+      root.appendChild(box);
+      clips[key] = window.lottie.loadAnimation({
+        container: box, renderer: 'svg', loop: true, autoplay: false,
+        path: src[key], rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
+      });
+      clips[key].el = box;
+    }
+    const rig = { root, clips };
+    rigs.set(character, rig);
+    return rig;
+  }
+
   function mountCharacter(el, { character, state: st }) {
     el.dataset.character = character;
     el.dataset.state = st;
     el.querySelector('.ch-name').textContent = character.toUpperCase();
     el.querySelector('.ch-state').textContent = st;
-    // lottie.loadAnimation({ container: el, renderer: 'svg', loop: true,
-    //   autoplay: true, path: ASSETS[character][st] });
+
+    const rig = rigs.get(character) || buildRig(el, character);
+    el.classList.toggle('rigged', !!rig);
+    for (const [name, r] of rigs) r.root.hidden = name !== character;
+    if (!rig) return;
+
+    // only speak has its own clip; intro, outro and pose sit on idle for now
+    const want = st === 'speak' ? 'speak' : 'idle';
+    for (const key of ['idle', 'speak']) {
+      const c = rig.clips[key];
+      c.el.hidden = key !== want;
+      if (key === want) c.play(); else c.pause();
+    }
   }
   function mountBackground(el, key) {
     el.querySelector('.bglabel').textContent = key.replace(/-/g, ' ');
@@ -564,6 +614,23 @@
     window.addEventListener('resize', apply);
     apply();
   })();
+
+  /* The on-screen character's mouth moves for exactly as long as the line
+     plays — server voice or browser fallback, both resolve through the same
+     queue. Axel coaching from his bubble does not move the bouncer, and the
+     learner echo moves nobody. No attempt to match visemes to words: the ask
+     was a talking loop, not lip sync. */
+  let mouthTimer = null;
+  V.onSpeaking((speaker, on) => {
+    if (!current) return;
+    const who = current.scene.onScreen.character;
+    if (speaker !== who) return;
+    clearTimeout(mouthTimer);
+    const set = st => mountCharacter($('character'), { character: who, state: st });
+    // Back-to-back lines land stop-then-start in the same tick; dropping to
+    // idle for one frame between them reads as a twitch, so settling is lazy.
+    if (on) set('speak'); else mouthTimer = setTimeout(() => set('idle'), 160);
+  });
 
   // scriptable view of the same numbers the test strip shows
   window.__DEBUG = { plan: () => plan, item: () => current && current.item, state: () => state };

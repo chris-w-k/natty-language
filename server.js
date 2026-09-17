@@ -31,7 +31,7 @@ const TTS_MODEL   = process.env.TTS_MODEL || 'gemini-2.5-flash-preview-tts';
    bar you have to order at, and the child's own echo. */
 const VOICES = {
   axel:      process.env.VOICE_AXEL      || 'Zubenelgenubi',
-  bouncer:   process.env.VOICE_BOUNCER   || 'Charon',
+  bouncer:   process.env.VOICE_BOUNCER   || 'Algenib',
   bartender: process.env.VOICE_BARTENDER || 'Aoede',
   learner:   process.env.VOICE_LEARNER   || 'Leda',
 };

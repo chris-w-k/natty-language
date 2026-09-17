@@ -54,6 +54,8 @@ public/content.js      the quest: scenes, phrases, chips, distractors, glosses
 public/engine.js       the deterministic learner model. Owns every number.
 public/ui.js           screens, chips, mic, coach widget. Owns no numbers.
 public/voice.js        Gemini TTS first, browser synthesis as fallback
+public/anim/           Lottie clips, <character>-idle.json and -talk.json
+public/vendor/         lottie_light.min.js, vendored so there is no CDN call
 public/app.css         all visual values as tokens on :root
 ```
 
@@ -178,12 +180,39 @@ already sounds like the character. A wrong voice name just falls back.
 `TTS_MODEL` defaults to `gemini-2.5-flash-preview-tts`. If TTS 404s, that is
 the value to change; it degrades to browser speech rather than breaking.
 
+## Characters
+
+Lottie, vendored (`public/vendor/lottie_light.min.js`, 5.12.2, SVG renderer —
+the clips use no expressions, text, effects or mattes, so the light build is
+enough and it is not a CDN dependency).
+
+`public/anim/<character>-{idle,talk}.json`. Both clips for a character load
+once into one rig and stay loaded; speaking swaps which is visible rather than
+reloading, so a character can start and stop talking mid-turn with no flash.
+The clips are 1920×1080 with the figure centred and the slot is portrait, so
+they render `xMidYMax slice`: anchored to the bottom, empty sides cropped, feet
+on the stage floor.
+
+`VOICE.onSpeaking(speaker, on)` drives the mouth, so it works on the server
+voice and the browser fallback alike, and it holds for exactly as long as the
+line plays. Only the character actually on screen reacts — Axel coaching from
+his bubble does not move the bouncer, and the learner echo moves nobody. No
+viseme matching: it is a talking loop, not lip sync.
+
+Characters with no entry in `ANIM` fall back to the dashed placeholder box —
+that is how the bartender still renders. States are still named
+`idle | speak | intro | outro | pose`, the five slots Directus stores on
+`ai_tutor_characters`; only `idle` and `speak` have art, and the rest resolve
+to `idle`.
+
+Axel's static avatar in the coach circle is `public/img/axel-avatar.png`. It is
+61×59, so it is soft on a retina screen — worth a 2× export before this is
+shown to anyone.
+
 ## Reskin later
 
 Three stacked layers that never move: `#layer-bg`, `#layer-char`, `#layer-ui`.
-`mountCharacter()` and `mountBackground()` in `ui.js` are stubs — swap the
-bodies for lottie-web and real images and nothing relayouts. Character states
-are named `idle | speak | intro | outro | pose`, the same five slots Directus
-stores on `ai_tutor_characters`.
+`mountBackground()` in `ui.js` is still a stub — drop real images in and
+nothing relayouts.
 
 Every colour, radius and shadow is a token on `:root` in `app.css`.

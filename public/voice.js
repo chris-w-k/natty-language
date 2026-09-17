@@ -23,6 +23,20 @@ window.VOICE = (function () {
 
   const LANG = { es: 'es-ES', en: 'en-GB' };
 
+  /* Who is talking right now. The UI listens so a character's mouth moves for
+     the length of the line — both on the server voice and on the browser
+     fallback, since both resolve through the same queue. Nothing here knows
+     about animation; it just reports the speaker. */
+  const listeners = [];
+  let talking = null;
+  function onSpeaking(fn) { listeners.push(fn); }
+  function emit(speaker, on) {
+    if (on && talking === speaker) return;
+    if (!on && talking !== speaker) return;
+    talking = on ? speaker : null;
+    for (const fn of listeners) { try { fn(speaker, on); } catch {} }
+  }
+
   function setServer(on) { serverTTS = !!on; }
   function setEnabled(on) { enabled = !!on; if (!on) stop(); }
   function isEnabled() { return enabled; }
@@ -39,6 +53,7 @@ window.VOICE = (function () {
   }
 
   function stop() {
+    if (talking) emit(talking, false);
     chain = Promise.resolve();
     try { window.speechSynthesis.cancel(); } catch {}
     if (current) { try { current.pause(); } catch {} current = null; }
@@ -122,13 +137,18 @@ window.VOICE = (function () {
     chain = chain.then(async () => {
       if (!enabled) return;
       unlock();
-      if (serverTTS) {
-        try {
-          const url = await fetchClip(text, speaker);
-          if (await play(url)) return;
-        } catch { /* fall through to the browser */ }
+      emit(speaker, true);
+      try {
+        if (serverTTS) {
+          try {
+            const url = await fetchClip(text, speaker);
+            if (await play(url)) return;
+          } catch { /* fall through to the browser */ }
+        }
+        await browserSay(text, LANG[lang] || lang);
+      } finally {
+        emit(speaker, false);
       }
-      await browserSay(text, LANG[lang] || lang);
     }).catch(() => {});
     return chain;
   }
@@ -140,5 +160,5 @@ window.VOICE = (function () {
     try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => {}; } catch {}
   }
 
-  return { say, now, prefetch, stop, unlock, setServer, setEnabled, isEnabled };
+  return { say, now, prefetch, stop, unlock, onSpeaking, setServer, setEnabled, isEnabled };
 })();
