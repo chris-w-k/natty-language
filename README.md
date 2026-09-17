@@ -186,6 +186,38 @@ says what it is waiting for instead of leaving the previous turn live
 underneath. Each scene's words are prefetched as it begins — that scene's
 vocabulary only, since every clip is a Gemini call.
 
+## Latency
+
+Three things were making a child watch a loading strip for 15-40 seconds a
+turn, and the first was doing almost all of it.
+
+**Thinking was on.** `gemini-2.5-flash` reasons before answering by default,
+and both calls here are short structured JSON — a line of dialogue, a handful
+of flags. Nothing in either needs it. `askJSON` now switches it off. The field
+has been spelled two ways across API versions, so the first 400 that mentions
+it moves to the next spelling and retries: a wrong guess costs one request at
+boot rather than breaking every turn. `THINKING_BUDGET` overrides the value.
+
+**The turn generator retried.** Three attempts on a 20s timeout is up to a
+minute of a child staring at a spinner — for a line that has a hand-written
+equivalent sitting in `content.js`. It gets one attempt on an 8s fuse.
+
+**Nothing bounded the wait client-side.** `/api/turn` now has a 4.5s deadline,
+after which the turn renders from the template. Past that point the model has
+nothing to offer that is worth a spinner.
+
+The test strip reports which happened and how long it took — `generator:
+gemini 840ms`, or `generator: template (timed out, 4501ms)`. If it says
+template every turn, read the reason: `timed out` is latency, `unglossable
+word` or `too many new words` is the whitelist, `wrong language` is §6.
+
+Scene prefetching is staggered rather than fired as one burst, so a scene's
+worth of TTS calls does not compete with the lines the child is waiting on.
+
+What is left is the free Render instance: it sleeps after ~15 minutes idle and
+takes ~30s to wake, which is most of the wait on the very first turn of a
+session and nothing to do with any of the above.
+
 ## What the characters may say
 
 The generator writes two lines a turn and both are checked before they reach

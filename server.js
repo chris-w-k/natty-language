@@ -102,7 +102,7 @@ function cookieToken(req) {
 const authed = (req, b) => tokenValid(cookieToken(req) || (b && b.token));
 
 /* ---------- gemini transport (verbatim shape) ---------- */
-async function gemini(model, body, { tries = 3 } = {}) {
+async function gemini(model, body, { tries = 3, timeoutMs = 20000 } = {}) {
   const url = `${API_BASE}/models/${model}:generateContent`;
   let lastErr;
   for (let i = 0; i < tries; i++) {
@@ -111,29 +111,62 @@ async function gemini(model, body, { tries = 3 } = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': API_KEY },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (res.status === 429 || res.status >= 500) throw new Error('retryable ' + res.status);
-      if (!res.ok) throw new Error('gemini ' + res.status + ' ' + (await res.text()).slice(0, 300));
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 300);
+        throw Object.assign(new Error('gemini ' + res.status + ' ' + detail), { status: res.status, detail });
+      }
       return await res.json();
     } catch (e) {
       lastErr = e;
+      if (e && e.status === 400) throw e;      // our fault; retrying changes nothing
       if (i < tries - 1) await new Promise(r => setTimeout(r, 400 * Math.pow(2, i)));
     }
   }
   throw lastErr;
 }
 
-async function askJSON({ system, parts, schema, temperature = 0.2 }) {
-  const data = await gemini(MODEL, {
+/* Both of these calls are short structured JSON — a line of dialogue, a
+   handful of flags. gemini-2.5-flash thinks by DEFAULT, and on a prompt this
+   size that was costing tens of seconds per turn while a child sat watching a
+   loading strip. Thinking is switched off.
+
+   The field has been spelled two ways across API versions, so rather than bet
+   on one, the first 400 that mentions it drops the field for the rest of the
+   process and the call is retried plain. That way a wrong guess costs one
+   request at boot instead of breaking every turn. */
+const THINKING_BUDGET = Number(process.env.THINKING_BUDGET || 0);
+const THINKING_SHAPES = [
+  { thinkingConfig: { thinkingBudget: THINKING_BUDGET } },   // v1beta, 2.5-flash
+  { thinking_level: 'low' },                                  // newer spelling
+  {},                                                         // model default
+];
+let thinkingShape = 0;
+
+async function askJSON({ system, parts, schema, temperature = 0.2, tries = 3, timeoutMs = 20000 }) {
+  const send = () => gemini(MODEL, {
     systemInstruction: system ? { parts: [{ text: system }] } : undefined,
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: schema,
       temperature,
+      ...THINKING_SHAPES[thinkingShape],
     },
-  });
+  }, { tries, timeoutMs });
+
+  let data;
+  for (;;) {
+    try { data = await send(); break; }
+    catch (e) {
+      const rejected = e && e.status === 400 && /thinking/i.test(e.detail || e.message || '');
+      if (!rejected || thinkingShape >= THINKING_SHAPES.length - 1) throw e;
+      thinkingShape += 1;
+      console.warn('\x1b[33m⚠\x1b[0m thinking field rejected, trying', JSON.stringify(THINKING_SHAPES[thinkingShape]));
+    }
+  }
   const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '{}';
   return JSON.parse(text);
 }
@@ -277,7 +310,12 @@ async function generateTurn(b) {
     for (const r of recent) lines.push('- ' + r);
   }
   const prompt = lines.join('\n');
-  return await askJSON({ system: TURN_SYSTEM, parts: [{ text: prompt }], schema: TURN_SCHEMA, temperature: 1.0 });
+  /* One attempt, short fuse. A slow turn is worse than a templated one: the
+     client has a hand-written line ready and a child is watching a spinner. */
+  return await askJSON({
+    system: TURN_SYSTEM, parts: [{ text: prompt }], schema: TURN_SCHEMA,
+    temperature: 1.0, tries: 1, timeoutMs: 8000,
+  });
 }
 
 /* ---------- text to speech ----------

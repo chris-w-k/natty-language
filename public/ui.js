@@ -248,11 +248,21 @@
     return { words, unglossable, fresh };
   }
 
+  /* How long the child may be made to wait for a generated line. There is a
+     hand-written one in content.js that is always correct, so past this point
+     the model has nothing to offer that is worth a spinner. */
+  const TURN_DEADLINE_MS = 4500;
+  let lastGenMs = 0, lastGenWhy = 'template';
+
   async function generateTurn(scene, item, scaffold) {
-    if (!serverUp) return null;
+    if (!serverUp) { lastGenWhy = 'no server'; return null; }
     const met = metWords(item);
+    const t0 = Date.now();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), TURN_DEADLINE_MS);
     try {
       const r = await fetch('/api/turn', {
+        signal: ctl.signal,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character: scene.onScreen.character,
@@ -266,9 +276,13 @@
           history: history.slice(-4), recent: recentLines.slice(-6)
         })
       });
-      if (!r.ok) return null;
+      if (!r.ok) { lastGenWhy = 'http ' + r.status; return null; }
       const j = await r.json();
-      if (!j || !j.coach_ask || !j.scene_line) return null;
+      lastGenMs = Date.now() - t0;
+      if (!j || !j.coach_ask || !j.scene_line) {
+        lastGenWhy = j && j.error ? 'error' : 'empty';
+        return null;
+      }
 
       /* The prompt states both rules; a model still drifts, so they are
          enforced here where it costs nothing. A rejected turn falls back to
@@ -276,16 +290,23 @@
       if (scene.onScreen.speaks !== 'native') {
         const cap = MAX_SCENE_WORDS[scaffold] ?? 12;
         const a = audit(j.scene_line, met);
-        if (a.words > cap) return null;      // too long for this rung
-        if (a.unglossable > 0) return null;  // a word the child cannot look up
-        if (a.fresh > 2) return null;        // §10: two new words, no more
+        if (a.words > cap)     { lastGenWhy = 'too long'; return null; }
+        if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
+        if (a.fresh > 2)       { lastGenWhy = 'too many new words'; return null; }
       } else if (looksTargetLanguage(j.scene_line)) {
-        return null;                         // a native speaker drifting into Spanish
+        lastGenWhy = 'wrong language';       // a native speaker drifting into Spanish
+        return null;
       }
 
       recentLines.push(j.coach_ask);
       return j;
-    } catch { return null; }
+    } catch (e) {
+      lastGenMs = Date.now() - t0;
+      lastGenWhy = (e && e.name === 'AbortError') ? 'timed out' : 'unreachable';
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function recordTurn(scene, item, line, ask, produced) {
@@ -428,10 +449,15 @@
     const scene = E.sceneOf(Q, state);
     if (!scene || preloadedScene === state.sceneIndex) return;
     preloadedScene = state.sceneIndex;
+    /* Staggered, not fired as one burst. A scene's worth of clips going out
+       together competes with the lines the child is waiting to hear right now,
+       and a rate-limited TTS call backs off for seconds. */
+    const queue = [];
     for (const it of scene.items) {
-      V.prefetch(it.target, 'axel');
-      for (const w of (it.chips || [])) V.prefetch(w, 'axel');
+      queue.push([it.target, 'axel']);
+      for (const w of (it.chips || [])) queue.push([w, 'axel']);
     }
+    queue.forEach(([text, who], i) => setTimeout(() => V.prefetch(text, who), 1200 + i * 700));
   }
 
   async function renderTurn() {
@@ -447,7 +473,9 @@
     preloadScene();
     const gen = await generateTurn(scene, item, scaffold);
     $('turn-loading').classList.add('hidden');
-    $('t-gen').textContent = gen ? 'generator: gemini' : 'generator: template';
+    $('t-gen').textContent = gen
+      ? 'generator: gemini ' + lastGenMs + 'ms'
+      : 'generator: template (' + lastGenWhy + (lastGenMs ? ', ' + lastGenMs + 'ms' : '') + ')';
     const coach = coachCopy(item, scaffold, plan, gen);
     const sceneLine = gen ? gen.scene_line : scene.opening;
 
