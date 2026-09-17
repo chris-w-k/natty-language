@@ -57,11 +57,19 @@ window.ENGINE = (function () {
   }
 
   function createState(quest) {
-    const items = {};
+    const items = {}, patterns = {};
     for (const it of allItems(quest)) {
-      items[it.id] = { id: it.id, sceneId: it.sceneId, mastery: 0, exposures: 0, fails: 0, owed: false, lastTurn: -99 };
+      items[it.id] = { id: it.id, sceneId: it.sceneId, patternId: it.patternId,
+                       exposures: 0, fails: 0, owed: false, lastTurn: -99 };
+      const pid = it.patternId || it.id;
+      if (!patterns[pid]) patterns[pid] = { id: pid, mastery: 0, exposures: 0 };
     }
     return {
+      /* The construction's score, ONE per pattern however many words it is met
+         with. "Can I have a ticket" and "Can I have a soda" are the same
+         pattern twice: the frame carries over, the word does not. Per-instance
+         facts (fails, owed, when it was last seen) stay on the item. */
+      patterns,
       // §1: two independent ledgers. A word absent from this map is UNSEEN,
       // which is not the same as mastery 0 and is why it is created lazily.
       words: {},
@@ -91,9 +99,11 @@ window.ENGINE = (function () {
   function overall(state, quest) {
     const ids = Object.keys(state.items);
     if (!ids.length) return 0;
-    const patternMean = ids.reduce((s, id) => s + state.items[id].mastery, 0) / ids.length;
-    const vocab = [];
-    for (const it of allItems(quest)) for (const w of (it.chips || [])) vocab.push(w);
+    const pids = Object.keys(state.patterns || {});
+    const patternMean = pids.length
+      ? pids.reduce((s, id) => s + state.patterns[id].mastery, 0) / pids.length : 0;
+    // the vocabulary list proper: the words that fill the slots
+    const vocab = [...new Set(allItems(quest).map(it => it.slotTarget).filter(Boolean))];
     if (!vocab.length) return patternMean;
     const wordMean = vocab.reduce((s, w) => s + wordMastery(state, w), 0) / vocab.length;
     return clamp((patternMean + wordMean) / 2);
@@ -104,18 +114,27 @@ window.ENGINE = (function () {
      and how many decoy chips are in the tray. */
   function bucket(m) { return m < 0.2 ? 0 : m < 0.4 ? 1 : m < 0.6 ? 2 : m < 0.8 ? 3 : 4; }
 
+  const patternOf = item => (typeof item === 'string' ? item : (item.patternId || item.id));
+  function patternMastery(state, item) {
+    const st = state.patterns && state.patterns[patternOf(item)];
+    return st ? st.mastery : 0;
+  }
+
   /* §2 and §6 aggregate the two ledgers DIFFERENTLY, and conflating them was
      half the problem. The scaffold takes the MINIMUM, so one unseen word keeps
      the support up. Everything else — the bar, "can use", what to practise
      next, the percentage on screen — takes the 50/50 MEAN, so steady progress
      still reads as progress. */
+  /* The two halves are the CONSTRUCTION and the WORD IN ITS SLOT — not every
+     chip on screen. Averaging the frame words in double-counts the pattern:
+     "¿Me das una cerveza, por favor?" shares four of its five chips with a
+     phrase already mastered, so an item the child had never once been shown
+     read as 88% learned. A phrase with no slot is all frame, so its score is
+     the pattern's. */
   function itemScore(state, item) {
-    const st = state.items[item.id];
-    const pattern = st ? st.mastery : 0;
-    const chips = item.chips || [];
-    if (!chips.length) return pattern;
-    const words = chips.reduce((a, w) => a + wordMastery(state, w), 0) / chips.length;
-    return clamp((pattern + words) / 2);
+    const pattern = patternMastery(state, item);
+    if (!item.slotTarget) return pattern;
+    return clamp((pattern + wordMastery(state, item.slotTarget)) / 2);
   }
 
   const wordKey = w => norm(w);
@@ -142,12 +161,9 @@ window.ENGINE = (function () {
      carry the turn to L3 while it still contained words the child had never
      met — exactly the turn-three screenshot. */
   function scaffoldFor(state, item) {
-    const id = typeof item === 'string' ? item : item && item.id;
-    const st = state.items[id];
-    let m = st ? st.mastery : 0;
-    const chips = (typeof item === 'object' && item && item.chips) || [];
-    for (const w of chips) m = Math.min(m, wordMastery(state, w));
-    return bucket(m);
+    const pattern = patternMastery(state, item);
+    const slot = (item && item.slotTarget) ? wordMastery(state, item.slotTarget) : pattern;
+    return bucket(Math.min(pattern, slot));
   }
 
   const DISTRACTORS_AT = [1, 2, 2, 3, 4];
@@ -164,25 +180,51 @@ window.ENGINE = (function () {
     return Math.min(n, Math.max(1, Math.ceil(n * (scaffold + 1) / 5)));
   }
 
+  /* Which chips become gaps, and in what order. An item built from a pattern
+     says so itself: the slot word goes first, because that is what the turn is
+     about, and the frame peels in from the end around it. Dropping "favor?"
+     before "una entrada" would be testing the punctuation. Items with no
+     gapOrder fall back to the old trailing-first behaviour. */
+  function gapIndices(item, gaps) {
+    const n = item.chips.length;
+    const order = (item.gapOrder && item.gapOrder.length === n)
+      ? item.gapOrder
+      : Array.from({ length: n }, (_, i) => n - 1 - i);
+    return new Set(order.slice(0, gaps));
+  }
+
   function buildPlan(item, scaffold) {
     const chips = item.chips.slice();
     const n = chips.length;
     const gaps = Math.min(n, gapCount(n, scaffold));
-    const answer = chips.slice(n - gaps);
+    const gapAt = gapIndices(item, gaps);
+
+    /* cells are the sentence in order: each is a word the child can see or a
+       blank they must fill. The blanks are no longer guaranteed to be at the
+       end, so the slot has to carry its position. */
+    const cells = chips.map((w, i) => ({ w, gap: gapAt.has(i) }));
+    const answer = cells.filter(c => c.gap).map(c => c.w);
+    const locked = cells.filter(c => !c.gap).map(c => c.w);
+
     if (scaffold === 0) {
-      const nat = String(item.native).replace(/[?!.]+$/, '').split(' ');
-      const frame = nat.slice(0, Math.max(1, nat.length - 1)).join(' ');
-      return { mode: 'native-frame', frame, locked: [], answer, gaps };
+      const nat = String(item.native).replace(/[?!.]+$/, '');
+      return { mode: 'native-frame', frame: nat, cells, locked, answer, gaps };
     }
-    return { mode: 'target-frame', frame: '', locked: chips.slice(0, n - gaps), answer, gaps };
+    return { mode: 'target-frame', frame: '', cells, locked, answer, gaps };
   }
 
   /* Chips mode is judged on the part the learner supplied; voice mode on the
      whole phrase, because you cannot speak a gap. */
-  function checkGaps(placed, plan) {
+  function checkGaps(placed, plan, item) {
     const a = placed.map(norm).join(' ').trim();
     const b = plan.answer.map(norm).join(' ').trim();
     if (a === b) return { target_produced: true, understandable: true, error_type: 'none', correction: '' };
+    /* Some turns are a choice rather than a drill — cash or card, both right.
+       Only meaningful once the whole phrase is in play. */
+    if (item && item.acceptAny && plan.gaps >= item.chips.length) {
+      const alts = item.acceptAny.map(t => String(t).split(/\s+/).map(norm).join(' ').trim());
+      if (alts.includes(a)) return { target_produced: true, understandable: true, error_type: 'none', correction: '' };
+    }
     if (a.split(' ').slice().sort().join(' ') === b.split(' ').slice().sort().join(' '))
       return { target_produced: false, understandable: true, error_type: 'word_order', correction: plan.answer.join(' ') };
     return { target_produced: false, understandable: false, error_type: 'wrong_word', correction: plan.answer.join(' ') };
@@ -256,7 +298,7 @@ window.ENGINE = (function () {
     const owed = [];
     for (const it of scene.items) {
       const st = state.items[it.id];
-      if (!st.owed && st.mastery < BAR(quest)) { st.owed = true; st.fails = 0; owed.push(it); }
+      if (!st.owed && itemScore(state, it) < BAR(quest)) { st.owed = true; st.fails = 0; owed.push(it); }
     }
     return owed;
   }
@@ -311,11 +353,13 @@ window.ENGINE = (function () {
      the words they just said race ahead while the construction inches up. */
   function applyCorrect(state, item, { mode, hinted, hints }) {
     const st = state.items[item.id];
+    const pat = state.patterns[patternOf(item)];
     const used = typeof hints === 'number' ? hints : (hinted ? 1 : 0);
-    const before = st.mastery;
+    const before = pat.mastery;
 
     const base = mode === 'voice' ? GAIN.pattern.voice : GAIN.pattern.chips;
-    st.mastery = clamp(st.mastery + base * damp('pattern', used));
+    pat.mastery = clamp(pat.mastery + base * damp('pattern', used));
+    pat.exposures += 1;
     st.exposures += 1;
     st.fails = 0;
     st.lastTurn = state.turn;
@@ -327,7 +371,7 @@ window.ENGINE = (function () {
 
     state.turn += 1;
     state.coins += used ? 5 : 10;
-    const delta = { label: item.target, from: before, to: st.mastery, why: used ? 'correct (helped)' : `correct (${mode})` };
+    const delta = { label: item.target, from: before, to: pat.mastery, why: used ? 'correct (helped)' : `correct (${mode})` };
     state.log.push({ turn: state.turn, item: item.id, ...delta });
     return delta;
   }
@@ -339,7 +383,8 @@ window.ENGINE = (function () {
     const st = state.items[item.id];
     st.fails += 1;
     st.exposures += 1;
-    return { label: item.target, from: st.mastery, to: st.mastery, why: 'wrong — no penalty' };
+    const m = patternMastery(state, item);
+    return { label: item.target, from: m, to: m, why: 'wrong — no penalty' };
   }
 
   function mercyDue(state, item, quest) {
@@ -350,7 +395,8 @@ window.ENGINE = (function () {
     const st = state.items[item.id];
     st.owed = true;
     st.fails = 0;
-    return { label: item.target, from: st.mastery, to: st.mastery, why: 'Axel covered for you — comes back later' };
+    const m = patternMastery(state, item);
+    return { label: item.target, from: m, to: m, why: 'Axel covered for you — comes back later' };
   }
 
   /* Owed items are re-opened once the child reaches the final scene, so the
@@ -371,8 +417,8 @@ window.ENGINE = (function () {
   function applyDecay(state, daysSinceSeen) {
     const weeks = Math.floor(daysSinceSeen / 7);
     if (weeks < 1) return state;
-    for (const id of Object.keys(state.items)) {
-      state.items[id].mastery = clamp(state.items[id].mastery - DECAY_PER_WEEK * weeks);
+    for (const id of Object.keys(state.patterns)) {
+      state.patterns[id].mastery = clamp(state.patterns[id].mastery - DECAY_PER_WEEK * weeks);
     }
     return state;
   }
@@ -382,7 +428,7 @@ window.ENGINE = (function () {
     clamp, norm, fold, lev,
     allItems, createState, label, overall,
     bucket, scaffoldFor, gapCount, buildPlan, checkGaps,
-    itemScore, wordMastery, wordSeen, knownWords, creditWord, HINT_DAMP,
+    itemScore, patternMastery, patternOf, wordMastery, wordSeen, knownWords, creditWord, HINT_DAMP,
     sceneOf, sceneDone, pickNext, advanceScene, sceneTurnCap, sceneOverBudget, oweRemaining,
     evaluateLocal,
     creditHeardItem, applyCorrect, applyWrong, mercyDue, applyMercy, reopenOwed, applyDecay,

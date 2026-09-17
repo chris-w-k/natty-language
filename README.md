@@ -111,6 +111,50 @@ Simulated players, all of whom reach the final scene: perfect finishes in 21 of
 24 turns at 100%; one miss per phrase ends at 79%; getting nothing right at all
 still sees all four scenes and the ending.
 
+## Patterns and words
+
+The quest is two constructions and a handful of words, which is how the source
+models a scenario and how the vocabulary was specified. `content.js` declares
+**patterns** (`¿Me das {x}, por favor?`), **words** that drop into the slot
+(`una entrada`, `un refresco`), and **scenes** as a list of beats pairing one
+with the other. An expander turns those into the flat items the engine plays;
+nothing outside that file knows the difference.
+
+The point is that "Can I have a ticket" and "Can I have a soda" are the **same
+pattern met twice**, not two unrelated things to learn. There is one mastery
+score per pattern, so the frame carries across the venue while each new word
+starts from nothing — and §6's minimum rule then keeps the support up for the
+word without dragging the frame back down with it:
+
+```
+after 1x ticket: pattern 0.20 | ticket L1 | soda L0
+after 4x ticket: pattern 0.80 | ticket L4 | soda L0
+```
+
+The soda turn stays at full support until the child has met the word, on a
+frame they can already build. That falls out of the model rather than being
+special-cased.
+
+A pattern with no `{x}` is a fixed phrase — *Gracias.*, *Perdona.* — which has
+nowhere to vary. `acceptAny` marks a turn that is a choice rather than a
+drill: cash or card, both right.
+
+**Scoring a slot item** is the pattern plus the word in its slot, not the mean
+of every chip on screen. Averaging the frame words in double-counts the
+pattern: `¿Me das una cerveza, por favor?` shares four of its five chips with a
+phrase already mastered, so an item the child had never once been shown read
+as 88% learned.
+
+**The cloze takes the slot first.** The slot is what the turn is about, and it
+sits mid-sentence, so gaps are no longer the trailing chips — the item carries
+its own gap order and the frame peels in from the end around the slot.
+Dropping `favor?` before `una entrada` would be testing the punctuation.
+
+**Decoys are other slot words** where the turn asks for the slot. A ticket, a
+drink and a beer all fit `¿Me das ___` and telling them apart is the point;
+frame words only come in once whole sentences are being built, where word
+order is what is being tested.
+
 ## The two ledgers
 
 Mastery modelling v2 §1 keeps two independent scores, and they move at very

@@ -312,3 +312,7 @@ mark{background:var(--fill);border-bottom:2px solid var(--coach);padding:1px 5px
   .chipline.gained{background:var(--coach);border-color:var(--coach);}
   .chipline.gained span{color:var(--paper);}
 }
+
+/* a frame fragment that starts with punctuation sits against the gap before it,
+   cancelling the slot's own inter-word gap so ", please?" reads as one clause */
+#slot .frame.hug{margin-left:-6px;}

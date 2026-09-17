@@ -568,37 +568,56 @@
     setTimeout(release, 12000);
   }
 
+  /* The blanks are no longer guaranteed to be at the end. A pattern's slot
+     sits wherever the sentence puts it — "¿Me das ___, por favor?" — so the
+     slot is drawn from plan.cells in sentence order, with the frame words
+     around the gaps rather than all in front of them. */
   function renderSlot() {
     const slot = $('slot');
     slot.classList.remove('ok');
     slot.innerHTML = '';
 
-    if (plan.mode === 'native-frame') {
+    let g = 0;
+    const gapEl = () => {
+      const i = g++;
+      if (placed[i] === undefined) {
+        const e = document.createElement('span');
+        e.className = 'gap';
+        return e;
+      }
+      const b = document.createElement('button');
+      b.className = 'chip placed';
+      b.type = 'button';
+      b.textContent = placed[i];
+      b.addEventListener('click', () => {
+        if (inputLocked) return;
+        placed.splice(i, 1); renderSlot(); renderTray();
+      });
+      return b;
+    };
+    const frameEl = text => {
       const f = document.createElement('span');
       f.className = 'frame';
-      f.textContent = plan.frame;
-      slot.appendChild(f);
+      // ", please?" must hug the gap it follows rather than float off it
+      if (/^[,.;:!?]/.test(text)) f.classList.add('hug');
+      f.textContent = text;
+      return f;
+    };
+
+    if (plan.mode === 'native-frame') {
+      /* §6 L0: the meaning is carried in the child's own language and the one
+         target word appears in the gap, where it belongs in the sentence. */
+      const nf = current.item.nativeFrame || { before: plan.frame, after: '' };
+      if (nf.before) slot.appendChild(frameEl(nf.before));
+      for (let i = 0; i < plan.gaps; i++) slot.appendChild(gapEl());
+      if (nf.after) slot.appendChild(frameEl(nf.after));
     } else {
-      for (const w of plan.locked) {
+      for (const cell of plan.cells) {
+        if (cell.gap) { slot.appendChild(gapEl()); continue; }
         const s = document.createElement('span');
         s.className = 'chip locked';
-        s.textContent = w;
+        s.textContent = cell.w;
         slot.appendChild(s);
-      }
-    }
-
-    for (let i = 0; i < plan.gaps; i++) {
-      if (placed[i] !== undefined) {
-        const b = document.createElement('button');
-        b.className = 'chip placed';
-        b.type = 'button';
-        b.textContent = placed[i];
-        b.addEventListener('click', () => { placed.splice(i, 1); renderSlot(); renderTray(); });
-        slot.appendChild(b);
-      } else {
-        const g = document.createElement('span');
-        g.className = 'gap';
-        slot.appendChild(g);
       }
     }
     $('btn-say').disabled = placed.length !== plan.gaps;
@@ -669,11 +688,19 @@
     renderTurn();
   }
 
-  function fullSentence() {
-    return plan.mode === 'native-frame'
-      ? placed.join(' ')
-      : [...plan.locked, ...placed].join(' ');
+  /* The sentence as it currently stands in the slot, gaps filled with whatever
+     the child has put there. At L0 that is their own language around one
+     Spanish word, which is exactly the point of the rung. */
+  function builtSentence() {
+    let g = 0;
+    if (plan.mode === 'native-frame') {
+      const nf = current.item.nativeFrame || { before: plan.frame, after: '' };
+      const mid = plan.cells.filter(c => c.gap).map(() => placed[g++] || '…').join(' ');
+      return [nf.before, mid, nf.after].filter(Boolean).join(' ').replace(/\s+([,.!?])/g, '$1');
+    }
+    return plan.cells.map(c => (c.gap ? (placed[g++] || '…') : c.w)).join(' ');
   }
+  const fullSentence = builtSentence;
 
   /* What gets read aloud on SAY IT: always the complete sentence, never the
      fragment the child tapped. The gaps are always the trailing chips, so the
@@ -683,14 +710,14 @@
      (so the punctuation and accents are the real ones); a wrong one reads back
      what they actually built, which is the point of hearing it. */
   /* The echo reads back what is IN THE SLOT, in whatever languages that is.
-     At L0 the frame is the child's own language and only the gap is Spanish,
-     so they hear "I am going to a concierto" — the sentence they actually
-     built. Reading them a full Spanish sentence they never wrote was the coach
-     modelling, not an echo, and it made the rung feel harder than it is. */
+     At L0 that is the child's own language around one Spanish word — "Can I
+     have una entrada, please?" — the sentence they actually built. Reading
+     them a full Spanish sentence they never wrote was the coach modelling,
+     not an echo, and it made the rung feel harder than it is. */
   function spokenSentence() {
-    if (plan.mode === 'native-frame') return [plan.frame, ...placed].join(' ');
-    if (E.checkGaps(placed, plan).target_produced) return current.item.target;
-    return [...plan.locked, ...placed].join(' ');
+    if (plan.mode !== 'native-frame' && E.checkGaps(placed, plan, current.item).target_produced)
+      return current.item.target;
+    return builtSentence();
   }
   // mixed lines are led by their frame; this only steers the browser fallback
   function spokenLang() { return plan.mode === 'native-frame' ? NL() : TL(); }
@@ -706,7 +733,7 @@
     // point is to hear the finished thing, even at the one-word rungs.
     if (mode === 'chips') V.now(spokenSentence(), { speaker: 'learner', lang: spokenLang() });
 
-    const res = mode === 'chips' ? E.checkGaps(placed, plan) : await evaluateSpoken(text, item);
+    const res = mode === 'chips' ? E.checkGaps(placed, plan, item) : await evaluateSpoken(text, item);
 
     if (res.target_produced) {
       const before = E.overall(state, Q);

@@ -33,6 +33,7 @@ const VOICES = {
   axel:      process.env.VOICE_AXEL      || 'Zubenelgenubi',
   bouncer:   process.env.VOICE_BOUNCER   || 'Algenib',
   bartender: process.env.VOICE_BARTENDER || 'Aoede',
+  fan:       process.env.VOICE_FAN       || 'Callirrhoe',
   learner:   process.env.VOICE_LEARNER   || 'Leda',
 };
 
@@ -44,6 +45,7 @@ const STYLES = {
   axel:      process.env.STYLE_AXEL      || 'Say in a warm, cocky, laddish teenage-punk voice, like a big brother coaching a kid through it — encouraging, never babyish, and clear enough to copy:',
   bouncer:   process.env.STYLE_BOUNCER   || 'Say in a deep, gruff, slightly bored doorman voice, unhurried and a little intimidating but not unkind:',
   bartender: process.env.STYLE_BARTENDER || 'Say in a brisk, friendly voice over a noisy bar, cheerful and quick:',
+  fan:       process.env.STYLE_FAN       || 'Say shouted happily over loud live music, delighted and a bit breathless:',
   learner:   process.env.STYLE_LEARNER   || 'Say clearly and simply, at a learner\'s pace, like a child repeating a phrase they have just worked out:',
 };
 const ACCESS_CODE = (process.env.ACCESS_CODE || '').trim();
