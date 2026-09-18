@@ -228,12 +228,13 @@ whole night: each character's line, Axel's hint, and the child's own answers
 coming back from the right with a greyed head. Older messages fade out at the
 top; the expand button opens the lot full screen.
 
-Target-language words are **blue and tappable**. A tap opens the gloss card
+Only **target-language words** are blue and tappable — lines are mixed now, and
+making "Have" or "you" tappable would offer a translation that does not exist. A tap opens the gloss card
 with the word, what it means, and a button to hear it. Reading is never
 locked — a child can ask what a word means whenever they like — but while a
 character is still speaking the card opens *silently* rather than talking over
 them. Its speaker button always works, because tapping it is asking for the
-interruption.
+interruption. Tapping anywhere else dismisses the card.
 
 The **answer area** is a white sheet: the sentence being built, a round submit
 beside it, and the words below in a horizontally scrolling dock with the mic
@@ -314,10 +315,13 @@ from a real one.
 
 `scene_line` — what the on-screen character says — is held to three rules:
 
-- **Length by support level** (4, 6, 8, 12, 16 words for L0–L4). A fluent
-  sentence is unreadable to a child three words into the language however
-  correct it is; at a high support level the character speaks in bursts and
-  the coach carries the meaning.
+- **§6 applies to the character too, not only the coach.** At L0 and L1 the
+  line is written in the child's own language with the target words dropped
+  into it — at L0, exactly one: *"Hold up. You got an **entrada**?"* From L2
+  it is in the target language, within a word limit (8, 12, 16). A short but
+  fully Spanish line is still a wall to a child on their first turn, which is
+  what a length cap alone got wrong. `openingNative` on a scene is the
+  scripted fallback for the low rungs.
 - **Nothing unglossable.** Every word must be in the glossary or in the
   quest's own vocabulary. A word outside that is one the child can tap and get
   nothing back.
@@ -410,9 +414,13 @@ The clips are 1920×1080 with the figure centred and the slot is portrait, so
 they render `xMidYMax slice`: anchored to the bottom, empty sides cropped, feet
 on the stage floor.
 
-`VOICE.onSpeaking(speaker, on)` drives the mouth, so it works on the server
-voice and the browser fallback alike, and it holds for exactly as long as the
-line plays. Only the character actually on screen reacts — Axel coaching from
+`VOICE.onSpeaking(speaker, on)` drives the mouth, and it fires when the audio
+actually starts — the `playing` event, not the moment the line is queued. It
+used to go up at the front of the queue, so a character mouthed away through
+the whole fetch before any sound arrived; the turn also mounted them in
+`speak` on render, which had them talking to themselves before the clip even
+existed. Both fixed: measured, the talk clip and the audio now start in the
+same tick. Only the character actually on screen reacts — Axel coaching from
 his bubble does not move the bouncer, and the learner echo moves nobody. No
 viseme matching: it is a talking loop, not lip sync.
 

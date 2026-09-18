@@ -246,11 +246,25 @@ but not yet in the first list, you may use at most two — they are new to this
 child. Reaching for a word they were never taught is worse than saying
 something simpler.
 
-It must also fit the word limit you are given. A fluent sentence is
-unreadable to a child three words into the language, however correct it is:
-at a high support level the character speaks in short bursts and the coach
-carries the meaning. The game counts the words and the unknown ones, and
-throws your line away if it breaks either rule.
+The support level governs this line too, not just the coach's, because a
+child on their first turn cannot read the person in front of them either.
+
+  scene_line mode NATIVE (levels 0 and 1): write the line in the NATIVE
+  language, with the target-language words dropped into it. At level 0 that
+  means EXACTLY ONE target-language word in an otherwise native sentence —
+  the meaning is carried in the language the child already has, and the one
+  new word is met in context. At level 1 up to three. The line must not be
+  entirely in the target language, and must contain no target-language word
+  you invented.
+
+  scene_line mode TARGET (levels 2 and up): write the line in the target
+  language, within the word limit you are given. A fluent sentence is
+  unreadable to a child three words into the language however correct it is,
+  so at the lower of these levels the character speaks in short bursts and the
+  coach carries the meaning.
+
+You are told which mode and which limits apply. The game counts the words and
+throws your line away if it breaks them.
 
 If the scene's character speaks the native language, write it entirely in the
 native language, with NOT ONE target-language word in it — no greeting, no
@@ -288,7 +302,8 @@ Return JSON only.`;
 
 async function generateTurn(b) {
   const { character, characterNote, sceneTitle, sceneSpeaks, sceneGoal, target, native,
-          scaffold, maxSceneWords, nativeLang, targetLang, allowed, glossable, history, recent } = b;
+          scaffold, sceneMode, maxSceneWords, maxSceneTargetWords,
+          nativeLang, targetLang, allowed, glossable, history, recent } = b;
   const lines = [
     `Scene: ${sceneTitle}${sceneGoal ? ' — ' + sceneGoal : ''}`,
     `On-screen character: ${character}${characterNote ? ' — ' + characterNote : ''}`,
@@ -296,7 +311,9 @@ async function generateTurn(b) {
     `Target phrase (${targetLang}): ${target}`,
     `Which means (${nativeLang}): ${native}`,
     `Support level: ${scaffold} of 4 (0 = brand new, 4 = nearly mastered)`,
-    `scene_line word limit: ${maxSceneWords || 12}`,
+    sceneMode === 'native'
+      ? `scene_line mode: NATIVE — write it in ${nativeLang}, with at most ${maxSceneTargetWords || 1} ${targetLang} word(s) in it`
+      : `scene_line mode: TARGET — write it in ${targetLang}, at most ${maxSceneWords || 12} words`,
     `Words this child has already met: ${(allowed || []).join(', ')}`,
     `Words the game can explain at all — nothing outside this list may appear: ${(glossable || []).join(', ')}`,
   ];

@@ -111,6 +111,10 @@ window.QUEST = (function () {
         "goal": "get past the bouncer with a ticket",
         "onScreen": { "character": "bouncer", "role": "npc", "speaks": "target" },
         "opening": "¿Sí? ¿Tienes entrada?",
+        /* §6 L0-L1: meaning in the child's own language, the target word
+           appearing once. The generator normally writes these; this is what
+           the game falls back to. */
+        "openingNative": "Hold up. You got an entrada?",
         "beats": [
           { "pattern": "can-i-have", "word": "ticket" },
           { "pattern": "thank-you" }
@@ -124,6 +128,7 @@ window.QUEST = (function () {
         "goal": "order a drink and pay for it",
         "onScreen": { "character": "bartender", "role": "npc", "speaks": "target" },
         "opening": "¡Hola! ¿Qué te pongo?",
+        "openingNative": "Hey! What can I get you — a bebida?",
         "beats": [
           { "pattern": "excuse-me" },
           { "pattern": "can-i-have", "word": "drink" },
@@ -140,6 +145,7 @@ window.QUEST = (function () {
         "goal": "enjoy the band with Axel",
         "onScreen": { "character": "fan", "role": "npc", "speaks": "target" },
         "opening": "¡Mira! ¡Están tocando!",
+        "openingNative": "Listen to them go! What do you make of this canción?",
         "beats": [
           { "pattern": "i-love-this", "word": "song" }
         ]

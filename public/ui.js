@@ -228,24 +228,44 @@
     return [...out];
   }
 
-  /* How long the character's line may be, by support level. A fluent sentence
-     is unreadable to a child three words into the language, however correct it
-     is; the coach carries the meaning until they have the words for it. */
-  const MAX_SCENE_WORDS = [4, 6, 8, 12, 16];
+  /* §6, applied to the CHARACTER's line and not only the coach's. The support
+     level is a rule about how much of the child's own language the turn leans
+     on, and at the bottom of the ladder that means the person in front of them
+     is understood in English with one Spanish word in it — "the meaning
+     carried in the support language; the target word appears once, glossed".
+     A short but fully Spanish line was still a wall to a child on their very
+     first turn, which is what this got wrong. */
+  const SCENE_RULES = [
+    { native: true,  maxTarget: 1 },    // L0: their language, ONE target word
+    { native: true,  maxTarget: 3 },    // L1: their language, target words dropped in
+    { native: false, maxWords: 8 },     // L2: target language, one short aside
+    { native: false, maxWords: 12 },    // L3: target language, framing only
+    { native: false, maxWords: 16 },    // L4: no support language at all
+  ];
+  const sceneRule = n => SCENE_RULES[n] || SCENE_RULES[SCENE_RULES.length - 1];
+
+  // a word spelled like the target language: inverted punctuation or Spanish
+  // diacritics. Used to spot invented vocabulary inside an English line.
+  const looksForeign = tok => /[¿¡]/.test(tok) || /[áéíóúñü]/i.test(tok);
 
   function audit(text, met) {
     const known = new Set((met || []).map(bare));
     const can = glossable();
     const drill = drillWords();
-    let unglossable = 0, fresh = 0, words = 0;
+    let unglossable = 0, fresh = 0, words = 0, target = 0, foreign = 0;
     for (const tok of String(text).split(/\s+/)) {
       const w = bare(tok);
       if (!w) continue;
       words += 1;
-      if (!can.has(w)) unglossable += 1;
-      else if (drill.has(w) && !known.has(w)) fresh += 1;
+      if (!can.has(w)) {
+        unglossable += 1;
+        if (looksForeign(tok)) foreign += 1;
+      } else {
+        target += 1;
+        if (drill.has(w) && !known.has(w)) fresh += 1;
+      }
     }
-    return { words, unglossable, fresh };
+    return { words, unglossable, fresh, target, foreign };
   }
 
   /* How long the child may be made to wait for a generated line. There is a
@@ -270,7 +290,9 @@
           sceneTitle: scene.title, sceneSpeaks: scene.onScreen.speaks,
           sceneGoal: scene.goal || '',
           target: item.target, native: item.native, scaffold,
-          maxSceneWords: MAX_SCENE_WORDS[scaffold] ?? 12,
+          sceneMode: sceneRule(scaffold).native ? 'native' : 'target',
+          maxSceneWords: sceneRule(scaffold).maxWords || 0,
+          maxSceneTargetWords: sceneRule(scaffold).maxTarget || 0,
           nativeLang: NL(), targetLang: TL(),
           allowed: met, glossable: [...glossable()],
           history: history.slice(-4), recent: recentLines.slice(-6)
@@ -288,11 +310,18 @@
          enforced here where it costs nothing. A rejected turn falls back to
          the hand-written opening in content.js, which is always safe. */
       if (scene.onScreen.speaks !== 'native') {
-        const cap = MAX_SCENE_WORDS[scaffold] ?? 12;
+        const rule = sceneRule(scaffold);
         const a = audit(j.scene_line, met);
-        if (a.words > cap)     { lastGenWhy = 'too long'; return null; }
-        if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
-        if (a.fresh > 2)       { lastGenWhy = 'too many new words'; return null; }
+        if (a.fresh > 2) { lastGenWhy = 'too many new words'; return null; }
+        if (rule.native) {
+          // mostly their own language, with the target word dropped into it
+          if (a.target > rule.maxTarget) { lastGenWhy = 'too much target language'; return null; }
+          if (a.target >= a.words)       { lastGenWhy = 'no support language'; return null; }
+          if (a.foreign > 0)             { lastGenWhy = 'invented word'; return null; }
+        } else {
+          if (a.words > rule.maxWords) { lastGenWhy = 'too long'; return null; }
+          if (a.unglossable > 0)       { lastGenWhy = 'unglossable word'; return null; }
+        }
       } else if (looksTargetLanguage(j.scene_line, 1)) {
         // A character speaking the child's own language gets NO latitude: one
         // Spanish word is one too many. Models love opening on "¡Hola!".
@@ -382,9 +411,15 @@
     return GLOSS[k] || GLOSS[k.replace(/[^a-zñáéíóúü ]/g, '')] || null;
   }
 
+  /* Only words the game can explain become blue and tappable. Lines are mixed
+     now — at the lowest rung a character speaks the child's own language with
+     one target word in it — and making "Have" or "you" tappable would offer a
+     translation that does not exist. */
   function spanishHTML(text) {
+    const can = glossable();
     return String(text).split(/(\s+)/).map(tok => {
       if (!tok.trim()) return tok;
+      if (!can.has(bare(tok))) return esc(tok);
       return '<button type="button" class="w" data-w="' + esc(tok) + '">' + esc(tok) + '</button>';
     }).join('');
   }
@@ -485,8 +520,10 @@
      button always works, because tapping it is asking for the interruption. */
   document.addEventListener('click', ev => {
     const w = ev.target.closest && ev.target.closest('.w');
-    if (!w) return;
-    showGloss(w.dataset.w, !inputLocked);
+    if (w) { showGloss(w.dataset.w, !inputLocked); return; }
+    // anywhere else dismisses it, except inside the card itself
+    if (!$('gloss').classList.contains('hidden') &&
+        !(ev.target.closest && ev.target.closest('#gloss'))) hideGloss();
   });
 
   /* ---------- input lock ----------
@@ -598,10 +635,14 @@
       ? 'generator: gemini ' + lastGenMs + 'ms'
       : 'generator: template (' + lastGenWhy + (lastGenMs ? ', ' + lastGenMs + 'ms' : '') + ')';
     const coach = coachCopy(item, scaffold, plan, gen);
-    const sceneLine = gen ? gen.scene_line : scene.opening;
+    const sceneLine = gen ? gen.scene_line
+      : ((sceneRule(scaffold).native && scene.openingNative) ? scene.openingNative : scene.opening);
 
     mountBackground($('layer-bg'), scene.background);
-    mountCharacter($('character'), { character: scene.onScreen.character, state: 'speak' });
+    /* Mounted idle, not speaking. The mouth is driven by VOICE.onSpeaking,
+       which now fires when the audio actually starts — setting 'speak' here
+       had the character talking to themselves through the whole fetch. */
+    mountCharacter($('character'), { character: scene.onScreen.character, state: 'idle' });
 
     /* The stage box belongs to whoever is on screen; the coach box below
        belongs to Axel. In the opening scene Axel is both, so he speaks from

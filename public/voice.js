@@ -145,9 +145,10 @@ window.VOICE = (function () {
     try { fetchClip(text, speaker).catch(() => {}); } catch {}
   }
 
-  function play(url) {
+  function play(url, onStart) {
     return new Promise(resolve => {
       const a = new Audio(url);
+      if (onStart) a.onplaying = () => onStart();
       let settled = false;
       const done = v => {
         if (settled) return;
@@ -177,7 +178,11 @@ window.VOICE = (function () {
     chain = chain.then(async () => {
       if (!enabled || mine !== gen) return;
       unlock();
-      emit(speaker, true);
+      /* The speaking flag used to go up here, at the front of the queue — so a
+         character's mouth moved through the whole fetch and only then did any
+         sound arrive. It now goes up when the audio actually starts playing.
+         Not frame-accurate lip sync, but the animation no longer runs on its
+         own for a second or two first. */
       try {
         if (serverTTS) {
           try {
@@ -186,11 +191,12 @@ window.VOICE = (function () {
             // flight. Without this second check a cancelled line still
             // reaches play() and starts over the top of its replacement.
             if (mine !== gen) return;
-            if (await play(url)) return;
+            if (await play(url, () => emit(speaker, true))) return;
             if (mine !== gen) return;
           } catch { /* fall through to the browser */ }
         }
         if (mine !== gen) return;
+        emit(speaker, true);          // synthesis starts as good as instantly
         await browserSay(text, LANG[lang] || lang);
       } finally {
         emit(speaker, false);
