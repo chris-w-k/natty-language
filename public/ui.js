@@ -383,6 +383,9 @@
     const template = item.coachLine + ' “' + item.native + '”';
     let ask = gen && gen.coach_ask ? gen.coach_ask : template;
     if (scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
+    /* The model follows the same ladder as the slot. One chunk while they are
+       only supplying one, the whole sentence once they are building it, a
+       partial one as they take it over, and nothing at the top. */
     let model = '', spoken = '';
     if (scaffold === 0) {
       const w = p.answer.join(' ');
@@ -392,9 +395,8 @@
       model = '<mark>' + spanishHTML(item.target) + '</mark>';
       spoken = item.target;
     } else if (scaffold === 2) {
-      const c = item.chips.slice();
-      c.pop();
-      model = '<mark>' + spanishHTML(c.join(' ')) + ' <span class="blank"></span></mark>';
+      const shown = item.chips.slice(0, -1).join(' ');
+      model = '<mark>' + spanishHTML(shown) + ' <span class="blank"></span></mark>';
       spoken = '';
     }
     return { askText: ask, html: esc(ask) + (model ? ' ' + model : ''), spoken };
@@ -622,6 +624,7 @@
     const { scene, item } = current;
     const scaffold = scaf = E.scaffoldFor(state, item);
     plan = E.buildPlan(item, scaffold);
+    E.noteShown(state, item, plan.gaps);
     const nativeSpeaker = scene.onScreen.speaks === 'native';
 
     // The generator is a network round trip. Hold the panel and say so, rather
@@ -707,22 +710,37 @@
     setTimeout(release, 12000);
   }
 
-  /* The blanks are no longer guaranteed to be at the end. A pattern's slot
-     sits wherever the sentence puts it — "¿Me das ___, por favor?" — so the
-     slot is drawn from plan.cells in sentence order, with the frame words
-     around the gaps rather than all in front of them. */
+  /* The sentence in order: a gap is theirs to fill in the target language,
+     anything else is still shown in their own. That is what makes the English
+     drain away one chunk per rung instead of the whole frame flipping to
+     Spanish the moment they get one answer right. */
   function renderSlot() {
     const slot = $('slot');
     slot.classList.remove('ok');
     slot.innerHTML = '';
 
     let g = 0;
-    const gapEl = () => {
+    for (const cell of plan.cells) {
+      if (cell.lead) {
+        const c = document.createElement('span');
+        c.className = 'frame hug';
+        c.textContent = cell.lead;
+        slot.appendChild(c);
+      }
+      if (!cell.gap) {
+        const f = document.createElement('span');
+        f.className = 'frame';
+        if (/^[,.;:!?]/.test(cell.native)) f.classList.add('hug');
+        f.textContent = cell.native;
+        slot.appendChild(f);
+        continue;
+      }
       const i = g++;
       if (placed[i] === undefined) {
         const e = document.createElement('span');
         e.className = 'gap';
-        return e;
+        slot.appendChild(e);
+        continue;
       }
       const b = document.createElement('button');
       b.className = 'chip placed';
@@ -732,32 +750,7 @@
         if (inputLocked) return;
         placed.splice(i, 1); renderSlot(); renderTray();
       });
-      return b;
-    };
-    const frameEl = text => {
-      const f = document.createElement('span');
-      f.className = 'frame';
-      // ", please?" must hug the gap it follows rather than float off it
-      if (/^[,.;:!?]/.test(text)) f.classList.add('hug');
-      f.textContent = text;
-      return f;
-    };
-
-    if (plan.mode === 'native-frame') {
-      /* §6 L0: the meaning is carried in the child's own language and the one
-         target word appears in the gap, where it belongs in the sentence. */
-      const nf = current.item.nativeFrame || { before: plan.frame, after: '' };
-      if (nf.before) slot.appendChild(frameEl(nf.before));
-      for (let i = 0; i < plan.gaps; i++) slot.appendChild(gapEl());
-      if (nf.after) slot.appendChild(frameEl(nf.after));
-    } else {
-      for (const cell of plan.cells) {
-        if (cell.gap) { slot.appendChild(gapEl()); continue; }
-        const s = document.createElement('span');
-        s.className = 'chip locked';
-        s.textContent = cell.w;
-        slot.appendChild(s);
-      }
+      slot.appendChild(b);
     }
     $('btn-say').disabled = placed.length !== plan.gaps;
   }
@@ -829,15 +822,14 @@
 
   /* The sentence as it currently stands in the slot, gaps filled with whatever
      the child has put there. At L0 that is their own language around one
-     Spanish word, which is exactly the point of the rung. */
+     Spanish chunk, which is the point of the rung — and it is what goes into
+     the conversation as their message, because claiming they said the whole
+     Spanish sentence on turn one would be a lie the transcript tells. */
   function builtSentence() {
     let g = 0;
-    if (plan.mode === 'native-frame') {
-      const nf = current.item.nativeFrame || { before: plan.frame, after: '' };
-      const mid = plan.cells.filter(c => c.gap).map(() => placed[g++] || '…').join(' ');
-      return [nf.before, mid, nf.after].filter(Boolean).join(' ').replace(/\s+([,.!?])/g, '$1');
-    }
-    return plan.cells.map(c => (c.gap ? (placed[g++] || '…') : c.w)).join(' ');
+    return plan.cells
+      .map(c => (c.lead ? c.lead + ' ' : '') + (c.gap ? (placed[g++] || '…') : c.native))
+      .join(' ').replace(/\s+([,.!?])/g, '$1');
   }
   const fullSentence = builtSentence;
 
@@ -878,7 +870,8 @@
       /* Their answer goes into the log as their message — from the right, with
          their own avatar. Only correct ones: the transcript is the
          conversation that actually happened, not a list of attempts. */
-      say('me', spanishHTML(item.target), item.target);
+      const said = builtSentence();
+      say('me', spanishHTML(said), said);
 
       const before = E.overall(state, Q);
       const d = E.applyCorrect(state, item, { mode, hinted, hints });

@@ -55,46 +55,52 @@ window.QUEST = (function () {
       "buena": "good", "noche": "night", "adiós": "bye"
     },
 
-    /* The constructions. {x} is the slot. A pattern with no {x} is a fixed
-       phrase — courtesy words that have nowhere to vary. */
+    /* The constructions, declared as SEGMENTS that line up across the two
+       languages. Each segment has the child's version and the target version,
+       and one carries the slot. Aligning them is what lets the sentence start
+       mostly in English and lose an English chunk per rung:
+
+         L0   Can I have [una entrada] please?
+         L1   Can I have [una entrada] [por favor?]
+         L2   [\u00bfMe das] [una entrada] [por favor?]
+
+       Cloze over bare words could not do that \u2014 there is no English word that
+       "por" replaces. */
     "patterns": {
       "can-i-have": {
-        "native": "Can I have {x}, please?",
-        "target": "¿Me das {x}, por favor?",
-        "chips": ["¿Me", "das", "{x}", "por", "favor?"],
+        "segments": [
+          { "native": "Can I have", "target": "\u00bfMe das" },
+          { "native": "{x}", "target": "{x}", "slot": true },
+          /* `lead` is punctuation that belongs to the JOIN, not to the chip.
+             "una entrada, por favor?" needs the comma; a chip reading
+             ", por favor?" would be nonsense to tap. */
+          { "native": "please?", "target": "por favor?", "lead": "," }
+        ],
         "coachLine": "Ask for it."
       },
       "i-love-this": {
-        "native": "I love this {x}!",
-        "target": "¡Me encanta esta {x}!",
-        "chips": ["¡Me", "encanta", "esta", "{x}!"],
+        "segments": [
+          { "native": "I love this", "target": "\u00a1Me encanta esta" },
+          { "native": "{x}!", "target": "{x}!", "slot": true }
+        ],
         "coachLine": "Tell them what you think."
       },
       "thank-you": {
-        "native": "Thank you.",
-        "target": "Gracias.",
-        "chips": ["Gracias."],
+        "segments": [{ "native": "Thank you.", "target": "Gracias." }],
         "coachLine": "Say the polite thing."
       },
       "excuse-me": {
-        "native": "Excuse me.",
-        "target": "Perdona.",
-        "chips": ["Perdona."],
+        "segments": [{ "native": "Excuse me.", "target": "Perdona." }],
         "coachLine": "Get their attention first."
       },
       "pay-how": {
-        "native": "Card.",
-        "target": "Tarjeta.",
-        "chips": ["Tarjeta."],
-        "coachLine": "He's asking how you're paying — cash or card. Either one works.",
-        /* Both answers are right — this is a choice, not a drill. checkGaps
-           accepts any of these, so the tray can offer both honestly. */
+        "segments": [{ "native": "Card.", "target": "Tarjeta." }],
+        "coachLine": "He's asking how you're paying \u2014 cash or card. Either one works.",
+        /* Both answers are right \u2014 this is a choice, not a drill. */
         "acceptAny": ["Tarjeta.", "Efectivo."]
       }
     },
 
-    /* The slot words. `target` is what goes in the gap, article included, so
-       the gender is learned with the noun rather than as a separate rule. */
     "words": {
       "ticket": { "target": "una entrada",  "native": "a ticket" },
       "drink":  { "target": "una bebida",   "native": "a drink" },
@@ -154,13 +160,14 @@ window.QUEST = (function () {
   };
 
   /* ---------- expansion ----------
-     Each beat becomes one item. The item carries `patternId` so the engine can
-     keep ONE mastery score for the construction across every word it is met
-     with, and `slot` so the cloze knows which chip to take away first: the
-     word is what the turn is actually about, and dropping "favor?" before
-     "una entrada" would be testing the punctuation. */
+     Each beat becomes one item. `patternId` lets the engine keep ONE mastery
+     score for the construction across every word it is met with, and the
+     aligned segments give the cloze something to peel: the slot goes first
+     because that is what the turn is about, then the English chunks are
+     replaced by their target counterparts from the end inwards. */
   function expand(q) {
     const fill = (s, w) => String(s).replace('{x}', w);
+    const join = parts => parts.join(' ').replace(/\s+([,.!?])/g, '$1').trim();
 
     for (const scene of q.scenes) {
       scene.items = (scene.beats || []).map(beat => {
@@ -169,40 +176,43 @@ window.QUEST = (function () {
         const word = beat.word ? q.words[beat.word] : null;
         if (beat.word && !word) throw new Error('unknown word: ' + beat.word);
 
-        const slotWord = word ? word.target : '';
-        const chips = pat.chips.map(c => fill(c, slotWord));
-        const slot = pat.chips.findIndex(c => c.includes('{x}'));
+        const slotTarget = word ? word.target : '';
+        const slotNative = word ? word.native : '';
 
-        /* Gap order: the slot first, then the frame peeling in from the end.
-           At L0 the child supplies the word and reads the frame; by L4 they
-           are building the whole thing. */
+        const segments = pat.segments.map(seg => ({
+          slot:   !!seg.slot,
+          lead:   seg.lead || '',
+          target: fill(seg.target, slotTarget),
+          native: fill(seg.native, slotNative),
+        }));
+        // the chip stays clean; the punctuation only shows up in the sentence
+        const lead = (s, k) => (s.lead ? s.lead + ' ' : '') + s[k];
+
+        const chips = segments.map(s => s.target);
+        const slot = segments.findIndex(s => s.slot);
+
+        /* Gap order: the slot, then the remaining chunks from the end inwards.
+           "Can I have [___] please?" becomes "Can I have [___] [___]" becomes
+           "[___] [___] [___]" \u2014 one English chunk leaving per rung. */
         const order = [];
         if (slot >= 0) order.push(slot);
-        for (let i = chips.length - 1; i >= 0; i--) if (i !== slot) order.push(i);
-
-        /* The native sentence split around the slot, so L0 can show
-           "Can I have ___, please?" in the child's own language and ask for
-           one Spanish word in the gap — §6's "meaning carried in the support
-           language, the target word appears once". */
-        const cut = String(pat.native).indexOf('{x}');
-        const nativeFrame = cut >= 0
-          ? { before: pat.native.slice(0, cut).trim(), after: pat.native.slice(cut + 3).trim() }
-          : { before: pat.native, after: '' };
+        for (let i = segments.length - 1; i >= 0; i--) if (i !== slot) order.push(i);
 
         const id = beat.pattern + (beat.word ? '-' + beat.word : '');
+        const target = join(segments.map(s => lead(s, 'target')));
         return {
           id,
-          nativeFrame,
           patternId: beat.pattern,
           slotId: beat.word || null,
-          slotTarget: slotWord || null,
-          target: fill(pat.target, slotWord),
-          native: fill(pat.native, word ? word.native : ''),
+          slotTarget: slotTarget || null,
+          segments,
+          target,
+          native: join(segments.map(s => lead(s, 'native'))),
           coachLine: pat.coachLine,
           chips,
           gapOrder: order,
           acceptAny: pat.acceptAny || null,
-          accept: [fill(pat.target, slotWord).toLowerCase()],
+          accept: [target.toLowerCase()],
           distractors: []
         };
       });

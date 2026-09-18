@@ -60,7 +60,12 @@ window.ENGINE = (function () {
     const items = {}, patterns = {};
     for (const it of allItems(quest)) {
       items[it.id] = { id: it.id, sceneId: it.sceneId, patternId: it.patternId,
-                       exposures: 0, fails: 0, owed: false, lastTurn: -99 };
+                       exposures: 0, fails: 0, owed: false, lastTurn: -99,
+                       /* the widest cloze this phrase has actually been SHOWN at.
+                          The scaffold says what it would be shown at next; this
+                          says what the child has really seen, and only that can
+                          say whether the ladder has been climbed. */
+                       topGaps: 0 };
       const pid = it.patternId || it.id;
       if (!patterns[pid]) patterns[pid] = { id: pid, mastery: 0, exposures: 0 };
     }
@@ -176,8 +181,11 @@ window.ENGINE = (function () {
        L3  "Voy ___ ___ ___"         3 words
        L4  "___ ___ ___ ___"         all of it
      Short phrases collapse rungs rather than repeating them.                  */
+  /* One more chunk per rung. The sentence is built from aligned segments now,
+     so the count is literal: at L0 one gap, at L1 two, until the whole thing
+     is theirs to produce. */
   function gapCount(n, scaffold) {
-    return Math.min(n, Math.max(1, Math.ceil(n * (scaffold + 1) / 5)));
+    return Math.min(n, Math.max(1, scaffold + 1));
   }
 
   /* Which chips become gaps, and in what order. An item built from a pattern
@@ -194,23 +202,34 @@ window.ENGINE = (function () {
   }
 
   function buildPlan(item, scaffold) {
-    const chips = item.chips.slice();
-    const n = chips.length;
+    const segs = item.segments ||
+      (item.chips || []).map(c => ({ target: c, native: c, slot: false }));
+    const n = segs.length;
     const gaps = Math.min(n, gapCount(n, scaffold));
     const gapAt = gapIndices(item, gaps);
 
-    /* cells are the sentence in order: each is a word the child can see or a
-       blank they must fill. The blanks are no longer guaranteed to be at the
-       end, so the slot has to carry its position. */
-    const cells = chips.map((w, i) => ({ w, gap: gapAt.has(i) }));
+    /* cells are the sentence in order. A gap is theirs to fill in the target
+       language; anything else is still shown in their own, which is what makes
+       the English drain away one chunk at a time instead of all at once. */
+    const cells = segs.map((s, i) => ({
+      w: s.target, native: s.native, lead: s.lead || '', gap: gapAt.has(i),
+    }));
     const answer = cells.filter(c => c.gap).map(c => c.w);
     const locked = cells.filter(c => !c.gap).map(c => c.w);
 
-    if (scaffold === 0) {
-      const nat = String(item.native).replace(/[?!.]+$/, '');
-      return { mode: 'native-frame', frame: nat, cells, locked, answer, gaps };
-    }
-    return { mode: 'target-frame', frame: '', cells, locked, answer, gaps };
+    return {
+      mode: gaps >= n ? 'target-frame' : 'native-frame',
+      frame: '', cells, locked, answer, gaps,
+    };
+  }
+
+  /* Called by whoever renders the turn, with the plan it is about to show.
+     pickNext reads it back: a phrase that has not yet been shown with every
+     chunk missing still has English to lose and keeps the turn. */
+  function noteShown(state, item, gaps) {
+    const st = state.items[item.id];
+    if (st) st.topGaps = Math.max(st.topGaps || 0, gaps);
+    return state;
   }
 
   /* Chips mode is judged on the part the learner supplied; voice mode on the
@@ -257,18 +276,57 @@ window.ENGINE = (function () {
     }
     const open = pool.filter(it => !state.items[it.id].owed && itemScore(state, it) < BAR(quest));
     if (!open.length) return null;
-    const score = new Map(open.map(it => [it.id, itemScore(state, it)]));
-    const sorted = open.slice().sort((a, b) => {
+
+    /* §7, phase B — "introduce: an un-introduced pattern exists AND nothing is
+       very weak (< 0.35)". Without that gate, weakest-first hands every turn to
+       whichever phrase has been seen least, so a brand-new item at 0 always
+       outranks the one being learned and the drill ping-pongs: ask for a
+       ticket, say thank you, ask for a ticket. Something already started and
+       still shaky keeps the turn. */
+    const INTRODUCED = 0.35;
+    const started = open.filter(it => state.items[it.id].exposures > 0);
+
+    /* Two ways to still owe this phrase attention, strongest first. A phrase
+       part-way up its own cloze ladder has English left to lose and should
+       finish losing it — that is the thing the child is being shown, and
+       breaking off to say "thank you" in the middle of it is what made the
+       first scene read as two half-taught phrases instead of one learned one.
+       Failing that, the source's own gate: anything started and still shaky. */
+    const climbing = started.filter(it => {
+      const rungs = (it.segments && it.segments.length) || (it.chips || []).length;
+      /* Measured on what has been SHOWN, not on the scaffold. The scaffold runs
+         a rung ahead of the screen — answer at L1 and it is already L2 — so
+         reading it here dropped the phrase out of "climbing" the turn BEFORE
+         its last English chunk was ever taken away. That is the gap Chris saw:
+         two turns of "Can I have ___", then thank-you for three turns, and the
+         full Spanish sentence only much later. */
+      return (state.items[it.id].topGaps || 0) < rungs;
+    });
+    const shaky = started.filter(it => itemScore(state, it) < INTRODUCED);
+    const field = climbing.length ? climbing : (shaky.length ? shaky : open);
+
+    const score = new Map(field.map(it => [it.id, itemScore(state, it)]));
+    const sorted = field.slice().sort((a, b) => {
       const d = score.get(a.id) - score.get(b.id);
       if (Math.abs(d) > 1e-6) return d;
       return state.items[a.id].lastTurn - state.items[b.id].lastTurn;
     });
-    // avoid drilling the same item twice running when a sibling is available
-    if (sorted.length > 1 && state.items[sorted[0].id].lastTurn === state.turn - 1 &&
-        Math.abs(score.get(sorted[0].id) - score.get(sorted[1].id)) < 1e-6) {
-      return { scene, item: sorted[1] };
+    /* Repeating an item is right while it is CLIMBING — that is the ladder,
+       and "Can I have ___" three turns running is the phrase being learned.
+       Once it has been shown whole, repeating it is just the same turn again:
+       weakest-first happily asked for "Gracias." four times in a row. So when
+       the top pick is last turn's item and has nothing left to climb, hand the
+       turn to the next best candidate — from the whole open pool, since the
+       narrowed field is often a single item. */
+    const top = sorted[0];
+    const repeating = state.items[top.id].lastTurn === state.turn - 1;
+    const stillClimbing = climbing.some(it => it.id === top.id);
+    if (repeating && !stillClimbing) {
+      const others = open.filter(it => it.id !== top.id)
+        .sort((a, b) => itemScore(state, a) - itemScore(state, b));
+      if (others.length) return { scene, item: others[0] };
     }
-    return { scene, item: sorted[0] };
+    return { scene, item: top };
   }
 
   function advanceScene(state) {
@@ -427,7 +485,7 @@ window.ENGINE = (function () {
     GAIN, DECAY_PER_WEEK, DISTRACTORS_AT,
     clamp, norm, fold, lev,
     allItems, createState, label, overall,
-    bucket, scaffoldFor, gapCount, buildPlan, checkGaps,
+    bucket, scaffoldFor, gapCount, buildPlan, noteShown, checkGaps,
     itemScore, patternMastery, patternOf, wordMastery, wordSeen, knownWords, creditWord, HINT_DAMP,
     sceneOf, sceneDone, pickNext, advanceScene, sceneTurnCap, sceneOverBudget, oweRemaining,
     evaluateLocal,
