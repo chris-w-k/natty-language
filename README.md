@@ -213,6 +213,35 @@ Every Spanish word on screen — the character's line, the coach's model — is 
 button. Tapping it shows its gloss and says it aloud. Glosses live in the
 `glossary` map in `content.js`; a word with no entry still speaks.
 
+## The screen
+
+Built to the designer's mocks rather than the greybox it started as.
+
+The **character is the background** — the Lottie fills the stage full-bleed and
+everything else sits over them. Above it, a five-pixel rail with one segment
+per scene, filling green: a scene counter and a progress bar in the same
+space. Top left is pause, top right the mastery pill. Everything else that
+used to clutter the HUD — coins, sound, the phrase list — lives behind pause.
+
+The **conversation** replaces the two speech boxes. One continuous log for the
+whole night: each character's line, Axel's hint, and the child's own answers
+coming back from the right with a greyed head. Older messages fade out at the
+top; the expand button opens the lot full screen.
+
+Target-language words are **blue and tappable**. A tap opens the gloss card
+with the word, what it means, and a button to hear it. Reading is never
+locked — a child can ask what a word means whenever they like — but while a
+character is still speaking the card opens *silently* rather than talking over
+them. Its speaker button always works, because tapping it is asking for the
+interruption.
+
+The **answer area** is a white sheet: the sentence being built, a round submit
+beside it, and the words below in a horizontally scrolling dock with the mic
+and clear alongside.
+
+Diagnostics are not part of the game any more. `?debug=1` brings the test
+strip back inside the pause sheet.
+
 ## Getting in
 
 A turn runs in three beats:

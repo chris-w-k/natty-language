@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#1D1C19">
+<meta name="theme-color" content="#8B7BF0">
 <title>Axel goes to a gig</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,9 +14,11 @@
 
 <div id="app">
 
-  <div id="rail"><i id="rail-fill"></i></div>
+  <!-- scene progress: one segment per scene, filling green as the night goes on -->
+  <div id="rail" aria-label="Progress through the night"></div>
 
   <div id="stage">
+    <!-- the character is the background: full bleed, the chat sits over them -->
     <div class="layer" id="layer-bg">
       <img class="bgimg" alt="" hidden>
       <span class="bglabel"></span>
@@ -34,49 +36,49 @@
         <button class="sq" id="btn-pause" aria-label="Pause">
           <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><rect x="1" y="1" width="4" height="14" fill="currentColor"></rect><rect x="9" y="1" width="4" height="14" fill="currentColor"></rect></svg>
         </button>
-        <div class="sq round"><span style="font-family:var(--mono);font-size:7px;letter-spacing:.04em;color:var(--ink-2);text-align:center;line-height:1.3">NOVA<br>PALS</span></div>
       </div>
 
       <div class="hud-r">
-        <div class="coins"><i></i><b id="coins">0</b></div>
-        <div class="chipline"><span id="scenechip">SCENE 1 / 4</span></div>
-        <div class="chipline blue"><span id="mastery">MASTERY 0%</span></div>
-        <button class="sq" id="btn-sound" aria-label="Sound on or off">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a9 9 0 0 1 0 14"></path></svg>
-        </button>
-        <button class="sq" id="btn-progress" aria-label="Progress details">
-          <svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect y="0" width="16" height="2" fill="currentColor"></rect><rect y="6" width="16" height="2" fill="currentColor"></rect><rect y="12" width="16" height="2" fill="currentColor"></rect></svg>
-        </button>
+        <div class="mastery-pill">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            <path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path>
+          </svg>
+          <span id="mastery">Mastery: 0%</span>
+        </div>
       </div>
 
-      <div id="speech">
-        <span class="who" id="sp-who"></span>
-        <span class="line" id="sp-line"></span>
+      <!-- the conversation, oldest at the top and fading out -->
+      <div id="chat-wrap">
+        <button class="sq ghost" id="btn-expand" aria-label="Show the whole conversation">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 3H3v6"></path><path d="M15 21h6v-6"></path><path d="M3 3l7 7"></path><path d="M21 21l-7-7"></path>
+          </svg>
+        </button>
+        <div id="chat" aria-live="polite"></div>
       </div>
     </div>
   </div>
 
   <div id="lower">
-    <div id="coach" class="hidden">
-      <button class="face" id="coach-face" aria-label="Ask Axel for help"><img src="img/axel-avatar.png" alt=""><span>AXEL</span></button>
-      <div class="bubble">
-        <span class="who">AXEL · COACH</span>
-        <span class="say" id="coach-say"></span>
-        <span class="hint" id="coach-hint"></span>
-      </div>
-    </div>
-
     <div id="turn-loading" class="hidden">
       <span class="dots"><i></i><i></i><i></i></span>
       <span>Axel's working out what to ask you…</span>
     </div>
 
     <div id="slot-label"></div>
-    <div id="slot"></div>
-    <div id="tray"></div>
+
+    <div id="answer">
+      <div id="slot"></div>
+      <button id="btn-say" aria-label="Submit your answer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path>
+        </svg>
+      </button>
+    </div>
 
     <div id="mic-panel" class="hidden">
-      <div class="top"><span>MIC OPEN — TAP TO STOP</span><span style="color:var(--ink-3)">CHIPS HIDDEN</span></div>
+      <div class="top"><span>MIC OPEN — TAP TO STOP</span><span style="color:var(--ink-3)">WORDS HIDDEN</span></div>
       <div id="wave">
         <i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i>
         <i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i>
@@ -85,25 +87,50 @@
       <div class="heard" id="mic-heard"></div>
     </div>
 
-    <div id="controls">
-      <button class="btn icon" id="btn-mic" aria-label="Speak instead">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v2a7 7 0 0 0 14 0v-2"></path><path d="M12 19v3"></path></svg>
-      </button>
-      <button class="btn" id="btn-clear" style="width:56px;flex:none"><span>CLR</span></button>
-      <button class="btn wide primary" id="btn-say"><span>SAY IT</span></button>
+    <div id="dock">
+      <div id="tray"></div>
+      <div id="dock-side">
+        <button class="btn icon" id="btn-mic" aria-label="Speak instead">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v2a7 7 0 0 0 14 0v-2"></path><path d="M12 19v3"></path></svg>
+        </button>
+        <button class="btn icon" id="btn-clear" aria-label="Clear your answer">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 14h10l1-14"></path></svg>
+        </button>
+      </div>
     </div>
 
     <div id="verdict"></div>
   </div>
 
-  <div id="tip" class="hidden"></div>
+  <!-- word gloss: what a blue word means, and how it sounds -->
+  <div id="gloss" class="hidden">
+    <button class="g-close" id="gloss-close" aria-label="Close">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+    </button>
+    <button class="g-say" id="gloss-say" aria-label="Hear it">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a9 9 0 0 1 0 14"></path></svg>
+    </button>
+    <b id="gloss-word"></b>
+    <span id="gloss-mean"></span>
+  </div>
+
+  <!-- the whole conversation, full screen -->
+  <div id="chat-full" class="hidden">
+    <div class="cf-head">
+      <span>The night so far</span>
+      <button class="sq" id="chat-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+    </div>
+    <div class="cf-body" id="chat-full-body"></div>
+  </div>
 
   <!-- title -->
   <div class="sheet hidden" id="title">
     <div class="body" id="title-body">
       <span class="eyebrow">Novakid · NovaPals</span>
       <h1 id="title-name">Axel goes to a gig</h1>
-      <p id="title-sub">Learn the Spanish to get in, get a drink and say you're having a good time. Axel's coaching.</p>
+      <p id="title-sub">Learn the Spanish to get in, get a drink and tell someone you love the song. Axel's coaching.</p>
       <button class="btn wide primary" id="title-go"><span>START</span></button>
       <span class="note" id="title-note"></span>
     </div>
@@ -122,6 +149,28 @@
     </div>
   </div>
 
+  <!-- paused -->
+  <div class="sheet hidden" id="prog-sheet">
+    <div class="head">
+      <div><span class="eyebrow">Paused</span><h2>Axel goes to a gig</h2></div>
+      <button class="sq" id="prog-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </button>
+    </div>
+    <div class="body" id="prog-body"></div>
+    <div class="pause-row">
+      <button class="btn" id="btn-sound"><span id="sound-label">SOUND ON</span></button>
+      <span class="coins"><i></i><b id="coins">0</b></span>
+    </div>
+    <!-- diagnostics: off unless the page is opened with ?debug=1 -->
+    <div id="test-strip" class="hidden">
+      <span class="k">TEST MODE — HIDDEN FROM CHILDREN</span>
+      <span class="v">overall <b id="prog-overall">0%</b> · <span id="t-mode">evaluator: —</span> · turn <span id="t-turn">0/32</span></span>
+      <span class="v">objective <span id="t-obj">—</span> · scaffold <span id="t-scaf">—</span> · <span id="t-gen">generator: template</span></span>
+      <span class="v" id="t-delta">&nbsp;</span>
+    </div>
+  </div>
+
   <!-- coach sheet -->
   <div class="sheet hidden" id="coach-sheet">
     <div class="head">
@@ -131,23 +180,6 @@
       </button>
     </div>
     <div class="body" id="coach-rungs"></div>
-  </div>
-
-  <!-- progress sheet -->
-  <div class="sheet hidden" id="prog-sheet">
-    <div class="head">
-      <div><span class="eyebrow">Progress</span><h2>Axel goes to a gig</h2></div>
-      <button class="sq" id="prog-close" aria-label="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
-      </button>
-    </div>
-    <div class="body" id="prog-body"></div>
-    <div id="test-strip">
-      <span class="k">TEST MODE — HIDDEN FROM CHILDREN</span>
-      <span class="v">overall <b id="prog-overall">0%</b> · <span id="t-mode">evaluator: —</span> · turn <span id="t-turn">0/18</span></span>
-      <span class="v">objective <span id="t-obj">—</span> · scaffold <span id="t-scaf">—</span> · <span id="t-gen">generator: template</span></span>
-      <span class="v" id="t-delta">&nbsp;</span>
-    </div>
   </div>
 
   <!-- end card -->

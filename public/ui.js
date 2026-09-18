@@ -389,27 +389,104 @@
     }).join('');
   }
 
-  let tipTimer = null;
-  function showTip(el, word) {
-    const g = gloss(word);
-    const tip = $('tip');
-    tip.textContent = g ? word + ' — ' + g : word;
-    tip.classList.remove('hidden');
-    const r = el.getBoundingClientRect();
-    const host = $('app').getBoundingClientRect();
-    tip.style.left = Math.max(8, Math.min(host.width - tip.offsetWidth - 8,
-      r.left - host.left + r.width / 2 - tip.offsetWidth / 2)) + 'px';
-    tip.style.top = (r.top - host.top - tip.offsetHeight - 8) + 'px';
-    clearTimeout(tipTimer);
-    tipTimer = setTimeout(() => tip.classList.add('hidden'), 2600);
+  /* ---------- the conversation ----------
+     One continuous log for the whole night, oldest fading out at the top. Each
+     entry is kept as data so the full-screen view can re-render it, and so the
+     child's own answers sit in the same history as everything said to them. */
+  const chatLog = [];
+
+  const AVATARS = { axel: 'img/axel-avatar.png' };
+  const LABEL   = { axel: 'Coach', me: 'You' };
+  const label = who => LABEL[who] || (who.charAt(0).toUpperCase() + who.slice(1));
+
+  function avatarEl(who) {
+    const a = document.createElement('span');
+    a.className = 'av';
+    const src = AVATARS[who];
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = '';
+      a.appendChild(img);
+      return a;
+    }
+    if (who === 'me') {
+      // the child's own avatar: a greyed head until they can choose one
+      a.classList.add('me');
+      a.innerHTML =
+        '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
+        '<circle cx="12" cy="8.5" r="4" fill="currentColor"></circle>' +
+        '<path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" fill="currentColor"></path></svg>';
+      return a;
+    }
+    // no art for this character yet: a disc with their initial
+    a.textContent = who.charAt(0).toUpperCase();
+    return a;
   }
 
+  function messageEl(entry, opts = {}) {
+    const row = document.createElement('div');
+    row.className = 'msg' + (entry.who === 'me' ? ' mine' : '') +
+                    (entry.who === 'axel' ? ' coach' : '') + (opts.enter ? ' enter' : '');
+    const av = avatarEl(entry.who);
+    if (entry.who === 'axel') {
+      const b = document.createElement('button');
+      b.className = 'av';
+      b.setAttribute('aria-label', 'Ask Axel for help');
+      b.innerHTML = av.innerHTML;
+      b.addEventListener('click', openCoach);
+      row.appendChild(b);
+    } else {
+      row.appendChild(av);
+    }
+    const col = document.createElement('div');
+    col.className = 'col';
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = label(entry.who);
+    const bub = document.createElement('span');
+    bub.className = 'bubble';
+    bub.innerHTML = entry.html;
+    col.appendChild(who); col.appendChild(bub);
+    row.appendChild(col);
+    return row;
+  }
+
+  function say(who, html, text) {
+    chatLog.push({ who, html, text: text || '' });
+    const chat = $('chat');
+    chat.appendChild(messageEl(chatLog[chatLog.length - 1], { enter: true }));
+    // keep the live view short; the whole night lives in the expanded view
+    while (chat.children.length > 5) chat.removeChild(chat.firstChild);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function renderChatFull() {
+    const body = $('chat-full-body');
+    body.innerHTML = '';
+    for (const e of chatLog) body.appendChild(messageEl(e));
+    body.scrollTop = body.scrollHeight;
+  }
+
+  /* ---------- word gloss ----------
+     A blue word opens the card: what it means, and a button to hear it. */
+  let glossWord = '';
+  function showGloss(word, speak) {
+    glossWord = word;
+    $('gloss-word').textContent = String(word).replace(/^[¿¡"“]+|[?!.,;:"”]+$/g, '') || word;
+    $('gloss-mean').textContent = gloss(word) || '—';
+    $('gloss').classList.remove('hidden');
+    if (speak) V.now(word, { speaker: 'axel', lang: TL() });
+  }
+  function hideGloss() { $('gloss').classList.add('hidden'); }
+
+  /* Reading is never locked — a child can ask what a word means whenever they
+     like. Only the SOUND waits: while a character is still speaking, the card
+     opens silently rather than talking over them. The card's own speaker
+     button always works, because tapping it is asking for the interruption. */
   document.addEventListener('click', ev => {
     const w = ev.target.closest && ev.target.closest('.w');
-    if (!w) { $('tip').classList.add('hidden'); return; }
-    if (inputLocked) return;
-    showTip(w, w.dataset.w);
-    V.now(w.dataset.w, { speaker: 'axel', lang: TL() });
+    if (!w) return;
+    showGloss(w.dataset.w, !inputLocked);
   });
 
   /* ---------- input lock ----------
@@ -426,8 +503,8 @@
 
   /* label by how many gaps there actually are, not by the level */
   function slotLabel(p, n) {
-    if (p.gaps >= n) return 'BUILD THE WHOLE SENTENCE';
-    return p.gaps === 1 ? 'TAP THE MISSING WORD' : 'TAP THE ' + p.gaps + ' MISSING WORDS';
+    if (p.gaps >= n) return 'Build the whole sentence';
+    return p.gaps === 1 ? 'Tap the missing word' : 'Tap the ' + p.gaps + ' missing words';
   }
 
   /* ---------- render ---------- */
@@ -437,18 +514,47 @@
      nudges it up at the start of every turn, and flashing for that would be
      congratulating them for nothing. */
   function pulseMastery() {
-    const chip = $('mastery').parentElement, rail = $('rail');
+    const chip = $('mastery').closest('.mastery-pill'), rail = $('rail');
     chip.classList.remove('gained'); rail.classList.remove('gained');
     void chip.offsetWidth;                         // restart the animation
     chip.classList.add('gained'); rail.classList.add('gained');
     setTimeout(() => { chip.classList.remove('gained'); rail.classList.remove('gained'); }, 1200);
   }
 
+  /* One rail segment per scene. Scenes behind you are full, the one you are in
+     fills by how many of its phrases are usable, scenes ahead are empty — a
+     scene counter and a progress bar in the same five pixels. */
+  function buildRail() {
+    const rail = $('rail');
+    rail.innerHTML = '';
+    for (let i = 0; i < Q.scenes.length; i++) {
+      const seg = document.createElement('span');
+      seg.className = 'seg';
+      seg.appendChild(document.createElement('i'));
+      rail.appendChild(seg);
+    }
+  }
+
+  function renderRail() {
+    const segs = $('rail').children;
+    for (let i = 0; i < Q.scenes.length; i++) {
+      const fill = segs[i] && segs[i].firstChild;
+      if (!fill) continue;
+      let pctDone = 0;
+      if (i < state.sceneIndex) pctDone = 1;
+      else if (i === state.sceneIndex) {
+        const items = Q.scenes[i].items;
+        const done = items.filter(it => E.itemScore(state, it) >= Q.session.canUseBar).length;
+        pctDone = items.length ? done / items.length : 0;
+      }
+      fill.style.width = (pctDone * 100).toFixed(1) + '%';
+    }
+  }
+
   function renderHud() {
     const o = E.overall(state, Q);
-    $('rail-fill').style.width = (o * 100).toFixed(1) + '%';
-    $('mastery').textContent = 'MASTERY ' + pct(o);
-    $('scenechip').textContent = 'SCENE ' + Math.min(state.sceneIndex + 1, Q.scenes.length) + ' / ' + Q.scenes.length;
+    renderRail();
+    $('mastery').textContent = 'Mastery: ' + pct(o);
     $('coins').textContent = String(state.coins);
     $('t-obj').textContent = current ? current.item.id : '—';
     $('t-scaf').textContent = current ? 'L' + scaf + ' (' + plan.gaps + ' gap' + (plan.gaps > 1 ? 's' : '') + ')' : '—';
@@ -501,18 +607,6 @@
        belongs to Axel. In the opening scene Axel is both, so he speaks from
        the stage and still coaches from the bottom — one rule, no special
        case for who happens to be standing there. */
-    $('speech').classList.toggle('onbar', nativeSpeaker);
-    $('sp-who').textContent = scene.onScreen.character.toUpperCase() +
-      (nativeSpeaker ? '' : ' · ' + TL().toUpperCase());
-    $('sp-line').innerHTML = nativeSpeaker ? esc(sceneLine) : spanishHTML(sceneLine);
-
-    /* Axel is present for the whole turn — only his bubble waits. `silent`
-       leaves the face on screen and dims it, so the child can see their pal is
-       there (and tap him for help) while the character is still speaking. */
-    $('coach').classList.remove('hidden');
-    $('coach').classList.add('silent');
-    $('coach-say').innerHTML = coach.html;
-    $('coach-hint').textContent = 'TAP AXEL FOR HELP';
     turnLine = sceneLine;
     turnAsk = coach.askText;
 
@@ -540,15 +634,19 @@
        Spanish in it is still tappable, and SAY IT still reads their sentence
        back, so nothing is lost that they cannot ask for. */
     V.stop();
+    say(scene.onScreen.character, nativeSpeaker ? esc(sceneLine) : spanishHTML(sceneLine), sceneLine);
     const characterDone = V.say(sceneLine, {
       speaker: scene.onScreen.character, lang: nativeSpeaker ? NL() : TL()
     });
 
+    /* The coach's message joins the conversation once the character has
+       finished speaking. Posting both at once let a child read the hint before
+       they had heard the question. */
     let coachShown = false;
     const showCoach = () => {
       if (coachShown) return;
       coachShown = true;
-      $('coach').classList.remove('silent');
+      say('axel', coach.html, coach.askText);
     };
     characterDone.then(showCoach);
     setTimeout(showCoach, 6000);   // a voice that never arrives must not hide the hint
@@ -736,6 +834,11 @@
     const res = mode === 'chips' ? E.checkGaps(placed, plan, item) : await evaluateSpoken(text, item);
 
     if (res.target_produced) {
+      /* Their answer goes into the log as their message — from the right, with
+         their own avatar. Only correct ones: the transcript is the
+         conversation that actually happened, not a list of attempts. */
+      say('me', spanishHTML(item.target), item.target);
+
       const before = E.overall(state, Q);
       const d = E.applyCorrect(state, item, { mode, hinted, hints });
       pushDelta(d);
@@ -873,6 +976,11 @@
   async function boot() {
     state = E.createState(Q);
     preloadedScene = -1;
+    chatLog.length = 0;
+    $('chat').innerHTML = '';
+    buildRail();
+    hideGloss();
+    $('chat-full').classList.add('hidden');
     $('t-mode').textContent = 'evaluator: local · voice: browser';
     preloadRigs();                    // loads behind the title screen
     await titleScreen();
@@ -885,43 +993,33 @@
   }
 
   $('btn-say').addEventListener('click', () => submit(fullSentence(), 'chips'));
-  $('btn-clear').addEventListener('click', () => { placed = []; renderSlot(); renderTray(); });
+  $('btn-clear').addEventListener('click', () => { if (!inputLocked) { placed = []; renderSlot(); renderTray(); } });
   $('btn-mic').addEventListener('click', toggleMic);
-  $('coach-face').addEventListener('click', openCoach);
-  $('btn-progress').addEventListener('click', openProgress);
   $('btn-pause').addEventListener('click', openProgress);
   $('coach-close').addEventListener('click', () => $('coach-sheet').classList.add('hidden'));
   $('prog-close').addEventListener('click', () => $('prog-sheet').classList.add('hidden'));
   $('btn-restart').addEventListener('click', () => { $('end').classList.add('hidden'); boot(); });
-  $('btn-sound').addEventListener('click', () => {
-    V.setEnabled(!V.isEnabled());
-    $('btn-sound').classList.toggle('off', !V.isEnabled());
+
+  $('gloss-close').addEventListener('click', hideGloss);
+  $('gloss-say').addEventListener('click', () => V.now(glossWord, { speaker: 'axel', lang: TL() }));
+
+  $('btn-expand').addEventListener('click', () => {
+    renderChatFull();
+    $('chat-full').classList.remove('hidden');
   });
+  $('chat-close').addEventListener('click', () => $('chat-full').classList.add('hidden'));
+
+  function syncSound() {
+    $('sound-label').textContent = V.isEnabled() ? 'SOUND ON' : 'SOUND OFF';
+  }
+  $('btn-sound').addEventListener('click', () => { V.setEnabled(!V.isEnabled()); syncSound(); });
+  syncSound();
+
+  // diagnostics are not part of the game; ?debug=1 brings them back
+  if (/[?&]debug=1/.test(location.search)) $('test-strip').classList.remove('hidden');
 
   // iOS will not play audio until a gesture; the first touch anywhere opens it
   document.addEventListener('pointerdown', () => V.unlock(), { once: true });
-
-  /* Keep whoever we are speaking to clear of Axel's bubble. The coach box is
-     one, two or three lines deep depending on the turn, so the anchor is
-     measured rather than guessed — and it stays right when the dashed box is
-     swapped for real art. */
-  /* Keep the character clear of their own speech box, which now sits on the
-     stage where the coach used to be. Measured rather than guessed, because
-     the box is one to three lines deep depending on the line. */
-  (function trackSpeech() {
-    const speech = $('speech'), stage = $('stage');
-    const apply = () => {
-      const h = speech.classList.contains('hidden') ? 0 : speech.offsetHeight;
-      stage.style.setProperty('--stage-char-anchor', (h ? h + 22 : 24) + 'px');
-    };
-    try { new ResizeObserver(apply).observe(speech); } catch {}
-    try {
-      new MutationObserver(apply).observe(speech,
-        { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
-    } catch {}
-    window.addEventListener('resize', apply);
-    apply();
-  })();
 
   /* The on-screen character's mouth moves for exactly as long as the line
      plays — server voice or browser fallback, both resolve through the same
