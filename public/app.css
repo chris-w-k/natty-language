@@ -80,6 +80,17 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);ou
 
 /* full bleed: the art fills the stage and the chat sits on top of it */
 #layer-char{display:block;pointer-events:none;}
+/* The chat sits on the character's chest now that the crop has brought them
+   forward. The designer's bouncer wears a dark suit, which does that job on
+   its own; ours has a white shirt and a bright green controller exactly where
+   the speech bubbles land. This settles the lower part of the figure towards
+   the scene colour so the bubbles stay readable, and leaves the head alone. */
+#layer-char::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:46%;
+  pointer-events:none;
+  background:linear-gradient(to bottom,
+    rgba(126,113,232,0) 0%, rgba(126,113,232,.34) 46%, rgba(126,113,232,.60) 100%);
+}
 #character{
   position:absolute;inset:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;

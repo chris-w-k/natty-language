@@ -28,13 +28,68 @@
      entry here falls back to the dashed placeholder box, which is how the
      bartender still renders.
 
-     xMidYMax slice: the clips are 1920x1080 with the figure centred, and the
-     slot is portrait. Anchoring to the bottom keeps the character standing on
-     the stage floor and crops the empty sides instead of shrinking them in. */
+     The clips are 1920x1080 and the slot is portrait, so something always gets
+     cropped. What gets cropped is decided in frameRig() below. */
   const ANIM = {
     axel:    { idle: 'anim/axel-idle.json',    speak: 'anim/axel-talk.json' },
     bouncer: { idle: 'anim/bouncer-idle.json', speak: 'anim/bouncer-talk.json' },
   };
+
+  /* ---------- framing ----------
+     The design wants the character's top half filling the space the whole
+     figure used to: head high, shoulders running off both edges, torso
+     continuing down behind the chat and behind the answer sheet. The rig is
+     unchanged — this is a crop.
+
+     FIGURE is where the character actually is inside its 1920x1080 clip,
+     measured off a render of each one rather than guessed. It matters because
+     neither figure is centred in its own frame (the bouncer sits 29px left of
+     it, Axel 35px) and both clips of a character are framed alike, so nothing
+     shifts when they start talking. Working from these boxes is what lets the
+     crop be computed rather than dialled in: the two constants below frame any
+     character once its box is known, and the maths re-runs on resize instead
+     of assuming a phone. */
+  const FIGURE = {
+    bouncer: { x: 662, y: 128, w: 538, h: 940 },
+    axel:    { x: 732, y:  88, w: 386, h: 952 },
+  };
+  const CLIP_W = 1920, CLIP_H = 1080;
+  const CROP = 0.56;        // how far down the figure to show — roughly the waist
+  /* Scene left above the head. It is not decoration: the pause button and the
+     mastery pill sit in the top 50px, and at 4.5% the hair ran behind them. */
+  const SKY  = 0.105;
+
+  /* Place the rig so the head lands just below the top of the stage and the
+     waist lands on the bottom of it, with the figure's own centre on the
+     stage's centre. Everything outside is cropped by the stage. */
+  function frameRig(host, character) {
+    const rig = rigs.get(character);
+    const f = FIGURE[character];
+    if (!rig || !f) return;
+    const W = host.clientWidth, H = host.clientHeight;
+    if (!W || !H) return;
+
+    // what the SVG itself does first: cover the box, centred (xMidYMid slice)
+    const s = Math.max(W / CLIP_W, H / CLIP_H);
+    const left = (W - CLIP_W * s) / 2, top = (H - CLIP_H * s) / 2;
+
+    const cx  = left + (f.x + f.w / 2) * s;          // figure centre, before the crop
+    const y0  = top + f.y * s;                        // top of the head
+    const y1  = top + (f.y + f.h * CROP) * s;         // where we cut the body
+
+    const want0 = SKY * H, want1 = H;
+    const Z = Math.max(1, (want1 - want0) / Math.max(1, y1 - y0));
+    let tx = W / 2 - cx * Z;
+    const ty = want0 - y0 * Z;
+
+    // never pull the clip's own edge inside the stage — that would show a seam
+    const fl = left * Z + tx, fr = fl + CLIP_W * s * Z;
+    if (fl > 0) tx -= fl;
+    if (fr < W) tx += W - fr;
+
+    rig.root.style.transformOrigin = '0 0';
+    rig.root.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${Z.toFixed(4)})`;
+  }
   const rigs = new Map();               // character -> { root, clips:{idle,speak} }
 
   function buildRig(host, character) {
@@ -51,7 +106,10 @@
       root.appendChild(box);
       clips[key] = window.lottie.loadAnimation({
         container: box, renderer: 'svg', loop: true, autoplay: false,
-        path: src[key], rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
+        path: src[key],
+        /* Centred rather than bottom-anchored: frameRig() does the placing,
+           and it needs the SVG's own fit to be predictable. */
+        rendererSettings: { preserveAspectRatio: 'xMidYMid slice' },
       });
       clips[key].el = box;
     }
@@ -82,6 +140,7 @@
     el.classList.toggle('rigged', !!rig);
     for (const [name, r] of rigs) r.root.hidden = name !== character;
     if (!rig) return;
+    frameRig(el, character);
 
     // only speak has its own clip; intro, outro and pose sit on idle for now
     const want = st === 'speak' ? 'speak' : 'idle';
@@ -91,6 +150,17 @@
       if (key === want) c.play(); else c.pause();
     }
   }
+  /* A rotation or a soft-keyboard resize changes the stage, and the crop is
+     computed from it, so it has to be recomputed too. */
+  let frameTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(frameTimer);
+    frameTimer = setTimeout(() => {
+      const el = $('character');
+      if (el && el.dataset.character) frameRig(el, el.dataset.character);
+    }, 120);
+  });
+
   function mountBackground(el, key) {
     el.querySelector('.bglabel').textContent = key.replace(/-/g, ' ');
     // el.querySelector('.bgimg').src = ASSETS.backgrounds[key];
