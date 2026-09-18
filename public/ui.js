@@ -357,6 +357,40 @@
     return CHIP_GLOSS[String(w).toLowerCase().trim()] || gloss(w) || '';
   }
 
+  /* Every target-language token inside a chip the child has already produced
+     or heard. The word ledger is keyed on whole chips ("una entrada"), so it
+     cannot answer "has this child met the word entrada" — which is the
+     question when the BARTENDER uses one. */
+  function seenTokens() {
+    const out = new Set();
+    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) {
+      if (!E.wordSeen(state, w)) continue;
+      for (const tok of String(w).split(/\s+/)) out.add(bare(tok));
+    }
+    return out;
+  }
+
+  /* Words the CHARACTER has just used that the child has never met. The coach
+     glossing the phrase the child must produce was only half the job: the
+     bartender says "y tengo un refresco" and the new word goes by unexplained,
+     which is the same dead end one step earlier. Capped, because a hint that
+     turns into a dictionary is not a hint. */
+  function newInLine(line) {
+    const seen = seenTokens();
+    const out = [], had = new Set();
+    for (const tok of String(line).split(/\s+/)) {
+      const k = bare(tok);
+      if (!k || had.has(k) || seen.has(k)) continue;
+      if (!countsAsTarget(tok, glossable())) continue;
+      const means = gloss(tok);
+      if (!means) continue;
+      had.add(k);
+      out.push({ target: tok.replace(/^[¿¡"“]+|[",”]+$/g, ''), means });
+      if (out.length >= 2) break;
+    }
+    return out;
+  }
+
   /* §6, applied to the CHARACTER's line and not only the coach's. The support
      level is a rule about how much of the child's own language the turn leans
      on, and at the bottom of the ladder that means the person in front of them
@@ -390,6 +424,17 @@
     const w = bare(tok);
     return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
   };
+
+  /* Does this line actually contain the word the turn is teaching? Matched on
+     the noun rather than the whole chip, because "una entrada" is a fine thing
+     for someone else to say as "la entrada" or "entradas". */
+  function carriesSlot(line, item) {
+    const noun = String(item.slotTarget || '').split(/\s+/).pop();
+    if (!noun) return true;
+    const stem = bare(noun).replace(/e?s$/, '');
+    if (stem.length < 3) return true;
+    return String(line).split(/\s+/).some(t => bare(t).startsWith(stem));
+  }
 
   function audit(text, met) {
     const known = new Set((met || []).map(bare));
@@ -473,6 +518,13 @@
           if (a.targetish > rule.maxTarget) { lastGenWhy = 'too much target language'; return null; }
           if (a.targetish >= a.words)       { lastGenWhy = 'no support language'; return null; }
           if (a.foreign > 0)             { lastGenWhy = 'invented word'; return null; }
+          /* And it must be THE word. "Do you need a ticket for the show?" obeys
+             every rule above and teaches nothing: the one word the turn is
+             about went by in English, so the rung did its job for no one. At
+             these levels the target word is the whole point of the sentence. */
+          if (item.slotTarget && !carriesSlot(j.scene_line, item)) {
+            lastGenWhy = 'target word missing'; return null;
+          }
         } else {
           if (a.words > rule.maxWords) { lastGenWhy = 'too long'; return null; }
           if (a.unglossable > 0)       { lastGenWhy = 'unglossable word'; return null; }
@@ -899,6 +951,14 @@
       ? requestCoach(scene, item, scaffold, sceneLine)
       : Promise.resolve(null);
 
+    /* Both halves of the same duty: the words the child must produce, and the
+       words the bartender just used at them. */
+    /* Matched on tokens, not on whole strings: the chip is "una entrada" and
+       the bartender says "entrada", and comparing them as strings listed the
+       same word twice — "¿Tienes una entrada entrada". */
+    const already = new Set(fresh.flatMap(f => String(f.target).split(/\s+/).map(bare)));
+    const spoken = newInLine(sceneLine).filter(w => !already.has(bare(w.target)));
+    fresh.push(...spoken);
     turnFresh = fresh;                    // what this turn actually introduced
     const coach = coachCopy(item, scaffold, plan, gen, fresh, null);
 

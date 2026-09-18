@@ -313,7 +313,14 @@ window.ENGINE = (function () {
       const it = itemById(quest, id);
       if (it && !pool.some(p => p.id === id)) pool.push(it);
     }
-    const open = pool.filter(it => !state.items[it.id].owed && itemScore(state, it) < BAR(quest));
+    /* Some things are only sayable at a particular moment. "Perdona" gets
+       someone's attention; asking for it once they are already answering you
+       reads as a glitch, and it was the clearest sign the conversation was
+       being assembled turn by turn rather than held. */
+    const opening = state.turn === 0;
+    const open = pool.filter(it => !state.items[it.id].owed &&
+      itemScore(state, it) < BAR(quest) &&
+      (!it.opensOnly || opening));
     if (!open.length) return null;
 
     const seen     = it => state.items[it.id].exposures > 0;
@@ -341,8 +348,12 @@ window.ENGINE = (function () {
          definition, so gating on items shut the door on new constructions the
          moment any vocabulary was added. What should hold a new construction
          back is a half-learned construction. */
+      /* Only constructions still in play. An opener is sayable once and then
+         gone; leaving it in this gate meant a phrase nobody could practise
+         again held every other construction back for the rest of the night. */
+      const live = new Set(open.map(patternOf));
       const halfTaught = Object.values(state.patterns)
-        .filter(p => p.exposures > 0 && p.mastery < FRAME_TARGET);
+        .filter(p => p.exposures > 0 && p.mastery < FRAME_TARGET && live.has(p.id));
       const unmet   = open.filter(newWord);
 
       if (fresh.length && !halfTaught.length) {

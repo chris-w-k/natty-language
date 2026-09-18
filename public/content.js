@@ -187,6 +187,11 @@ window.QUEST = (function () {
       },
       "excuse-me": {
         "segments": [{ "native": "Excuse me.", "target": "Perdona." }],
+        /* Only as an opener. Asking a child to get the attention of someone
+           who has just answered them is not a lesson, it is a non sequitur —
+           and it was the clearest sign the conversation was being assembled
+           rather than held. */
+        "opensOnly": true,
         "coachLine": "Get his attention first.",
         "coachLines": ["Get his attention first.", "He hasn't seen you — say something.",
                        "Start politely.", "Catch his eye first."]
@@ -230,12 +235,16 @@ window.QUEST = (function () {
            turn. */
         "opening": "¡Hola! ¿Qué quieres?",
         "openingNative": "Evening! Still after an entrada?",
+        /* He is behind a counter, not teaching. "Go on then, say the word —
+           cerveza?" was him doing the coach's job, and the two voices telling
+           the child what to say made neither of them worth listening to. He
+           serves, he answers, he moves on. */
         "lines": {
           "native": [
             "Evening! Still after an entrada?",
-            "Busy night. What can I get you — agua?",
+            "Busy night. Long queue behind you.",
             "Yes? There's still a camiseta or two left.",
-            "Go on then. Say the word — cerveza?"
+            "Right then. What'll it be?"
           ],
           "target": [
             "¡Hola! ¿Qué quieres?",
@@ -305,6 +314,7 @@ window.QUEST = (function () {
           native: join(segments.map(s => lead(s, 'native'))) + tail,
           coachLine: pat.coachLine,
           coachLines: pat.coachLines || [pat.coachLine],
+          opensOnly: !!pat.opensOnly,
           chips,
           gapOrder: order,
           acceptAny: pat.acceptAny || null,
@@ -366,6 +376,12 @@ window.QUEST = (function () {
       if (!it.slotTarget) {
         it.slotDecoys = solos.filter(w => !own.has(key(w)));
         far = [...it.slotDecoys, ...far];
+      } else {
+        /* And the reverse: a whole utterance has no business being offered
+           against a sentence being assembled out of its own parts. Ordering
+           "¿Tienes" and "una entrada" is the test; "Perdona." is not a wrong
+           order, it is a different conversation. */
+        far = far.filter(c => !solos.includes(c));
       }
       it.distractors = [...near, ...far];
       if (it.acceptAny) for (const alt of it.acceptAny) if (!own.has(key(alt))) {
