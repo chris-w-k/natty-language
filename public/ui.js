@@ -744,12 +744,7 @@
   document.addEventListener('click', ev => {
     const w = ev.target.closest && ev.target.closest('.w');
     if (w) { showGloss(w.dataset.w, !inputLocked); return; }
-    /* A tray chip opens the card in its own handler, and this listener runs
-       after it — without this the card was dismissed by the very tap that
-       opened it, so it flashed and vanished. Matched on the class alone
-       because placing a chip re-renders the tray: by now the button that was
-       tapped is detached, and a descendant selector like "#tray .chip" no
-       longer matches it. */
+    // a chip tap is answering, not reading: it leaves an open card alone
     if (ev.target.closest && ev.target.closest('.chip')) return;
     // anywhere else dismisses it, except inside the card itself
     if (!$('gloss').classList.contains('hidden') &&
@@ -1049,12 +1044,11 @@
         if (inputLocked || placed.length >= plan.gaps) return;
         placed.push(w);
         V.now(w, { speaker: 'axel', lang: TL() });
-        /* Switch 3. Every blue word in the conversation can be tapped for its
-           meaning; the chips — the words the turn is actually asking the child
-           to choose between — could only be heard. A decoy you cannot look up
-           is not a choice, it is a coin toss. The card is the same free one
-           reading uses everywhere else, and the next tap dismisses it. */
-        showGloss(w, false);
+        /* Placing a chip does NOT open the gloss card. It did for a while, so
+           that a decoy could be looked up rather than guessed at — but the card
+           then appeared uninvited on every tap of an answer, which is a box in
+           the way rather than a thing you asked for. The card is for a word you
+           deliberately tapped; the coach names anything genuinely new. */
         renderSlot(); renderTray();
       });
       tray.appendChild(b);
