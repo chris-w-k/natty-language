@@ -33,26 +33,78 @@ window.QUEST = (function () {
        in a pattern's own chips, because a word with no gloss is a dead end.
        Keys are lowercase and stripped of punctuation. */
     "glossary": {
+      /* Drill vocabulary — the words the game is actually teaching. */
       "me": "me", "das": "will you give", "pones": "will you put",
       "por": "for", "favor": "please", "por favor": "please",
       "gracias": "thank you", "muchas": "many", "muchas gracias": "thanks a lot",
       "perdona": "excuse me", "perdone": "excuse me",
-      "una": "a", "un": "a", "el": "the", "la": "the",
-      "entrada": "ticket", "una entrada": "a ticket",
-      "bebida": "drink", "una bebida": "a drink",
+      "una": "a", "un": "a", "el": "the", "la": "the", "los": "the", "las": "the",
+      "entrada": "ticket", "una entrada": "a ticket", "entradas": "tickets",
+      "bebida": "drink", "una bebida": "a drink", "bebidas": "drinks",
       "cerveza": "beer", "una cerveza": "a beer",
       "refresco": "soft drink", "un refresco": "a soda",
-      "encanta": "I love", "esta": "this", "este": "this",
-      "canción": "song", "canción!": "song",
+      "encanta": "I love", "esta": "this", "este": "this", "esto": "this",
+      "canción": "song", "canciones": "songs",
       "efectivo": "cash", "tarjeta": "card",
-      "hola": "hello", "sí": "yes", "no": "no", "qué": "what",
-      "quieres": "do you want", "te": "you", "pongo": "shall I get you",
-      "tienes": "do you have", "son": "that's", "euros": "euros",
-      "cuánto": "how much", "es": "is", "cuesta": "does it cost",
-      "o": "or", "aquí": "here", "tienes aquí": "here you go",
-      "pasa": "go through", "adelante": "go ahead", "vale": "okay",
-      "están": "they are", "tocando": "playing", "mira": "look",
-      "buena": "good", "noche": "night", "adiós": "bye"
+
+      /* Scene glue. Everything a bouncer, a bartender or someone in the crowd
+         might plausibly say has to be in here, because the game refuses any
+         line containing a word it cannot explain when the child taps it. A
+         short list did not mean a careful game — it meant the generator's
+         line was thrown away almost every turn and the same hand-written
+         sentence appeared over and over. The whitelist is still absolute;
+         it is simply wide enough now to hold a conversation. */
+      "hola": "hello", "adiós": "bye", "sí": "yes", "no": "no",
+      "qué": "what", "quién": "who", "cómo": "how", "dónde": "where",
+      "cuánto": "how much", "cuántos": "how many", "cuál": "which",
+      "y": "and", "o": "or", "pero": "but", "que": "that", "de": "of",
+      "a": "to", "en": "in", "con": "with", "sin": "without", "para": "for",
+      "tu": "your", "tus": "your", "mi": "my", "te": "you", "tú": "you",
+      "yo": "I", "es": "is", "son": "are", "está": "is", "están": "are",
+      "hay": "there is", "tengo": "I have", "tienes": "do you have",
+      "tiene": "has", "tienes aquí": "here you go",
+      "quieres": "do you want", "quiero": "I want", "puedo": "can I",
+      "puedes": "can you", "pongo": "shall I get you", "dame": "give me",
+      "toma": "take it", "aquí": "here", "allí": "there", "ahí": "there",
+      "ahora": "now", "luego": "later", "ya": "already", "todavía": "still",
+      "muy": "very", "más": "more", "mucho": "a lot", "poco": "a little",
+      "bien": "good", "muy bien": "very good", "mal": "bad",
+      "bueno": "good", "buena": "good", "genial": "great", "guay": "cool",
+      "vale": "okay", "claro": "of course", "venga": "come on",
+      "pasa": "go through", "pasad": "go through", "adelante": "go ahead",
+      "espera": "wait", "mira": "look", "oye": "hey", "escucha": "listen",
+      "perdón": "sorry", "lo siento": "sorry",
+      "euros": "euros", "euro": "euro", "dinero": "money",
+      "cuesta": "does it cost", "cuestan": "do they cost", "precio": "price",
+      "gratis": "free", "cambio": "change",
+      "noche": "night", "buenas noches": "good evening", "hoy": "today",
+      "grupo": "band", "banda": "band", "música": "music", "concierto": "gig",
+      "tocando": "playing", "tocan": "they play", "suena": "it sounds",
+      "escenario": "stage", "puerta": "door", "barra": "bar", "cola": "queue",
+      "gente": "people", "chico": "kid", "chica": "kid", "amigo": "friend",
+      "agua": "water", "zumo": "juice", "hielo": "ice", "vaso": "glass",
+      "otra": "another", "otro": "another", "siguiente": "next",
+      "gusta": "do you like", "me gusta": "I like it", "encantan": "I love",
+      "mejor": "better", "favorita": "favourite", "favorito": "favourite",
+      "increíble": "amazing", "fuerte": "loud", "marcha": "energy",
+      "primero": "first", "último": "last", "solo": "only", "también": "too",
+      "nada": "nothing", "algo": "something", "todo": "everything",
+      "gracias a ti": "thank you",
+
+      /* The audit reads one word at a time, so a two-word key like "buenas
+         noches" never matches — each half has to be here in its own right. */
+      "buenas": "good", "buenos": "good", "noches": "evening",
+      "días": "day", "tardes": "afternoon", "tarde": "late",
+      "tomar": "to have", "beber": "to drink", "comer": "to eat",
+      "pedir": "to ask for", "entrar": "to go in", "entra": "go in",
+      "ver": "to see", "oír": "to hear", "decir": "to say",
+      "dice": "says", "dime": "tell me", "verdad": "right",
+      "señor": "sir", "señorita": "miss", "chaval": "kid",
+      "dentro": "inside", "fuera": "outside", "arriba": "up",
+      "list": "ready", "listo": "ready", "lista": "ready",
+      "vamos": "let's go", "va": "goes", "voy": "I'm going",
+      "eso": "that", "esa": "that", "ese": "that", "estos": "these",
+      "cuidado": "careful", "tranquilo": "easy", "gracias": "thank you"
     },
 
     /* The constructions, declared as SEGMENTS that line up across the two
@@ -76,26 +128,31 @@ window.QUEST = (function () {
              ", por favor?" would be nonsense to tap. */
           { "native": "please?", "target": "por favor?", "lead": "," }
         ],
-        "coachLine": "Ask for it."
+        "coachLine": "Ask for it.",
+        "coachLines": ["Ask for it.", "Go on — ask him.", "Your turn. Ask.", "Say what you want."]
       },
       "i-love-this": {
         "segments": [
           { "native": "I love this", "target": "\u00a1Me encanta esta" },
           { "native": "{x}!", "target": "{x}!", "slot": true }
         ],
-        "coachLine": "Tell them what you think."
+        "coachLine": "Tell them what you think.",
+        "coachLines": ["Tell them what you think.", "Say it back to them.", "Go on, tell them.", "What do you reckon? Say it."]
       },
       "thank-you": {
         "segments": [{ "native": "Thank you.", "target": "Gracias." }],
-        "coachLine": "Say the polite thing."
+        "coachLine": "Say the polite thing.",
+        "coachLines": ["Say the polite thing.", "Don't forget your manners.", "One more word and you're in.", "Be polite."]
       },
       "excuse-me": {
         "segments": [{ "native": "Excuse me.", "target": "Perdona." }],
-        "coachLine": "Get their attention first."
+        "coachLine": "Get their attention first.",
+        "coachLines": ["Get their attention first.", "They haven't seen you. Say something.", "Start politely.", "Catch their eye first."]
       },
       "pay-how": {
         "segments": [{ "native": "Card.", "target": "Tarjeta." }],
         "coachLine": "He's asking how you're paying \u2014 cash or card. Either one works.",
+        "coachLines": ["He's asking how you're paying \u2014 cash or card. Either one works.", "Cash or card? Your call.", "How are you paying? Either is fine.", "Pick one \u2014 cash or card."],
         /* Both answers are right \u2014 this is a choice, not a drill. */
         "acceptAny": ["Tarjeta.", "Efectivo."]
       }
@@ -116,11 +173,27 @@ window.QUEST = (function () {
         "background": "venue-front-door",
         "goal": "get past the bouncer with a ticket",
         "onScreen": { "character": "bouncer", "role": "npc", "speaks": "target" },
-        "opening": "¿Sí? ¿Tienes entrada?",
         /* §6 L0-L1: meaning in the child's own language, the target word
-           appearing once. The generator normally writes these; this is what
-           the game falls back to. */
+           appearing once. The generator normally writes these; these are what
+           the game falls back to when it cannot, and there are several of each
+           because one apiece meant a rejected generation produced the exact
+           same screen every turn. */
+        "opening": "¿Sí? ¿Tienes entrada?",
         "openingNative": "Hold up. You got an entrada?",
+        "lines": {
+          "native": [
+            "Hold up. You got an entrada?",
+            "Nobody gets in without an entrada, kid.",
+            "Right — show me the entrada and you're in.",
+            "Well? No entrada, no gig."
+          ],
+          "target": [
+            "¿Sí? ¿Tienes entrada?",
+            "¿Y tu entrada?",
+            "Sin entrada no pasas.",
+            "Venga, la entrada."
+          ]
+        },
         "beats": [
           { "pattern": "can-i-have", "word": "ticket" },
           { "pattern": "thank-you" }
@@ -135,6 +208,20 @@ window.QUEST = (function () {
         "onScreen": { "character": "bartender", "role": "npc", "speaks": "target" },
         "opening": "¡Hola! ¿Qué te pongo?",
         "openingNative": "Hey! What can I get you — a bebida?",
+        "lines": {
+          "native": [
+            "Hey! What can I get you — a bebida?",
+            "Busy night. You want a bebida or not?",
+            "Yes? One bebida coming up, if you ask me.",
+            "What's it to be? Say the word — bebida?"
+          ],
+          "target": [
+            "¡Hola! ¿Qué te pongo?",
+            "¿Sí? ¿Qué quieres?",
+            "Dime. ¿Una bebida?",
+            "¿Y para ti?"
+          ]
+        },
         "beats": [
           { "pattern": "excuse-me" },
           { "pattern": "can-i-have", "word": "drink" },
@@ -152,6 +239,20 @@ window.QUEST = (function () {
         "onScreen": { "character": "fan", "role": "npc", "speaks": "target" },
         "opening": "¡Mira! ¡Están tocando!",
         "openingNative": "Listen to them go! What do you make of this canción?",
+        "lines": {
+          "native": [
+            "Listen to them go! What do you make of this canción?",
+            "They're on! Tell me about this canción.",
+            "Oh, this one — what do you think of the canción?",
+            "Best bit of the night. This canción, yeah?"
+          ],
+          "target": [
+            "¡Mira! ¡Están tocando!",
+            "¡Qué buena!",
+            "¿Te gusta?",
+            "¡Esta es la mejor!"
+          ]
+        },
         "beats": [
           { "pattern": "i-love-this", "word": "song" }
         ]
@@ -209,6 +310,7 @@ window.QUEST = (function () {
           target,
           native: join(segments.map(s => lead(s, 'native'))),
           coachLine: pat.coachLine,
+          coachLines: pat.coachLines || [pat.coachLine],
           chips,
           gapOrder: order,
           acceptAny: pat.acceptAny || null,

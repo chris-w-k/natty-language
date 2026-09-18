@@ -248,11 +248,25 @@
   // diacritics. Used to spot invented vocabulary inside an English line.
   const looksForeign = tok => /[¿¡]/.test(tok) || /[áéíóúñü]/i.test(tok);
 
+  /* Spanish words that are also ordinary English words. They are in the
+     glossary because the characters use them, but finding one in a line is no
+     evidence the line is Spanish: "No entry without an entrada" is English,
+     and counting its "no" pushed it over a limit that allows one Spanish word.
+     Everywhere the game asks "how much of this line is the target language",
+     these are the words that do not answer it. */
+  const AMBIGUOUS = new Set(['a', 'no', 'me', 'son', 'solo', 'nada', 'van',
+                             'mira', 'pasa', 'o', 'es', 'la', 'el', 'te',
+                             'tu', 'mi', 'y', 'en', 'con', 'toma']);
+  const countsAsTarget = (tok, vocab) => {
+    const w = bare(tok);
+    return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
+  };
+
   function audit(text, met) {
     const known = new Set((met || []).map(bare));
     const can = glossable();
     const drill = drillWords();
-    let unglossable = 0, fresh = 0, words = 0, target = 0, foreign = 0;
+    let unglossable = 0, fresh = 0, words = 0, target = 0, targetish = 0, foreign = 0;
     for (const tok of String(text).split(/\s+/)) {
       const w = bare(tok);
       if (!w) continue;
@@ -262,10 +276,11 @@
         if (looksForeign(tok)) foreign += 1;
       } else {
         target += 1;
+        if (countsAsTarget(tok, can)) targetish += 1;
         if (drill.has(w) && !known.has(w)) fresh += 1;
       }
     }
-    return { words, unglossable, fresh, target, foreign };
+    return { words, unglossable, fresh, target, targetish, foreign };
   }
 
   /* How long the child may be made to wait for a generated line. There is a
@@ -315,8 +330,8 @@
         if (a.fresh > 2) { lastGenWhy = 'too many new words'; return null; }
         if (rule.native) {
           // mostly their own language, with the target word dropped into it
-          if (a.target > rule.maxTarget) { lastGenWhy = 'too much target language'; return null; }
-          if (a.target >= a.words)       { lastGenWhy = 'no support language'; return null; }
+          if (a.targetish > rule.maxTarget) { lastGenWhy = 'too much target language'; return null; }
+          if (a.targetish >= a.words)       { lastGenWhy = 'no support language'; return null; }
           if (a.foreign > 0)             { lastGenWhy = 'invented word'; return null; }
         } else {
           if (a.words > rule.maxWords) { lastGenWhy = 'too long'; return null; }
@@ -338,6 +353,24 @@
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /* What the character says when the generated line was rejected or never
+     arrived. One hand-written sentence per scene meant every such turn looked
+     identical — three turns of "¿Sí? ¿Tienes entrada?" in a row, which is what
+     made the drill read as a loop rather than a conversation. These rotate,
+     and never repeat the line that is already on screen. */
+  const lastFallback = new Map();
+  function fallbackLine(scene, scaffold) {
+    const native = sceneRule(scaffold).native;
+    const set = (scene.lines && scene.lines[native ? 'native' : 'target']) ||
+                [native && scene.openingNative ? scene.openingNative : scene.opening];
+    const key = scene.id + '|' + (native ? 'n' : 't');
+    const prev = lastFallback.get(key);
+    let i = (state.turn + scene.id.length) % set.length;
+    if (set.length > 1 && set[i] === prev) i = (i + 1) % set.length;
+    lastFallback.set(key, set[i]);
+    return set[i];
   }
 
   function recordTurn(scene, item, line, ask, produced) {
@@ -375,12 +408,15 @@
     if (/[¿¡]/.test(text)) return true;                       // inverted punctuation
     if (/[áéíóúñü]/i.test(text)) return true;               // Spanish diacritics
     const v = targetVocab();
-    const hits = String(text).split(/\s+/).filter(t => v.has(bare(t)));
+    const hits = String(text).split(/\s+/).filter(t => countsAsTarget(t, v));
     return hits.length >= limit;    // in a hint, one shared word ("a") is coincidence
   }
 
   function coachCopy(item, scaffold, p, gen) {
-    const template = item.coachLine + ' “' + item.native + '”';
+    /* The same item comes round several turns running while it climbs, and one
+       fixed coachLine made those turns read as the same screen repeated. */
+    const set = item.coachLines && item.coachLines.length ? item.coachLines : [item.coachLine];
+    const template = set[(state.turn + item.id.length) % set.length] + ' “' + item.native + '”';
     let ask = gen && gen.coach_ask ? gen.coach_ask : template;
     if (scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
     /* The coach used to print the Spanish underneath — the answer, in blue,
@@ -629,8 +665,7 @@
       ? 'generator: gemini ' + lastGenMs + 'ms'
       : 'generator: template (' + lastGenWhy + (lastGenMs ? ', ' + lastGenMs + 'ms' : '') + ')';
     const coach = coachCopy(item, scaffold, plan, gen);
-    const sceneLine = gen ? gen.scene_line
-      : ((sceneRule(scaffold).native && scene.openingNative) ? scene.openingNative : scene.opening);
+    const sceneLine = gen ? gen.scene_line : fallbackLine(scene, scaffold);
 
     mountBackground($('layer-bg'), scene.background);
     /* Mounted idle, not speaking. The mouth is driven by VOICE.onSpeaking,
@@ -769,7 +804,15 @@
        recognise "una bebida" can tap it and find out rather than guess. */
     const pool = [...rest.filter(w => E.wordSeen(state, w)),
                   ...rest.filter(w => !E.wordSeen(state, w))];
-    const decoys = pool.slice(0, E.DISTRACTORS_AT[scaf] ?? 2);
+    /* The dock wraps now, so every chip is on screen — which also means the
+       dock is as tall as the number of chips. Five is what fits in two rows on
+       a small phone; past that the panel starts eating the stage. When the
+       child is building a whole sentence they already have three chips to
+       order, and ordering is the difficulty at that rung, not telling a ticket
+       from a beer — so the decoys give way rather than the answer. */
+    const MAX_CHIPS = 5;
+    const room = Math.max(1, MAX_CHIPS - needed.length);
+    const decoys = pool.slice(0, Math.min(E.DISTRACTORS_AT[scaf] ?? 2, room));
     const all = [...needed, ...decoys];
     const words = all
       .map((w, i) => ({ w, k: (i * 7 + state.turn * 13 + w.length * 3) % all.length }))

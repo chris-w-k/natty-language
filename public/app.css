@@ -272,15 +272,21 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 #btn-say:not(:disabled):active{transform:scale(.94);}
 
 /* word dock: horizontally scrolling pills, with the mic alongside */
-#dock{display:flex;align-items:center;gap:8px;}
+#dock{display:flex;align-items:flex-end;gap:8px;}
+/* The dock WRAPS. It used to scroll sideways with the scrollbar hidden, which
+   meant a chip past the right edge was not just out of view but unadvertised:
+   at "build the whole sentence" the tray held six chips, three fitted, and one
+   of the three the child actually needed was off-screen. There is no reading
+   of that screen except "the right answer isn't here". Every option a turn
+   offers is now on screen at once; the row grows downwards instead. */
 #tray{
-  flex:1;min-width:0;display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 4px;
+  max-height:150px;overflow-y:auto;scrollbar-width:none;
 }
 #tray::-webkit-scrollbar{display:none;}
 #tray .chip{
   flex:none;background:var(--paper);border:1px solid var(--line);border-radius:10px;
-  padding:10px 14px;font-size:14.5px;white-space:nowrap;box-shadow:var(--shadow);
+  padding:9px 12px;font-size:14px;white-space:nowrap;box-shadow:var(--shadow);
   transition:transform .12s ease,opacity .12s ease;
 }
 #tray .chip:active{transform:scale(.95);}
