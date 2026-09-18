@@ -30,9 +30,13 @@
 
      The clips are 1920x1080 and the slot is portrait, so something always gets
      cropped. What gets cropped is decided in frameRig() below. */
+  /* The bouncer became the person behind the counter — he sells the tickets,
+     the drinks and the merch now, because one room with one person is what
+     gives the generator enough to talk about. The art files keep their old
+     names; only who he is changed. */
   const ANIM = {
-    axel:    { idle: 'anim/axel-idle.json',    speak: 'anim/axel-talk.json' },
-    bouncer: { idle: 'anim/bouncer-idle.json', speak: 'anim/bouncer-talk.json' },
+    axel:      { idle: 'anim/axel-idle.json',    speak: 'anim/axel-talk.json' },
+    bartender: { idle: 'anim/bouncer-idle.json', speak: 'anim/bouncer-talk.json' },
   };
 
   /* ---------- framing ----------
@@ -50,8 +54,8 @@
      character once its box is known, and the maths re-runs on resize instead
      of assuming a phone. */
   const FIGURE = {
-    bouncer: { x: 662, y: 128, w: 538, h: 940 },
-    axel:    { x: 732, y:  88, w: 386, h: 952 },
+    bartender: { x: 662, y: 128, w: 538, h: 940 },
+    axel:      { x: 732, y:  88, w: 386, h: 952 },
   };
   const CLIP_W = 1920, CLIP_H = 1080;
   const CROP = 0.56;        // how far down the figure to show — roughly the waist
@@ -371,7 +375,9 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           character: scene.onScreen.character,
-          characterNote: scene.onScreen.character === 'axel' ? 'a bubbly teenage punk musician, the coach' : '',
+          characterNote: scene.onScreen.character === 'axel'
+            ? 'a bubbly teenage punk musician, the coach'
+            : 'the one person behind the counter at a gig venue — he sells the tickets, the drinks and the merch, gruff but good-natured, and everything the child needs tonight has to come from him',
           sceneTitle: scene.title, sceneSpeaks: scene.onScreen.speaks,
           sceneGoal: scene.goal || '',
           target: item.target, native: item.native, scaffold,
@@ -660,31 +666,24 @@
   /* One rail segment per scene. Scenes behind you are full, the one you are in
      fills by how many of its phrases are usable, scenes ahead are empty — a
      scene counter and a progress bar in the same five pixels. */
+  /* One room now, so the rail is no longer a map of the night. It shows how
+     far through the session the child is — the mastery number in the corner
+     already says how they are doing, and two bars saying the same thing told
+     them nothing. */
   function buildRail() {
     const rail = $('rail');
     rail.innerHTML = '';
-    for (let i = 0; i < Q.scenes.length; i++) {
-      const seg = document.createElement('span');
-      seg.className = 'seg';
-      seg.appendChild(document.createElement('i'));
-      rail.appendChild(seg);
-    }
+    const seg = document.createElement('span');
+    seg.className = 'seg';
+    seg.appendChild(document.createElement('i'));
+    rail.appendChild(seg);
   }
 
   function renderRail() {
-    const segs = $('rail').children;
-    for (let i = 0; i < Q.scenes.length; i++) {
-      const fill = segs[i] && segs[i].firstChild;
-      if (!fill) continue;
-      let pctDone = 0;
-      if (i < state.sceneIndex) pctDone = 1;
-      else if (i === state.sceneIndex) {
-        const items = Q.scenes[i].items;
-        const done = items.filter(it => E.itemScore(state, it) >= Q.session.canUseBar).length;
-        pctDone = items.length ? done / items.length : 0;
-      }
-      fill.style.width = (pctDone * 100).toFixed(1) + '%';
-    }
+    const fill = $('rail').firstChild && $('rail').firstChild.firstChild;
+    if (!fill) return;
+    const done = Math.min(1, state.turn / Math.max(1, Q.session.turnBudget));
+    fill.style.width = (done * 100).toFixed(1) + '%';
   }
 
   function renderHud() {
@@ -720,7 +719,7 @@
   async function renderTurn() {
     const { scene, item } = current;
     const scaffold = scaf = E.scaffoldFor(state, item);
-    plan = E.buildPlan(item, scaffold);
+    plan = E.buildPlan(item, scaffold, E.frameFor(state, item));
     E.noteShown(state, item, plan.gaps);
     const nativeSpeaker = scene.onScreen.speaks === 'native';
 
@@ -853,6 +852,12 @@
       });
       slot.appendChild(b);
     }
+    if (plan.tail) {
+      const t = document.createElement('span');
+      t.className = 'frame hug';
+      t.textContent = plan.tail;
+      slot.appendChild(t);
+    }
     $('btn-say').disabled = placed.length !== plan.gaps;
   }
 
@@ -866,7 +871,13 @@
        being asked to rule out without ever having been taught it, so the pool
        is everything they have already produced or heard — nothing else. The
        tray is simply shorter early on, which is correct. */
-    const rest = (current.item.distractors || []).filter(w => !needed.includes(w));
+    /* One gap means the turn is about the word in the slot, so the wrong
+       answers are other slot words. Frame chips only join in once whole
+       sentences are being assembled, where order is what is being tested. */
+    const it = current.item;
+    const source = ((plan.gaps <= 1 || !it.slotTarget) && it.slotDecoys && it.slotDecoys.length)
+      ? it.slotDecoys : (it.distractors || []);
+    const rest = source.filter(w => !needed.includes(w));
     /* Words they have already met make the better decoys, so those come first
        — but a tray holding only the right answer is not a question, and turn
        one had exactly that. Unmet words fill up the rest. They are quest
@@ -943,9 +954,10 @@
      Spanish sentence on turn one would be a lie the transcript tells. */
   function builtSentence() {
     let g = 0;
-    return plan.cells
+    return (plan.cells
       .map(c => (c.lead ? c.lead + ' ' : '') + (c.gap ? (placed[g++] || '…') : c.native))
-      .join(' ').replace(/\s+([,.!?])/g, '$1');
+      .join(' ') + (plan.tail || ''))
+      .replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1');
   }
   const fullSentence = builtSentence;
 
@@ -1097,27 +1109,61 @@
     V.now(item.target, { speaker: 'axel', lang: TL() });
   }
 
+  /* The night used to be three rooms of two or three phrases, so listing every
+     one of them was the progress. It is one room of twenty-nine pattern x word
+     items now, and a list that long says nothing. §9's session summary is the
+     right shape: the constructions and how they stand, then the words met. */
   function openProgress() {
     const body = $('prog-body');
     body.innerHTML = '';
-    Q.scenes.forEach((sc, i) => {
-      const status = i < state.sceneIndex ? 'DONE' : i === state.sceneIndex ? 'HERE' : 'LOCKED';
+
+    const head = t => {
       const h = document.createElement('div');
       h.className = 'scene-h';
-      h.innerHTML = `<b>${i + 1} · ${esc(sc.title)}</b><span>${status}</span>`;
+      h.innerHTML = `<b>${esc(t)}</b><span></span>`;
       body.appendChild(h);
-      sc.items.forEach(it => {
-        const st = state.items[it.id];
-        const score = E.itemScore(state, it);
-        const lb = E.label(score, st.exposures > 0, Q);
-        const r = document.createElement('div');
-        r.className = 'row' + (i > state.sceneIndex ? ' locked' : '');
-        r.innerHTML =
-          `<div class="l"><span class="t">${esc(it.target)}</span><span class="m">${esc(it.native)}</span></div>` +
-          `<div class="r"><span class="pct">${pct(score)}</span><span class="pill ${lb.replace(' ', '')}">${lb}</span></div>`;
-        body.appendChild(r);
-      });
-    });
+    };
+    const row = (main, sub, score, seen) => {
+      const lb = E.label(score, seen, Q);
+      const r = document.createElement('div');
+      r.className = 'row';
+      r.innerHTML =
+        `<div class="l"><span class="t">${esc(main)}</span><span class="m">${esc(sub)}</span></div>` +
+        `<div class="r"><span class="pct">${pct(score)}</span><span class="pill ${lb.replace(' ', '')}">${lb}</span></div>`;
+      body.appendChild(r);
+    };
+
+    head('What you can say');
+    const byPattern = new Map();
+    for (const it of E.allItems(Q)) if (!byPattern.has(it.patternId)) byPattern.set(it.patternId, it);
+    for (const [pid, sample] of byPattern) {
+      const st = state.patterns[pid] || { mastery: 0, exposures: 0 };
+      // the frame with its slot left open, since the pattern is the thing scored
+      // the frame with its slot left open; "___" rather than "…" so it does not
+      // collide with the full stop the sentence already ends on
+      const blank = '___';
+      const shown = sample.slotTarget
+        ? sample.target.replace(sample.slotTarget, blank)
+        : sample.target;
+      const meansShown = sample.slotTarget
+        ? sample.native.replace(sample.segments.find(x => x.slot).native, blank)
+        : sample.native;
+      row(shown, meansShown, st.mastery, st.exposures > 0);
+    }
+
+    head('Words you have met');
+    const vocab = [...new Set(E.allItems(Q).map(it => it.slotTarget).filter(Boolean))];
+    const met = vocab.filter(w => E.wordSeen(state, w));
+    if (!met.length) {
+      const r = document.createElement('div');
+      r.className = 'row';
+      r.innerHTML = `<div class="l"><span class="m">None yet — they arrive as you go.</span></div>`;
+      body.appendChild(r);
+    }
+    for (const w of met.sort((a, b) => E.wordMastery(state, b) - E.wordMastery(state, a))) {
+      row(w, GLOSS[bare(w)] || '', E.wordMastery(state, w), true);
+    }
+
     $('prog-overall').textContent = pct(E.overall(state, Q));
     $('prog-sheet').classList.remove('hidden');
   }
