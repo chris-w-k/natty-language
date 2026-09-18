@@ -171,7 +171,10 @@ window.ENGINE = (function () {
     return bucket(Math.min(pattern, slot));
   }
 
-  const DISTRACTORS_AT = [1, 2, 2, 3, 4];
+  /* How many wrong options sit alongside the right one. At L0 the child is
+     choosing a single word, so one decoy made it a coin toss; two is a real
+     choice without crowding the dock. */
+  const DISTRACTORS_AT = [2, 2, 3, 3, 4];
 
   /* Progressive cloze, the Turkish way: one more word is dropped at each rung
      until the learner is producing the whole phrase. For a four-word phrase:

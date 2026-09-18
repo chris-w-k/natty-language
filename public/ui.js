@@ -383,23 +383,14 @@
     const template = item.coachLine + ' “' + item.native + '”';
     let ask = gen && gen.coach_ask ? gen.coach_ask : template;
     if (scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
-    /* The model follows the same ladder as the slot. One chunk while they are
-       only supplying one, the whole sentence once they are building it, a
-       partial one as they take it over, and nothing at the top. */
-    let model = '', spoken = '';
-    if (scaffold === 0) {
-      const w = p.answer.join(' ');
-      model = '<mark>' + spanishHTML(w) + '</mark>';
-      spoken = w;
-    } else if (scaffold === 1) {
-      model = '<mark>' + spanishHTML(item.target) + '</mark>';
-      spoken = item.target;
-    } else if (scaffold === 2) {
-      const shown = item.chips.slice(0, -1).join(' ');
-      model = '<mark>' + spanishHTML(shown) + ' <span class="blank"></span></mark>';
-      spoken = '';
-    }
-    return { askText: ask, html: esc(ask) + (model ? ' ' + model : ''), spoken };
+    /* The coach used to print the Spanish underneath — the answer, in blue,
+       next to the box you type it into. With decoys in the tray that is not a
+       hint, it is the answer key, and the choice it turns the turn into is
+       "copy the words above" rather than "which of these is a ticket".
+       The coach says what to say and in which language it is wanted; the
+       Spanish itself is one tap away on his avatar, where taking it is priced
+       (§4 hint damping) instead of free. */
+    return { askText: ask, html: esc(ask) };
   }
 
   /* ---------- tappable Spanish ----------
@@ -654,7 +645,12 @@
     turnLine = sceneLine;
     turnAsk = coach.askText;
 
-    if (coach.spoken) {
+    /* §3 passive exposure, +0.05 to the WORDS only. It used to be conditional
+       on the coach printing the model, which also made the app's numbers drift
+       from the simulation that checks them. The child meets this turn's words
+       either way — in the character's line and on the chips — so the credit is
+       a property of the turn. */
+    {
       const d = E.creditHeardItem(state, item);
       if (d) pushDelta(d);
     }
@@ -765,7 +761,14 @@
        being asked to rule out without ever having been taught it, so the pool
        is everything they have already produced or heard — nothing else. The
        tray is simply shorter early on, which is correct. */
-    const pool = (current.item.distractors || []).filter(w => E.wordSeen(state, w) && !needed.includes(w));
+    const rest = (current.item.distractors || []).filter(w => !needed.includes(w));
+    /* Words they have already met make the better decoys, so those come first
+       — but a tray holding only the right answer is not a question, and turn
+       one had exactly that. Unmet words fill up the rest. They are quest
+       vocabulary and every one of them is glossed, so a child who does not
+       recognise "una bebida" can tap it and find out rather than guess. */
+    const pool = [...rest.filter(w => E.wordSeen(state, w)),
+                  ...rest.filter(w => !E.wordSeen(state, w))];
     const decoys = pool.slice(0, E.DISTRACTORS_AT[scaf] ?? 2);
     const all = [...needed, ...decoys];
     const words = all
