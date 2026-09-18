@@ -317,6 +317,20 @@ window.QUEST = (function () {
     // one room: every item belongs to it
     q.scenes[0].items = items;
 
+    /* Every chip that can appear on screen, mapped to what it means. The
+       glossary is keyed on single words, so "una entrada" has no entry in it
+       and a tapped chip had nothing to say — and a decoy borrowed from another
+       item had nowhere to look at all. The segments are already aligned across
+       the two languages, so the meaning is sitting right there; this just
+       collects it. */
+    q.chipGloss = {};
+    for (const it of items) {
+      for (const seg of it.segments) {
+        const k = String(seg.target).toLowerCase().trim();
+        if (k && !q.chipGloss[k]) q.chipGloss[k] = seg.native;
+      }
+    }
+
     /* A decoy has to be a plausible wrong answer, not just another word on the
        board. When the turn asks for the SLOT, the other slot words are the
        real competition — a ticket, a water, a t-shirt all fit "¿Me das ___"

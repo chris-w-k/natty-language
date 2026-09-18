@@ -275,9 +275,16 @@ line away. The word limits above do not apply to a native-language line.
 coach_ask: one short sentence from the coach, Axel, who has just heard the
 character speak and is helping. Where the character said something in the
 target language, Axel makes its meaning clear before telling the child what
-to say back — that is his job on the turn. Never write the target phrase
-itself here; the game shows that separately when the support level allows it.
-Never translate the target word for word.
+to say back — that is his job on the turn. Do not hand over the whole target
+phrase; the game shows that separately when the support level allows it.
+
+THE ONE EXCEPTION, and it outranks everything else here. You are given a list
+of words this turn asks for that the child has NEVER MET. If that list is not
+empty, Axel must say those words and what they mean, in the same breath as the
+ask — "you'll want PERDONA for that, it means excuse me". A child cannot pick
+a word out of a tray they have never seen, and the alternative is a guess. If
+the list IS empty, name none of it: the child has the word, and printing it
+turns the turn into copying.
 
 The support level decides how much of the child's own language you may lean
 on. It is not a style choice, it is the rule:
@@ -303,7 +310,7 @@ Return JSON only.`;
 async function generateTurn(b) {
   const { character, characterNote, sceneTitle, sceneSpeaks, sceneGoal, target, native,
           scaffold, sceneMode, maxSceneWords, maxSceneTargetWords,
-          nativeLang, targetLang, allowed, glossable, history, recent } = b;
+          nativeLang, targetLang, allowed, glossable, newWords, history, recent } = b;
   const lines = [
     `Scene: ${sceneTitle}${sceneGoal ? ' — ' + sceneGoal : ''}`,
     `On-screen character: ${character}${characterNote ? ' — ' + characterNote : ''}`,
@@ -315,6 +322,10 @@ async function generateTurn(b) {
       ? `scene_line mode: NATIVE — write it in ${nativeLang}, with at most ${maxSceneTargetWords || 1} ${targetLang} word(s) in it`
       : `scene_line mode: TARGET — write it in ${targetLang}, at most ${maxSceneWords || 12} words`,
     `Words this child has already met: ${(allowed || []).join(', ')}`,
+    (newWords && newWords.length)
+      ? `NEW to this child this turn — coach_ask must name these and say what they mean: ${
+          newWords.map(w => `${w.target} = ${w.means}`).join('; ')}`
+      : 'Nothing is new to this child this turn — coach_ask must not spell out the answer.',
     `Words the game can explain at all — nothing outside this list may appear: ${(glossable || []).join(', ')}`,
   ];
   if (history && history.length) {
@@ -337,6 +348,70 @@ async function generateTurn(b) {
   return await askJSON({
     system: TURN_SYSTEM, parts: [{ text: prompt }], schema: TURN_SCHEMA,
     temperature: 1.0, tries: 1, timeoutMs: 8000,
+  });
+}
+
+/* ---------- the coach, as an agent of its own ----------
+   Switch 1 = "two". The turn generator writes the character; this writes the
+   hint, having been shown what the character actually said. Two jobs, two
+   prompts, each short enough to be followed.
+
+   It costs no waiting in the normal case: the client does not post the coach's
+   bubble until the character has finished speaking, so this call runs inside
+   that audio. If it is late, the client uses its own line — the hint is never
+   what a child is left waiting for. */
+const COACH_SCHEMA = {
+  type: 'object',
+  properties: { coach_ask: { type: 'string' } },
+  required: ['coach_ask'],
+};
+
+const COACH_SYSTEM = `You are Axel: a teenage punk musician coaching a 7-10 year
+old through a conversation in a language they are learning. You have just heard
+what the other person said. You write ONE short sentence back to the child — not
+to the other person, who cannot hear you.
+
+Your sentence does two things and nothing else: make sure the child understood
+what was just said to them, and tell them what to say back. Say it in the
+child's own language.
+
+You are given the words this turn asks for that the child has NEVER MET. If that
+list is not empty, name those words and what they mean — "you'll want PERDONA,
+it means excuse me". This is the whole reason you are here: a child cannot pick
+a word out of a tray they have never seen, and without you the turn is a guess.
+
+If the list is empty the child already has the words, so do NOT spell the answer
+out. Nudge instead. Printing an answer they already know turns the turn into
+copying, and they learn nothing from copying.
+
+Never write the whole target phrase for them. Never use a target-language word
+that is not in the allowed list — a word the game cannot explain is a dead end.
+No stage directions, no emoji, no praise, no questions to an adult. Vary your
+wording; you say a lot of these. Return JSON only.`;
+
+async function generateCoach(b) {
+  const { character, sceneLine, target, native, objective, scaffold,
+          nativeLang, targetLang, glossable, newWords, recent } = b;
+  const lines = [
+    `The ${character} just said: ${sceneLine}`,
+    `The child must now say (${targetLang}): ${target}`,
+    `Which means (${nativeLang}): ${native}`,
+    objective ? `What this turn is teaching: ${objective}` : '',
+    `Support level: ${scaffold} of 4 (0 = brand new, 4 = nearly mastered)`,
+    `Write your sentence in: ${nativeLang}`,
+    (newWords && newWords.length)
+      ? `NEVER MET before this turn — name these and say what they mean: ${
+          newWords.map(w => `${w.target} = ${w.means}`).join('; ')}`
+      : 'Nothing here is new to this child. Nudge; do not spell it out.',
+    `Target-language words you may use at all: ${(glossable || []).join(', ')}`,
+  ].filter(Boolean);
+  if (recent && recent.length) {
+    lines.push('', 'Your own recent lines, do not repeat them:');
+    for (const r of recent) lines.push('- ' + r);
+  }
+  return await askJSON({
+    system: COACH_SYSTEM, parts: [{ text: lines.join('\n') }], schema: COACH_SCHEMA,
+    temperature: 1.0, tries: 1, timeoutMs: 6000,
   });
 }
 
@@ -459,6 +534,19 @@ http.createServer(async (req, res) => {
       return json(res, 200, await generateTurn(b));
     } catch (e) {
       // the client falls back to its own templates, so this is never fatal
+      return json(res, 200, { error: e.message });
+    }
+  }
+
+  if (url === '/api/coach' && req.method === 'POST') {
+    try {
+      const b = await readBody(req);
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
+      if (MOCK) return json(res, 200, { mock: true });
+      checkRate(req);
+      return json(res, 200, await generateCoach(b));
+    } catch (e) {
+      // the client has its own line ready, so a failure here is never fatal
       return json(res, 200, { error: e.message });
     }
   }
