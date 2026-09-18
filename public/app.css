@@ -334,22 +334,6 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 }
 .newword i{font-style:normal;color:var(--ink-3);}
 
-/* ---------- test options on the title screen ---------- */
-#opts-wrap{margin-top:26px;padding-top:18px;border-top:1px solid var(--line-soft);width:100%;}
-#opts-wrap .eyebrow{
-  font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--ink-3);
-  display:block;margin-bottom:10px;text-transform:uppercase;
-}
-#opts{display:flex;flex-direction:column;gap:9px;}
-.opt-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-.opt-l{font-size:12.5px;color:var(--ink-2);}
-.seg-ctl{display:flex;background:var(--fill);border-radius:9px;padding:2px;flex:none;}
-.seg-ctl button{
-  font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;
-  padding:6px 9px;border-radius:7px;color:var(--ink-3);white-space:nowrap;
-}
-.seg-ctl button.on{background:var(--paper);color:var(--ink);box-shadow:var(--shadow);}
-
 /* ---------- sheets ---------- */
 .sheet{position:absolute;inset:0;background:var(--paper);z-index:40;display:flex;flex-direction:column;}
 .sheet.hidden{display:none;}

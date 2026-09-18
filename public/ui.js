@@ -12,40 +12,6 @@
   const TL = () => Q.targetLang;
   const NL = () => Q.nativeLang;
 
-  /* ---------- test options ----------
-     Three independent switches, because the right answer to each is a
-     judgement Chris wants to make by playing rather than by reading. They are
-     read from the URL first so a build can be linked, and remembered after, so
-     a reload does not reset the experiment.
-
-       coach  where the hint comes from   code | two | one
-       gloss  first-exposure translation  once | never | always
-       chips  tapping a chip for meaning  free | new  | off
-
-     Defaults are the combination I would ship. */
-  const OPT_VALUES = {
-    coach: ['code', 'two', 'one'],
-    gloss: ['once', 'never', 'always'],
-    chips: ['free', 'new', 'off'],
-  };
-  const OPTS = (() => {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem('gig-opts') || '{}'); } catch {}
-    const url = new URLSearchParams(location.search);
-    const out = {};
-    for (const [k, vals] of Object.entries(OPT_VALUES)) {
-      const want = url.get(k) || saved[k];
-      out[k] = vals.includes(want) ? want : vals[0];
-    }
-    return out;
-  })();
-  function setOpt(k, v) {
-    if (!OPT_VALUES[k] || !OPT_VALUES[k].includes(v)) return;
-    OPTS[k] = v;
-    try { localStorage.setItem('gig-opts', JSON.stringify(OPTS)); } catch {}
-    renderOpts();
-  }
-
   let state, current = null, plan = null, scaf = 0, placed = [], hinted = false, hints = 0;
   let inputLocked = false;
   let turnLine = '', turnAsk = '';        // this turn's actual words, for the history
@@ -461,10 +427,6 @@
      hand-written one in content.js that is always correct, so past this point
      the model has nothing to offer that is worth a spinner. */
   const TURN_DEADLINE_MS = 4500;
-  /* The coach's own fuse. Longer than it sounds, because it burns during the
-     character's audio rather than in front of a waiting child. */
-  const COACH_DEADLINE_MS = 5000;
-  const recentCoach = [];
   let lastGenMs = 0, lastGenWhy = 'template';
 
   async function generateTurn(scene, item, scaffold) {
@@ -565,40 +527,6 @@
     return set[i];
   }
 
-  /* The coach agent. Same shape as generateTurn: short fuse, never fatal, and
-     the caller has a correct line ready whatever happens here. */
-  let lastCoachMs = 0, lastCoachWhy = 'not asked';
-  async function requestCoach(scene, item, scaffold, sceneLine) {
-    if (!serverUp) { lastCoachWhy = 'no server'; return null; }
-    const t0 = Date.now();
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), COACH_DEADLINE_MS);
-    try {
-      const r = await fetch('/api/coach', {
-        signal: ctl.signal,
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          character: scene.onScreen.character,
-          sceneLine, target: item.target, native: item.native,
-          objective: item.coachLine, scaffold,
-          nativeLang: NL(), targetLang: TL(),
-          glossable: [...glossable()], newWords: newChips(item),
-          recent: recentCoach.slice(-6),
-        })
-      });
-      lastCoachMs = Date.now() - t0;
-      if (!r.ok) { lastCoachWhy = 'http ' + r.status; return null; }
-      const j = await r.json();
-      if (!j || !j.coach_ask) { lastCoachWhy = j && j.error ? 'error' : 'empty'; return null; }
-      recentCoach.push(j.coach_ask);
-      return j.coach_ask;
-    } catch (e) {
-      lastCoachMs = Date.now() - t0;
-      lastCoachWhy = (e && e.name === 'AbortError') ? 'timed out' : 'unreachable';
-      return null;
-    } finally { clearTimeout(timer); }
-  }
-
   function recordTurn(scene, item, line, ask, produced) {
     history.push({
       character: scene.onScreen.character,
@@ -652,7 +580,6 @@
      and never again. Which is switch 2. */
   function newWordLine(fresh) {
     if (!fresh.length) return '';
-    if (OPTS.gloss === 'never') return '';
     return fresh.map(w => `${w.target} — ${w.means}`).join('  ·  ');
   }
 
@@ -665,11 +592,9 @@
     return set[(state.turn + item.id.length) % set.length] + ' \u201c' + item.native + '\u201d';
   }
 
-  function coachCopy(item, scaffold, p, gen, fresh, agentAsk) {
+  function coachCopy(item, scaffold, p, gen, fresh) {
     const template = codeCoach(item, fresh);
-    let ask = template;
-    if (OPTS.coach === 'two' && agentAsk) ask = agentAsk;
-    else if (OPTS.coach === 'one' && gen && gen.coach_ask) ask = gen.coach_ask;
+    let ask = gen && gen.coach_ask ? gen.coach_ask : template;
 
     // a coach who answers in the language being taught is no coach
     if (ask !== template && scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
@@ -677,13 +602,9 @@
     /* The guarantee, whoever wrote the line: if this turn introduces a word
        and the hint does not contain it, the hint has not done its job. A
        generated line that already worked the word in keeps its own phrasing. */
-    const showNew = (OPTS.gloss === 'always') ||
-                    (OPTS.gloss === 'once' && fresh.length > 0);
-    const missing = showNew
-      ? fresh.filter(w => !ask.toLowerCase().includes(w.target.toLowerCase()))
-      : [];
+    const missing = fresh.filter(w => !ask.toLowerCase().includes(w.target.toLowerCase()));
 
-    const badge = showNew && missing.length ? newWordLine(missing) : '';
+    const badge = missing.length ? newWordLine(missing) : '';
     return {
       askText: badge ? ask + ' — ' + badge : ask,
       html: esc(ask) + (badge
@@ -942,15 +863,6 @@
     const sceneLine = gen ? gen.scene_line : fallbackLine(scene, scaffold);
     const fresh = newChips(item);
 
-    /* Switch 1 = "two": a second call, started here rather than awaited here.
-       The coach's bubble is not posted until the character has finished
-       speaking, so this has the length of that audio to come back in and the
-       child waits for nothing. Whatever it returns — or does not — the line
-       below is already correct. */
-    const coachAgent = OPTS.coach === 'two'
-      ? requestCoach(scene, item, scaffold, sceneLine)
-      : Promise.resolve(null);
-
     /* Both halves of the same duty: the words the child must produce, and the
        words the bartender just used at them. */
     /* Matched on tokens, not on whole strings: the chip is "una entrada" and
@@ -960,7 +872,7 @@
     const spoken = newInLine(sceneLine).filter(w => !already.has(bare(w.target)));
     fresh.push(...spoken);
     turnFresh = fresh;                    // what this turn actually introduced
-    const coach = coachCopy(item, scaffold, plan, gen, fresh, null);
+    const coach = coachCopy(item, scaffold, plan, gen, fresh);
 
     mountBackground($('layer-bg'), scene.background);
     /* Mounted idle, not speaking. The mouth is driven by VOICE.onSpeaking,
@@ -1013,18 +925,12 @@
        finished speaking. Posting both at once let a child read the hint before
        they had heard the question. */
     let coachShown = false;
-    const showCoach = (agentAsk) => {
+    const showCoach = () => {
       if (coachShown) return;
       coachShown = true;
-      const c = agentAsk ? coachCopy(item, scaffold, plan, gen, fresh, agentAsk) : coach;
-      turnAsk = c.askText;
-      $('t-coach').textContent = 'coach: ' + (agentAsk ? 'agent ' + lastCoachMs + 'ms'
-        : OPTS.coach === 'code' ? 'code'
-        : OPTS.coach === 'one' ? (gen && gen.coach_ask ? 'turn agent' : 'code (no line)')
-        : 'code (' + lastCoachWhy + ')');
-      say('axel', c.html, c.askText);
+      say('axel', coach.html, coach.askText);
     };
-    characterDone.then(() => coachAgent).then(showCoach, () => showCoach(null));
+    characterDone.then(showCoach, showCoach);
     setTimeout(showCoach, 6000);   // a voice that never arrives must not hide the hint
 
     // V.say('') returns the queue with this turn's lines already on it. The
@@ -1148,9 +1054,7 @@
            to choose between — could only be heard. A decoy you cannot look up
            is not a choice, it is a coin toss. The card is the same free one
            reading uses everywhere else, and the next tap dismisses it. */
-        if (OPTS.chips === 'free' || (OPTS.chips === 'new' && !E.wordSeen(state, w))) {
-          showGloss(w, false);
-        }
+        showGloss(w, false);
         renderSlot(); renderTray();
       });
       tray.appendChild(b);
@@ -1408,51 +1312,6 @@
     $('prog-sheet').classList.remove('hidden');
   }
 
-  /* Three segmented controls under the START button. Deliberately plain: this
-     is a switch panel for one person, not a settings screen for children. */
-  const OPT_COPY = {
-    coach: ['Coach hint from', { code: 'code', two: '2 agents', one: '1 agent' }],
-    gloss: ['New word shown', { once: 'once', never: 'never', always: 'always' }],
-    chips: ['Tap chip for meaning', { free: 'always', new: 'when new', off: 'off' }],
-  };
-  function buildOpts() {
-    const host = $('opts');
-    if (!host) return;
-    host.innerHTML = '';
-    for (const [key, vals] of Object.entries(OPT_VALUES)) {
-      const [label, names] = OPT_COPY[key];
-      const row = document.createElement('div');
-      row.className = 'opt-row';
-      const l = document.createElement('span');
-      l.className = 'opt-l';
-      l.textContent = label;
-      row.appendChild(l);
-      const seg = document.createElement('div');
-      seg.className = 'seg-ctl';
-      seg.dataset.key = key;
-      for (const v of vals) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.dataset.value = v;
-        b.textContent = names[v];
-        b.addEventListener('click', () => setOpt(key, v));
-        seg.appendChild(b);
-      }
-      row.appendChild(seg);
-      host.appendChild(row);
-    }
-    renderOpts();
-  }
-  function renderOpts() {
-    for (const seg of document.querySelectorAll('.seg-ctl')) {
-      const key = seg.dataset.key;
-      for (const b of seg.children) b.classList.toggle('on', b.dataset.value === OPTS[key]);
-    }
-    const strip = $('t-opts');
-    if (strip) strip.textContent =
-      'coach: ' + OPTS.coach + ' \u00b7 new word: ' + OPTS.gloss + ' \u00b7 chip tap: ' + OPTS.chips;
-  }
-
   /* ---------- boot ---------- */
   async function boot() {
     state = E.createState(Q);
@@ -1460,7 +1319,6 @@
     chatLog.length = 0;
     $('chat').innerHTML = '';
     buildRail();
-    buildOpts();
     hideGloss();
     $('chat-full').classList.add('hidden');
     $('t-mode').textContent = 'evaluator: local · voice: browser';
@@ -1525,7 +1383,6 @@
     plan: () => plan, item: () => current && current.item, state: () => state,
     audit: text => audit(text, metWords()),
     newChips: () => turnFresh,
-    opts: () => OPTS,
   };
 
   boot();

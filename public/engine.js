@@ -82,7 +82,6 @@ window.ENGINE = (function () {
       sceneIndex: 0,
       sceneStartTurn: 0,
       reopened: [],
-      carrier: {},        // word -> the construction that last carried it (§8)
       items,
       coins: 0,
       finished: false,
@@ -283,26 +282,25 @@ window.ENGINE = (function () {
     return null;
   }
 
-  /* §7 — one objective per turn, chosen from the state. The scenario used to
-     be three rooms of two or three scripted beats, so "weakest first" was
-     enough. It is one room with twenty-nine pattern x word items now, and the
-     order they arrive in is the whole curriculum, so this is the doc's phase
-     machine.
+  /* ---------- what to practise next ----------
+     Deterministic, and deliberately small. This was a six-phase machine
+     following §7 — introduce, expand vocabulary, consolidate, rotate carriers —
+     and it did choose sensibly, but nobody could look at a turn and say why it
+     had been chosen, which made every content problem look like a selection
+     problem. Three rules now, in order:
 
-     Rule zero is not in the doc: a phrase part-way up its own cloze ladder
-     keeps the turn. That is the ramp the child actually sees — the English
-     draining out of one sentence over consecutive turns — and breaking off
-     mid-climb to introduce something new is what made the drill read as a
-     shuffle rather than a lesson. Everything below it is §7 order. */
-  /* §7 B's floor is "nothing very weak (< 0.35)". That is written for a
-     trainer that comes back tomorrow and the day after, where meeting eight
-     constructions in one sitting is fine because retrieval is spaced over
-     weeks. This is one sitting, and at 0.35 it introduced all eight and left
-     only two of them usable — everything met, nothing learned. The floor is
-     the "can use" bar instead: a new construction waits until the ones already
-     on the table are ones the child can actually use. */
-  const INTRODUCED = 0.35;
+       1. A phrase part-way up its own cloze ladder keeps the turn. This is the
+          ramp the child actually sees — the English draining out of one
+          sentence over consecutive turns — and interrupting it is what made
+          the drill read as a shuffle rather than a lesson.
+       2. Otherwise: the weakest construction, and inside it the weakest word.
+          An unseen word scores zero, so new vocabulary arrives on its own
+          without a rule for it.
+       3. Never the same phrase twice running once it has been shown whole.
 
+     No model is consulted at any point here, and none ever was: the generator
+     is told what has been chosen, and writes two sentences of dialogue around
+     it. */
   function pickNext(state, quest) {
     if (state.finished) return null;
     const scene = sceneOf(quest, state);
@@ -313,106 +311,51 @@ window.ENGINE = (function () {
       const it = itemById(quest, id);
       if (it && !pool.some(p => p.id === id)) pool.push(it);
     }
+
     /* Some things are only sayable at a particular moment. "Perdona" gets
        someone's attention; asking for it once they are already answering you
-       reads as a glitch, and it was the clearest sign the conversation was
-       being assembled turn by turn rather than held. */
+       reads as a glitch. */
     const opening = state.turn === 0;
     const open = pool.filter(it => !state.items[it.id].owed &&
       itemScore(state, it) < BAR(quest) &&
       (!it.opensOnly || opening));
     if (!open.length) return null;
 
-    const seen     = it => state.items[it.id].exposures > 0;
-    const rungs    = it => (it.segments && it.segments.length) || (it.chips || []).length;
-    const wordOf   = it => it.slotTarget || null;
-    const newWord  = it => !!wordOf(it) && !wordSeen(state, wordOf(it));
-    const patSeen  = it => !!(state.patterns[patternOf(it)] || {}).exposures;
-    const byWeakest = (a, b) => itemScore(state, a) - itemScore(state, b);
+    const rungs = it => (it.segments && it.segments.length) || (it.chips || []).length;
+    const shown = it => state.items[it.id].topGaps || 0;
 
-    let field, why;
-
-    /* 0 — still climbing. Measured on what has been SHOWN, not on the
-       scaffold: the scaffold runs a rung ahead of the screen, so reading it
-       dropped a phrase out the turn before its last English chunk was ever
-       taken away. */
-    const climbing = open.filter(it => seen(it) && (state.items[it.id].topGaps || 0) < rungs(it));
+    /* 1. still climbing — measured on what has been SHOWN, not on the
+       scaffold, which runs a rung ahead of the screen. */
+    const climbing = open.filter(it =>
+      state.items[it.id].exposures > 0 && shown(it) < rungs(it));
     if (climbing.length) {
-      field = climbing.slice().sort(byWeakest);
-      why = 'climbing';
-    } else {
-      const fresh   = open.filter(it => !patSeen(it));
-      const veryWeak  = open.filter(it => seen(it) && itemScore(state, it) < INTRODUCED);
-      /* Measured on the CONSTRUCTIONS, not on every pattern x word item. A new
-         word dropped into a known frame starts at zero and is "weak" by
-         definition, so gating on items shut the door on new constructions the
-         moment any vocabulary was added. What should hold a new construction
-         back is a half-learned construction. */
-      /* Only constructions still in play. An opener is sayable once and then
-         gone; leaving it in this gate meant a phrase nobody could practise
-         again held every other construction back for the rest of the night. */
-      const live = new Set(open.map(patternOf));
-      const halfTaught = Object.values(state.patterns)
-        .filter(p => p.exposures > 0 && p.mastery < FRAME_TARGET && live.has(p.id));
-      const unmet   = open.filter(newWord);
-
-      if (fresh.length && !halfTaught.length) {
-        /* §7 B — introduce: teach exactly one construction. In the word the
-           child already knows best, so the turn is one new thing and not two,
-           and in the curriculum order the scene declares — "excuse me" before
-           "I like this" is a conversation; the reverse is a word list. */
-        const curriculum = (scene.opens || []).indexOf.bind(scene.opens || []);
-        const idx = it => { const i = curriculum(patternOf(it)); return i < 0 ? 99 : i; };
-        field = fresh.slice().sort((a, b) =>
-          (idx(a) - idx(b)) ||
-          (wordMastery(state, wordOf(b) || '') - wordMastery(state, wordOf(a) || '')));
-        why = 'introduce pattern';
-      } else if (veryWeak.length) {
-        field = veryWeak.slice().sort(byWeakest);
-        why = 'shaky';
-      } else if (unmet.length) {
-        /* §7 B2 — vocabulary expansion: a new word inside the STRONGEST known
-           pattern, so the only unfamiliar thing on screen is the word. */
-        /* Strongest frame first, but §8's rotation applies here too: once more
-           than one construction is solid, consecutive new words alternate
-           between them instead of pouring six nouns through one frame. */
-        const lastPat = state.lastPattern;
-        field = unmet.slice().sort((a, b) => {
-          const ra = patternOf(a) === lastPat ? 1 : 0, rb = patternOf(b) === lastPat ? 1 : 0;
-          return (ra - rb) || (patternMastery(state, b) - patternMastery(state, a));
-        });
-        why = 'new word';
-      } else {
-        /* §7 B3 — consolidation, with §8 carrier rotation: the same shaky word
-           comes back in a different construction rather than the same one. */
-        const last = state.carrier || {};
-        field = open.slice().sort((a, b) => {
-          const d = byWeakest(a, b);
-          if (Math.abs(d) > 1e-6) return d;
-          const ra = last[wordOf(a)] === patternOf(a) ? 1 : 0;
-          const rb = last[wordOf(b)] === patternOf(b) ? 1 : 0;
-          return ra - rb;
-        });
-        why = 'consolidate';
-      }
+      const it = climbing.sort((a, b) => itemScore(state, a) - itemScore(state, b))[0];
+      return { scene, item: it, why: 'climbing' };
     }
 
-    /* Repeating an item is right while it is CLIMBING — that is the ladder.
-       Once it has been shown whole, repeating it is just the same turn again:
-       weakest-first happily asked for "Gracias." four times running.
+    /* 2. weakest construction, then weakest word inside it. Everything is at
+       zero on turn one, so the tie-break is the whole opening of the session:
+       it follows the scene's own `opens` list, which is why the night starts
+       by getting the man's attention rather than wherever the content file
+       happens to declare its patterns. */
+    const curriculum = scene.opens || [];
+    const rank = it => {
+      const i = curriculum.indexOf(patternOf(it));
+      return i < 0 ? curriculum.length : i;
+    };
+    const order = new Map(open.map((it, i) => [it.id, i]));
+    const ranked = open.slice().sort((a, b) => {
+      const p = patternMastery(state, a) - patternMastery(state, b);
+      if (Math.abs(p) > 1e-6) return p;
+      const w = wordMastery(state, a.slotTarget || '') - wordMastery(state, b.slotTarget || '');
+      if (Math.abs(w) > 1e-6) return w;
+      return (rank(a) - rank(b)) || (order.get(a.id) - order.get(b.id));
+    });
 
-       The phase's own field comes first and the rest of the open pool behind
-       it, so declining a repeat drops to the next thing this phase wanted
-       rather than to whatever is weakest in the whole room. */
-    const rest = open.filter(it => !field.some(f => f.id === it.id)).sort(byWeakest);
-    const order = [...field, ...rest];
-    const blocked = why === 'climbing' ? null :
-      order.find(it => state.items[it.id].lastTurn === state.turn - 1);
-    const item = order.find(it => !blocked || it.id !== blocked.id) || order[0];
-    // say what actually happened, not what the phase wanted, so the debug
-    // strip can be trusted when a turn is read back
-    const fromField = field.some(f => f.id === item.id);
-    return { scene, item, why: fromField ? why : why + ' \u2192 rotate' };
+    /* 3. not the same phrase twice running. */
+    const repeat = it => state.items[it.id].lastTurn === state.turn - 1;
+    const item = ranked.find(it => !repeat(it)) || ranked[0];
+    return { scene, item, why: 'weakest' };
   }
 
   function advanceScene(state) {
@@ -512,9 +455,6 @@ window.ENGINE = (function () {
       const d = creditWord(state, w, GAIN.word * damp('word', used));
       if (d) state.log.push({ turn: state.turn, word: d.label, from: d.from, to: d.to, why: 'produced' });
     }
-    // §8 carrier rotation: next time this word is drilled, prefer another frame
-    if (item.slotTarget) (state.carrier || (state.carrier = {}))[item.slotTarget] = patternOf(item);
-    state.lastPattern = patternOf(item);
 
     state.turn += 1;
     state.coins += used ? 5 : 10;
