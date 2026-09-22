@@ -12,10 +12,11 @@
   const TL = () => Q.targetLang;
   const NL = () => Q.nativeLang;
 
-  let state, current = null, plan = null, scaf = 0, placed = [], hinted = false, hints = 0;
+  let state, current = null, plan = null, placed = [], hinted = false, attempts = 0;
+  const ACTOR = Q.activity.actor.id;
+  const COACH = Q.activity.coach.name;
   let inputLocked = false;
-  let turnLine = '', turnAsk = '';        // this turn's actual words, for the history
-  let turnFresh = [];                     // and the words it introduced, for the tests
+  let turnLine = '', turnAsk = '', turnCoachHtml = '';   // this turn's words, for history and the repeat
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
   /* ---------- character renderer ----------
@@ -264,125 +265,66 @@
   const recentLines = [];
   const history = [];          // what has actually been said in this scene
 
-  /* §10: the whitelist is absolute and outranks the scaffold, and it has two
-     tiers here.
-
-     GLOSSABLE is every word the game can explain — the glossary plus every
-     chip in the quest. A word outside it is one the child can tap and get
-     nothing back, so it must never reach the screen at all. (This is what the
-     hand-written openings are built from, which is why the first version of
-     this guard threw them away too.)
-
-     DRILL is the quest's own vocabulary — the words the child is actually
-     tested on. §10's "at most two new words per turn" is about these: meeting
-     a third drill word in a line you cannot answer yet is load, not exposure.
-
-     Everything else in GLOSSABLE is scene glue (§8: "already-mastered words may
-     appear as scene glue only") — sí, qué, hola. It is tappable, never tested,
-     and does not count against the cap. Counting it did: the first version of
-     this guard threw away the game's own hand-written openings. */
-  let GLOSSABLE = null;
+  /* ---------- what the child has met ----------
+     NJA-3136 feature 8.3: a word is shown in the target language once it has
+     been INTRODUCED, and from then on it is highlighted and tappable. Before
+     that it does not appear in the target language at all. Both facts come
+     from the same place — the engine's `introduced` flags — so the chat, the
+     whitelist and the tap-to-translate modal can never disagree. */
+  let WHITELIST = null;
   function glossable() {
-    if (GLOSSABLE) return GLOSSABLE;
-    GLOSSABLE = new Set(Object.keys(Q.glossary || {}).map(bare));
-    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) GLOSSABLE.add(bare(w));
-    return GLOSSABLE;
+    if (WHITELIST) return WHITELIST;
+    WHITELIST = new Set(Object.keys(Q.glossary).map(bare));
+    return WHITELIST;
   }
 
-  let DRILL = null;
-  function drillWords() {
-    if (DRILL) return DRILL;
-    DRILL = new Set();
-    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) DRILL.add(bare(w));
-    return DRILL;
-  }
-
-  /* What the child has actually met. This used to seed the set with THIS
-     TURN'S chips before filtering by wordSeen, so the words whose novelty
-     matters most were the ones always reported as known: on turn one the model
-     was told the child already had "Perdona." and therefore had no reason to
-     explain it, while the prompt separately forbade it from writing the target.
-     The one word the child needed was the one the system was sure they had. */
-  function metWords() {
+  /* Target-language words the child has already been introduced to. These are
+     the ones the character may use, and the ones that render as blue. */
+  function introducedWords() {
     const out = new Set();
-    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) if (E.wordSeen(state, w)) out.add(w);
-    return [...out];
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    for (const [id, rec] of Object.entries(state.items))
+      if (rec.introduced) for (const f of ['bare', 'definite', 'indefinite'])
+        add(Q.vocabItems[id][TL()][f]);
+    for (const [id, rec] of Object.entries(state.patterns))
+      if (rec.introduced) add(Q.vocabPatterns[id][TL()].replace(/\{[^}]+\}/g, ' '));
+    return out;
   }
 
-  /* The chips of this turn the child has never met, each with what it means.
-     Everything here already existed — wordSeen knows, and the aligned segments
-     carry the meaning — it was simply never asked. */
-  function newChips(item) {
-    return (item.chips || [])
-      .filter(w => !E.wordSeen(state, w))
-      .map(w => ({ target: w, means: chipMeaning(w) }));
-  }
-
-  const CHIP_GLOSS = Q.chipGloss || {};
   function chipMeaning(w) {
-    return CHIP_GLOSS[String(w).toLowerCase().trim()] || gloss(w) || '';
+    const k = String(w).toLowerCase().trim();
+    return Q.chipGloss[k] || gloss(w) || '';
   }
 
-  /* Every target-language token inside a chip the child has already produced
-     or heard. The word ledger is keyed on whole chips ("una entrada"), so it
-     cannot answer "has this child met the word entrada" — which is the
-     question when the BARTENDER uses one. */
-  function seenTokens() {
-    const out = new Set();
-    for (const it of E.allItems(Q)) for (const w of (it.chips || [])) {
-      if (!E.wordSeen(state, w)) continue;
-      for (const tok of String(w).split(/\s+/)) out.add(bare(tok));
+  /* The one new thing this exchange introduces, and what it means. The epic
+     allows exactly one — "we don't introduce both a pattern and a word as part
+     of the same exchange" — so this is a single value or nothing. */
+  function newThing(plan) {
+    if (!plan.introducing) return null;
+    if (plan.introducing === 'item') {
+      const it = Q.vocabItems[plan.pair.itemId];
+      return { kind: 'item', by: 'actor',
+               target: it[TL()][plan.pair.form], means: it[NL()][plan.pair.form] };
     }
-    return out;
+    const pat = Q.vocabPatterns[plan.pair.patternId];
+    return { kind: 'pattern', by: 'coach',
+             target: pat[TL()].replace(/\{[^}]+\}/g, '___'),
+             means: pat[NL()].replace(/\{[^}]+\}/g, '___') };
   }
 
-  /* Words the CHARACTER has just used that the child has never met. The coach
-     glossing the phrase the child must produce was only half the job: the
-     bartender says "y tengo un refresco" and the new word goes by unexplained,
-     which is the same dead end one step earlier. Capped, because a hint that
-     turns into a dictionary is not a hint. */
-  function newInLine(line) {
-    const seen = seenTokens();
-    const out = [], had = new Set();
-    for (const tok of String(line).split(/\s+/)) {
-      const k = bare(tok);
-      if (!k || had.has(k) || seen.has(k)) continue;
-      if (!countsAsTarget(tok, glossable())) continue;
-      const means = gloss(tok);
-      if (!means) continue;
-      had.add(k);
-      out.push({ target: tok.replace(/^[¿¡"“]+|[",”]+$/g, ''), means });
-      if (out.length >= 2) break;
-    }
-    return out;
+  /* Does the character's line actually contain the word it is introducing?
+     The character's job on a vocab turn is to put that word in front of the
+     child; a line that talks around it teaches nothing. */
+  function carriesWord(line, word) {
+    const stem = bare(String(word).split(/\s+/).pop()).replace(/e?s$/, '');
+    if (stem.length < 3) return true;
+    return String(line).split(/\s+/).some(t => bare(t).startsWith(stem));
   }
 
-  /* §6, applied to the CHARACTER's line and not only the coach's. The support
-     level is a rule about how much of the child's own language the turn leans
-     on, and at the bottom of the ladder that means the person in front of them
-     is understood in English with one Spanish word in it — "the meaning
-     carried in the support language; the target word appears once, glossed".
-     A short but fully Spanish line was still a wall to a child on their very
-     first turn, which is what this got wrong. */
-  const SCENE_RULES = [
-    { native: true,  maxTarget: 1 },    // L0: their language, ONE target word
-    { native: true,  maxTarget: 3 },    // L1: their language, target words dropped in
-    { native: false, maxWords: 8 },     // L2: target language, one short aside
-    { native: false, maxWords: 12 },    // L3: target language, framing only
-    { native: false, maxWords: 16 },    // L4: no support language at all
-  ];
-  const sceneRule = n => SCENE_RULES[n] || SCENE_RULES[SCENE_RULES.length - 1];
-
-  // a word spelled like the target language: inverted punctuation or Spanish
-  // diacritics. Used to spot invented vocabulary inside an English line.
   const looksForeign = tok => /[¿¡]/.test(tok) || /[áéíóúñü]/i.test(tok);
 
-  /* Spanish words that are also ordinary English words. They are in the
-     glossary because the characters use them, but finding one in a line is no
-     evidence the line is Spanish: "No entry without an entrada" is English,
-     and counting its "no" pushed it over a limit that allows one Spanish word.
-     Everywhere the game asks "how much of this line is the target language",
-     these are the words that do not answer it. */
+  /* Spanish words that are also ordinary English words. Finding one in a line
+     is no evidence the line is Spanish. */
   const AMBIGUOUS = new Set(['a', 'no', 'me', 'son', 'solo', 'nada', 'van',
                              'mira', 'pasa', 'o', 'es', 'la', 'el', 'te',
                              'tu', 'mi', 'y', 'en', 'con', 'toma']);
@@ -391,226 +333,135 @@
     return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
   };
 
-  /* Does this line actually contain the word the turn is teaching? Matched on
-     the noun rather than the whole chip, because "una entrada" is a fine thing
-     for someone else to say as "la entrada" or "entradas". */
-  function carriesSlot(line, item) {
-    const noun = String(item.slotTarget || '').split(/\s+/).pop();
-    if (!noun) return true;
-    const stem = bare(noun).replace(/e?s$/, '');
-    if (stem.length < 3) return true;
-    return String(line).split(/\s+/).some(t => bare(t).startsWith(stem));
+  /* Is this line written in the language being taught? Used on the coach's
+     side only: a coach who answers in the language the child is learning is
+     not a coach. One shared word is coincidence, two is a pattern. */
+  function looksTargetLanguage(text, limit = 2) {
+    if (/[¿¡]/.test(text) || /[áéíóúñü]/i.test(text)) return true;
+    const v = glossable();
+    return String(text).split(/\s+/).filter(t => countsAsTarget(t, v)).length >= limit;
   }
 
-  function audit(text, met) {
-    const known = new Set((met || []).map(bare));
-    const can = glossable();
-    const drill = drillWords();
-    let unglossable = 0, fresh = 0, words = 0, target = 0, targetish = 0, foreign = 0;
+  /* The guard on a generated character line. The engine has already decided
+     which words have crossed into the target language; a line that reaches
+     past that list is teaching vocabulary nobody chose, which is the failure
+     the epic names — "the agent adds/takes away too much of the language". */
+  function auditLine(text, allowed) {
+    let over = 0, unglossable = 0;
     for (const tok of String(text).split(/\s+/)) {
       const w = bare(tok);
       if (!w) continue;
-      words += 1;
-      if (!can.has(w)) {
-        unglossable += 1;
-        if (looksForeign(tok)) foreign += 1;
-      } else {
-        target += 1;
-        if (countsAsTarget(tok, can)) targetish += 1;
-        if (drill.has(w) && !known.has(w)) fresh += 1;
-      }
+      if (!countsAsTarget(tok, glossable())) continue;
+      if (!allowed.has(w)) over += 1;
+      if (!glossable().has(w)) unglossable += 1;
     }
-    return { words, unglossable, fresh, target, targetish, foreign };
+    return { over, unglossable };
   }
 
-  /* How long the child may be made to wait for a generated line. There is a
-     hand-written one in content.js that is always correct, so past this point
-     the model has nothing to offer that is worth a spinner. */
-  const TURN_DEADLINE_MS = 4500;
+  /* ---------- the two lines of an exchange ----------
+     NJA-3136 fixes the order: the character asks, the coach hints, the child
+     answers. Both lines are generated, but neither decides anything — the
+     engine has already chosen the pair, which half is in the target language
+     and what the right answer is. The model writes dialogue around that. */
+  const TURN_DEADLINE_MS = 5000;
   let lastGenMs = 0, lastGenWhy = 'template';
 
-  async function generateTurn(scene, item, scaffold) {
+  async function generateTurn(plan) {
     if (!serverUp) { lastGenWhy = 'no server'; return null; }
-    const met = metWords();
-    const fresh = newChips(item);
     const t0 = Date.now();
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TURN_DEADLINE_MS);
+    const intro = newThing(plan);
     try {
       const r = await fetch('/api/turn', {
         signal: ctl.signal,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          character: scene.onScreen.character,
-          characterNote: scene.onScreen.character === 'axel'
-            ? 'a bubbly teenage punk musician, the coach'
-            : 'the one person behind the counter at a gig venue — he sells the tickets, the drinks and the merch, gruff but good-natured, and everything the child needs tonight has to come from him',
-          sceneTitle: scene.title, sceneSpeaks: scene.onScreen.speaks,
-          sceneGoal: scene.goal || '',
-          target: item.target, native: item.native, scaffold,
-          sceneMode: sceneRule(scaffold).native ? 'native' : 'target',
-          maxSceneWords: sceneRule(scaffold).maxWords || 0,
-          maxSceneTargetWords: sceneRule(scaffold).maxTarget || 0,
+          prompt: Q.activity.prompt,
+          actor: Q.activity.actor.name,
+          coach: Q.activity.coach.name,
+          objectives: Q.activity.objectives,
           nativeLang: NL(), targetLang: TL(),
-          allowed: met, glossable: [...glossable()],
-          /* The words this turn asks for that the child has never seen, and
-             what they mean. The coach's whole job on such a turn is to make
-             these reachable. */
-          newWords: fresh,
-          history: history.slice(-4), recent: recentLines.slice(-6)
+          expected: plan.expected,
+          expectedNative: plan.pair.allNative,
+          // what has crossed over, so the character may use it and nothing else
+          introduced: [...introducedWords()],
+          glossable: [...glossable()],
+          // the ONE new thing, and whose job it is to hand it over
+          introducing: intro,
+          history: history.slice(-4),
+          recent: recentLines.slice(-6),
         })
       });
+      lastGenMs = Date.now() - t0;
       if (!r.ok) { lastGenWhy = 'http ' + r.status; return null; }
       const j = await r.json();
-      lastGenMs = Date.now() - t0;
-      if (!j || !j.coach_ask || !j.scene_line) {
-        lastGenWhy = j && j.error ? 'error' : 'empty';
-        return null;
+      if (!j || !j.actor_line || !j.coach_line) {
+        lastGenWhy = j && j.error ? 'error' : 'empty'; return null;
       }
 
-      /* The prompt states both rules; a model still drifts, so they are
-         enforced here where it costs nothing. A rejected turn falls back to
-         the hand-written opening in content.js, which is always safe. */
-      if (scene.onScreen.speaks !== 'native') {
-        const rule = sceneRule(scaffold);
-        const a = audit(j.scene_line, met);
-        if (a.fresh > 2) { lastGenWhy = 'too many new words'; return null; }
-        if (rule.native) {
-          // mostly their own language, with the target word dropped into it
-          if (a.targetish > rule.maxTarget) { lastGenWhy = 'too much target language'; return null; }
-          if (a.targetish >= a.words)       { lastGenWhy = 'no support language'; return null; }
-          if (a.foreign > 0)             { lastGenWhy = 'invented word'; return null; }
-          /* And it must be THE word. "Do you need a ticket for the show?" obeys
-             every rule above and teaches nothing: the one word the turn is
-             about went by in English, so the rung did its job for no one. At
-             these levels the target word is the whole point of the sentence. */
-          if (item.slotTarget && !carriesSlot(j.scene_line, item)) {
-            lastGenWhy = 'target word missing'; return null;
-          }
-        } else {
-          if (a.words > rule.maxWords) { lastGenWhy = 'too long'; return null; }
-          if (a.unglossable > 0)       { lastGenWhy = 'unglossable word'; return null; }
-        }
-      } else if (looksTargetLanguage(j.scene_line, 1)) {
-        // A character speaking the child's own language gets NO latitude: one
-        // Spanish word is one too many. Models love opening on "¡Hola!".
-        lastGenWhy = 'wrong language';
-        return null;
+      /* The guard. The engine's list is the whole of what may appear in the
+         target language; a line reaching past it is inventing curriculum. */
+      const allowed = introducedWords();
+      if (intro) for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
+      const a = auditLine(j.actor_line, allowed);
+      if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
+      if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
+      /* And when the character is the one introducing a word, the word has to
+         be in their mouth. */
+      if (intro && intro.by === 'actor' && !carriesWord(j.actor_line, intro.target)) {
+        lastGenWhy = 'new word missing'; return null;
       }
-
-      recentLines.push(j.coach_ask);
+      recentLines.push(j.coach_line);
       return j;
     } catch (e) {
       lastGenMs = Date.now() - t0;
       lastGenWhy = (e && e.name === 'AbortError') ? 'timed out' : 'unreachable';
       return null;
-    } finally {
-      clearTimeout(timer);
-    }
+    } finally { clearTimeout(timer); }
   }
 
-  /* What the character says when the generated line was rejected or never
-     arrived. One hand-written sentence per scene meant every such turn looked
-     identical — three turns of "¿Sí? ¿Tienes entrada?" in a row, which is what
-     made the drill read as a loop rather than a conversation. These rotate,
-     and never repeat the line that is already on screen. */
-  const lastFallback = new Map();
-  function fallbackLine(scene, scaffold) {
-    const native = sceneRule(scaffold).native;
-    const set = (scene.lines && scene.lines[native ? 'native' : 'target']) ||
-                [native && scene.openingNative ? scene.openingNative : scene.opening];
-    const key = scene.id + '|' + (native ? 'n' : 't');
-    const prev = lastFallback.get(key);
-    let i = (state.turn + scene.id.length) % set.length;
-    if (set.length > 1 && set[i] === prev) i = (i + 1) % set.length;
-    lastFallback.set(key, set[i]);
-    return set[i];
+  /* What gets said when the model is slow, unreachable or off the rails.
+     Written from the engine's own plan, so it is always correct even though it
+     is never interesting. */
+  function fallbackLines(plan) {
+    const intro = newThing(plan);
+    const asks = ['What can I get you?', 'Yes? What do you need?',
+                  'Right — what will it be?', 'Go on then.'];
+    let actor = asks[(state.turn + plan.pair.id.length) % asks.length];
+    if (intro && intro.by === 'actor') actor = `We have ${intro.target}. Do you want it?`;
+
+    const coachAsks = ['Tell them.', 'Say it back.', 'Your turn.', 'Answer them.'];
+    let coach = `${coachAsks[state.turn % coachAsks.length]} “${plan.pair.allNative}”`;
+    if (intro && intro.kind === 'pattern') coach = `Here's how you say it: “${plan.pair.allNative}”`;
+    return { actor_line: actor, coach_line: coach };
   }
 
-  function recordTurn(scene, item, line, ask, produced) {
+  function recordTurn(plan, actorLine, coachLine, produced) {
     history.push({
-      character: scene.onScreen.character,
-      said: line, coached: ask,
-      wanted: item.target, got: produced ? 'the child said it' : 'not yet'
+      actor: actorLine, coach: coachLine,
+      wanted: plan.expected, got: produced ? 'the child said it' : 'not yet',
     });
     if (history.length > 8) history.shift();
   }
 
-  /* ---------- what the coach says ----------
-     The ASK is always present, always in the native language: at no level is
-     the learner left guessing what they are supposed to communicate.
-     The MODEL is the Spanish, and that is what gets withdrawn as they climb. */
-  /* §6 makes the scaffold a rule about SUPPORT LANGUAGE, not just about how
-     many chips are blank: L0-L3 all keep the framing in the child's own
-     language, and only L4 withdraws it. The generator is told this, but a
-     model drifts — it handed back an all-Spanish ask on a rung that should
-     have been English, which is what made turn three unreadable. So the ask is
-     checked before it is used, and a drifting one falls back to the template. */
-  let TL_VOCAB = null;                        // built on first use: bare() is defined below
-  function targetVocab() {
-    if (TL_VOCAB) return TL_VOCAB;
-    TL_VOCAB = new Set();
-    for (const sc of Q.scenes) for (const it of sc.items) {
-      for (const w of (it.chips || [])) TL_VOCAB.add(bare(w));
-      for (const w of (it.distractors || [])) TL_VOCAB.add(bare(w));
-    }
-    for (const k of Object.keys(Q.glossary || {})) TL_VOCAB.add(bare(k));
-    return TL_VOCAB;
-  }
+  /* The coach's bubble. Whatever the model wrote, if this exchange introduces
+     something the coach is responsible for, the child leaves knowing what it
+     means: a construction they have never seen, named and translated. Vocab is
+     the character's job, so the coach does not double up on it. */
+  function coachCopy(plan, gen) {
+    const fb = fallbackLines(plan);
+    let ask = gen && gen.coach_line ? gen.coach_line : fb.coach_line;
+    if (looksTargetLanguage(ask) && !(gen && gen.coach_line === fb.coach_line)) ask = fb.coach_line;
 
-  function looksTargetLanguage(text, limit = 2) {
-    if (/[¿¡]/.test(text)) return true;                       // inverted punctuation
-    if (/[áéíóúñü]/i.test(text)) return true;               // Spanish diacritics
-    const v = targetVocab();
-    const hits = String(text).split(/\s+/).filter(t => countsAsTarget(t, v));
-    return hits.length >= limit;    // in a hint, one shared word ("a") is coincidence
-  }
-
-  /* What the coach is for.
-
-     The rule used to be "never print the Spanish": the answer sitting in blue
-     next to the box you type it into turns the turn into copying. That is
-     right — but only once the child HAS the word. On first exposure it left
-     no way through at all: "Say 'Excuse me'" over a tray of Perdona. /
-     Gracias. / Tarjeta. is a one-in-three guess, and guessing wrong prints the
-     answer anyway and charges hint damping for it.
-
-     So the ban keeps a hole in it exactly the size of the problem: a word the
-     child has never met is named, with its meaning, on the turn it arrives —
-     and never again. Which is switch 2. */
-  function newWordLine(fresh) {
-    if (!fresh.length) return '';
-    return fresh.map(w => `${w.target} — ${w.means}`).join('  ·  ');
-  }
-
-  /* The deterministic coach (switch 1 = "code"). Its wording still rotates
-     through the phrasings in the content, but what it can never do is leave
-     out the word the child is about to be asked for: there is no prompt to
-     drift and no call to fail. */
-  function codeCoach(item, fresh) {
-    const set = item.coachLines && item.coachLines.length ? item.coachLines : [item.coachLine];
-    return set[(state.turn + item.id.length) % set.length] + ' \u201c' + item.native + '\u201d';
-  }
-
-  function coachCopy(item, scaffold, p, gen, fresh) {
-    const template = codeCoach(item, fresh);
-    let ask = gen && gen.coach_ask ? gen.coach_ask : template;
-
-    // a coach who answers in the language being taught is no coach
-    if (ask !== template && scaffold <= 3 && looksTargetLanguage(ask)) ask = template;
-
-    /* The guarantee, whoever wrote the line: if this turn introduces a word
-       and the hint does not contain it, the hint has not done its job. A
-       generated line that already worked the word in keeps its own phrasing. */
-    const missing = fresh.filter(w => !ask.toLowerCase().includes(w.target.toLowerCase()));
-
-    const badge = missing.length ? newWordLine(missing) : '';
+    const intro = newThing(plan);
+    const owed = intro && intro.by === 'coach' &&
+                 !ask.toLowerCase().includes(intro.target.replace(/_+/g, '').trim().toLowerCase());
+    const badge = owed
+      ? `<span class="newword">${spanishHTML(intro.target)} <i>${esc(intro.means)}</i></span>` : '';
     return {
-      askText: badge ? ask + ' — ' + badge : ask,
-      html: esc(ask) + (badge
-        ? `<span class="newword">${spanishHTML(missing.map(w => w.target).join(' '))}` +
-          ` <i>${esc(missing.map(w => w.means).join(' · '))}</i></span>`
-        : ''),
+      askText: owed ? `${ask} — ${intro.target} — ${intro.means}` : ask,
+      html: esc(ask) + badge,
     };
   }
 
@@ -629,11 +480,16 @@
      now — at the lowest rung a character speaks the child's own language with
      one target word in it — and making "Have" or "you" tappable would offer a
      translation that does not exist. */
+  /* Feature 8.3: a target-language word is highlighted and clickable once it
+     has been introduced. Before that it is not on screen in that language at
+     all, and afterwards it always is — so "blue" and "introduced" are the same
+     fact, read from the same place. */
   function spanishHTML(text) {
     const can = glossable();
+    const met = introducedWords();
     return String(text).split(/(\s+)/).map(tok => {
       if (!tok.trim()) return tok;
-      if (!can.has(bare(tok))) return esc(tok);
+      if (!can.has(bare(tok)) || !met.has(bare(tok))) return esc(tok);
       /* "No entry without an entrada" had THREE blue words in it — "No", "a"
          and "entrada" — and tapping the first two offered a child translations
          of their own language. AMBIGUOUS already exists for counting how much
@@ -732,6 +588,7 @@
        "una entrada" was a blank card even though the content has known it
        meant "a ticket" all along. */
     $('gloss-mean').textContent = chipMeaning(word) || '—';
+    if (state) E.track(state, 'translation_clicked', { word: String(word) });
     $('gloss').classList.remove('hidden');
     if (speak) V.now(word, { speaker: 'axel', lang: TL() });
   }
@@ -762,13 +619,15 @@
     // #controls has not existed since the rebuild; the buttons live in #dock-side,
     // so the mic and the bin stayed live through every lock
     for (const el of document.querySelectorAll('#tray .chip, #dock-side .btn')) el.disabled = inputLocked;
-    if (!inputLocked) $('btn-say').disabled = placed.length !== plan.gaps;
+    if (!inputLocked && plan) $('btn-say').disabled = placed.length !== plan.answer.length;
   }
 
   /* label by how many gaps there actually are, not by the level */
-  function slotLabel(p, n) {
-    if (p.gaps >= n) return 'Build the whole sentence';
-    return p.gaps === 1 ? 'Tap the missing word' : 'Tap the ' + p.gaps + ' missing words';
+  function slotLabel(p) {
+    const n = p.answer.length;
+    if (!n) return '';
+    if (n >= p.cells.length) return 'Build the whole sentence';
+    return n === 1 ? 'Tap the missing word' : 'Tap the ' + n + ' missing words';
   }
 
   /* ---------- render ---------- */
@@ -801,124 +660,92 @@
     rail.appendChild(seg);
   }
 
+  /* The session ends on mastery, not on a clock, so the rail shows how much of
+     the scenario has been produced rather than how many turns have gone by. */
   function renderRail() {
     const fill = $('rail').firstChild && $('rail').firstChild.firstChild;
     if (!fill) return;
-    const done = Math.min(1, state.turn / Math.max(1, Q.session.turnBudget));
-    fill.style.width = (done * 100).toFixed(1) + '%';
+    fill.style.width = (E.overall(state, Q) * 100).toFixed(1) + '%';
   }
 
   function renderHud() {
-    const o = E.overall(state, Q);
     renderRail();
-    $('mastery').textContent = 'Mastery: ' + pct(o);
+    $('mastery').textContent = 'Mastery: ' + pct(E.overall(state, Q));
     $('coins').textContent = String(state.coins);
-    $('t-obj').textContent = current ? current.item.id : '—';
-    $('t-scaf').textContent = current ? 'L' + scaf + ' (' + plan.gaps + ' gap' + (plan.gaps > 1 ? 's' : '') + ')' : '—';
-    $('t-turn').textContent = state.turn + '/' + Q.session.turnBudget;
+    $('t-obj').textContent = plan ? plan.pair.id : '—';
+    $('t-scaf').textContent = plan
+      ? (plan.frameTarget ? 'frame:target' : 'frame:native') +
+        ' · ' + (plan.pair.hasSlot ? (plan.itemTarget ? 'word:target' : 'word:native') : 'no slot') +
+        (plan.introducing ? ' · NEW ' + plan.introducing : '')
+      : '—';
+    $('t-turn').textContent = state.turn + '/' + Q.session.turnCap +
+      (attempts ? '  attempt ' + (attempts + 1) : '');
   }
 
   /* Warm the voices for the scene we are about to play. Every clip is a Gemini
      call, so this is the current scene's own words only — not the whole quest
      — and it runs in the background. By the time the child reaches a phrase
      the audio is usually already in the cache and plays instantly. */
-  let preloadedScene = -1;
+  let preloaded = false;
   function preloadScene() {
-    const scene = E.sceneOf(Q, state);
-    if (!scene || preloadedScene === state.sceneIndex) return;
-    preloadedScene = state.sceneIndex;
-    /* Staggered, not fired as one burst. A scene's worth of clips going out
-       together competes with the lines the child is waiting to hear right now,
-       and a rate-limited TTS call backs off for seconds. */
-    const queue = [];
-    for (const it of scene.items) {
-      queue.push([it.target, 'axel']);
-      for (const w of (it.chips || [])) queue.push([w, 'axel']);
+    if (preloaded) return;
+    preloaded = true;
+    /* Staggered, not a burst: a scenario's worth of TTS going out at once
+       competes with the line the child is waiting to hear. */
+    const seen = new Set(), queue = [];
+    for (const p of Q.pairs) {
+      for (const t of [p.allTarget, p.itemTarget]) {
+        if (t && !seen.has(t)) { seen.add(t); queue.push(t); }
+      }
     }
-    queue.forEach(([text, who], i) => setTimeout(() => V.prefetch(text, who), 1200 + i * 700));
+    queue.slice(0, 24).forEach((text, i) => setTimeout(() => V.prefetch(text, ACTOR), 1500 + i * 800));
   }
 
   async function renderTurn() {
-    const { scene, item } = current;
-    const scaffold = scaf = E.scaffoldFor(state, item);
-    plan = E.buildPlan(item, scaffold, E.frameFor(state, item));
-    E.noteShown(state, item, plan.gaps);
-    const nativeSpeaker = scene.onScreen.speaks === 'native';
+    const pair = current;
+    plan = E.planTurn(state, pair);
+    E.seen(state, plan);
 
-    // The generator is a network round trip. Hold the panel and say so, rather
-    // than leaving the previous turn live and tappable underneath.
     setLocked(true);
     $('turn-loading').classList.remove('hidden');
     preloadScene();
-    const gen = await generateTurn(scene, item, scaffold);
+    const gen = await generateTurn(plan);
     $('turn-loading').classList.add('hidden');
     $('t-gen').textContent = gen
       ? 'generator: gemini ' + lastGenMs + 'ms'
       : 'generator: template (' + lastGenWhy + (lastGenMs ? ', ' + lastGenMs + 'ms' : '') + ')';
-    const sceneLine = gen ? gen.scene_line : fallbackLine(scene, scaffold);
-    const fresh = newChips(item);
 
-    /* Both halves of the same duty: the words the child must produce, and the
-       words the bartender just used at them. */
-    /* Matched on tokens, not on whole strings: the chip is "una entrada" and
-       the bartender says "entrada", and comparing them as strings listed the
-       same word twice — "¿Tienes una entrada entrada". */
-    const already = new Set(fresh.flatMap(f => String(f.target).split(/\s+/).map(bare)));
-    const spoken = newInLine(sceneLine).filter(w => !already.has(bare(w.target)));
-    fresh.push(...spoken);
-    turnFresh = fresh;                    // what this turn actually introduced
-    const coach = coachCopy(item, scaffold, plan, gen, fresh);
-
-    mountBackground($('layer-bg'), scene.background);
-    /* Mounted idle, not speaking. The mouth is driven by VOICE.onSpeaking,
-       which now fires when the audio actually starts — setting 'speak' here
-       had the character talking to themselves through the whole fetch. */
-    mountCharacter($('character'), { character: scene.onScreen.character, state: 'idle' });
-
-    /* The stage box belongs to whoever is on screen; the coach box below
-       belongs to Axel. In the opening scene Axel is both, so he speaks from
-       the stage and still coaches from the bottom — one rule, no special
-       case for who happens to be standing there. */
-    turnLine = sceneLine;
+    const fb = fallbackLines(plan);
+    const actorLine = gen ? gen.actor_line : fb.actor_line;
+    const coach = coachCopy(plan, gen);
+    turnLine = actorLine;
     turnAsk = coach.askText;
+    turnCoachHtml = coach.html;
 
-    /* §3 passive exposure, +0.05 to the WORDS only. It used to be conditional
-       on the coach printing the model, which also made the app's numbers drift
-       from the simulation that checks them. The child meets this turn's words
-       either way — in the character's line and on the chips — so the credit is
-       a property of the turn. */
-    {
-      const d = E.creditHeardItem(state, item);
-      if (d) pushDelta(d);
-    }
+    mountBackground($('layer-bg'), Q.activity.background);
+    mountCharacter($('character'), { character: ACTOR, state: 'idle' });
 
     placed = [];
     hinted = false;
-    hints = 0;
-    $('slot-label').textContent = slotLabel(plan, item.chips.length);
+    attempts = 0;
+    $('slot-label').textContent = slotLabel(plan);
     renderSlot();
     renderTray();
     setMic(false);
     $('verdict').textContent = '';
     $('verdict').className = '';
+    $('lower').classList.remove('wrong');
     renderHud();
 
-    // Speak the turn — queued, never awaited. The screen is usable immediately;
-    // a child who already knows the answer does not wait for the audio.
-    /* One voice per turn: the character's. The coach's line is read, not
-       heard — it is a hint sitting next to the answer box, and hearing it
-       spoken made the turn a wall of audio the child had to sit through. The
-       Spanish in it is still tappable, and SAY IT still reads their sentence
-       back, so nothing is lost that they cannot ask for. */
+    /* The order the epic fixes: character asks, coach hints, child answers.
+       The coach's bubble waits for the character to finish speaking — posting
+       both at once lets a child read the hint before they have heard the
+       question. */
     V.stop();
-    say(scene.onScreen.character, nativeSpeaker ? esc(sceneLine) : spanishHTML(sceneLine), sceneLine);
-    const characterDone = V.say(sceneLine, {
-      speaker: scene.onScreen.character, lang: nativeSpeaker ? NL() : TL()
-    });
+    say(ACTOR, spanishHTML(actorLine), actorLine);
+    setLocked(true);
+    const characterDone = V.say(actorLine, { speaker: ACTOR, lang: mixedLang(actorLine) });
 
-    /* The coach's message joins the conversation once the character has
-       finished speaking. Posting both at once let a child read the hint before
-       they had heard the question. */
     let coachShown = false;
     const showCoach = () => {
       if (coachShown) return;
@@ -926,114 +753,91 @@
       say('axel', coach.html, coach.askText);
     };
     characterDone.then(showCoach, showCoach);
-    setTimeout(showCoach, 6000);   // a voice that never arrives must not hide the hint
+    setTimeout(showCoach, 6000);
 
-    // V.say('') returns the queue with this turn's lines already on it. The
-    // panel unlocks when they have all played — or after a ceiling, because a
-    // voice that never arrives must not strand the child behind it.
-    setLocked(true);
     let released = false;
     const release = () => {
       if (released) return;
       released = true;
       setLocked(false);
-      mountCharacter($('character'), { character: scene.onScreen.character, state: 'idle' });
+      mountCharacter($('character'), { character: ACTOR, state: 'idle' });
     };
     V.say('').then(release);
     setTimeout(release, 12000);
   }
 
-  /* The sentence in order: a gap is theirs to fill in the target language,
-     anything else is still shown in their own. That is what makes the English
-     drain away one chunk per rung instead of the whole frame flipping to
-     Spanish the moment they get one answer right. */
+  /* A line is a mix of the two languages by design, so the voice follows
+     whichever one carries most of it. */
+  function mixedLang(line) {
+    const v = glossable();
+    const toks = String(line).split(/\s+/).filter(t => bare(t));
+    const t = toks.filter(x => countsAsTarget(x, v)).length;
+    return t * 2 >= toks.length ? TL() : NL();
+  }
+
+  /* The sentence with its gaps. Words already in the child's own language are
+     printed; words that have crossed into the target language are theirs to
+     supply. */
   function renderSlot() {
     const slot = $('slot');
     slot.classList.remove('ok');
     slot.innerHTML = '';
 
     let g = 0;
+    /* Runs of printed words are one span, not one per word: laid out as
+       separate flex children, "Do you have" came out with a gap between every
+       word, which reads as three words rather than a phrase. */
+    let run = null;
+    const flushRun = () => { if (run) { slot.appendChild(run); run = null; } };
+    const pushWord = txt => {
+      if (!run) { run = document.createElement('span'); run.className = 'frame'; run.textContent = txt; }
+      else run.textContent += ' ' + txt;
+    };
+
     for (const cell of plan.cells) {
-      if (cell.lead) {
+      if (cell.lead) pushWord(cell.lead);
+      if (!cell.gap) {
+        pushWord(cell.w + (cell.tail || ''));
+        continue;
+      }
+      {
+        flushRun();
+        const i = g++;
+        if (placed[i] === undefined) {
+          const e = document.createElement('span');
+          e.className = 'gap';
+          slot.appendChild(e);
+        } else {
+          const b = document.createElement('button');
+          b.className = 'chip placed';
+          b.type = 'button';
+          b.textContent = placed[i];
+          b.addEventListener('click', () => {
+            if (inputLocked) return;
+            placed.splice(i, 1); renderSlot(); renderTray();
+          });
+          slot.appendChild(b);
+        }
+      }
+      if (cell.tail) {
         const c = document.createElement('span');
         c.className = 'frame hug';
-        c.textContent = cell.lead;
+        c.textContent = cell.tail;
         slot.appendChild(c);
       }
-      if (!cell.gap) {
-        const f = document.createElement('span');
-        f.className = 'frame';
-        if (/^[,.;:!?]/.test(cell.native)) f.classList.add('hug');
-        f.textContent = cell.native;
-        slot.appendChild(f);
-        continue;
-      }
-      const i = g++;
-      if (placed[i] === undefined) {
-        const e = document.createElement('span');
-        e.className = 'gap';
-        slot.appendChild(e);
-        continue;
-      }
-      const b = document.createElement('button');
-      b.className = 'chip placed';
-      b.type = 'button';
-      b.textContent = placed[i];
-      b.addEventListener('click', () => {
-        if (inputLocked) return;
-        placed.splice(i, 1); renderSlot(); renderTray();
-      });
-      slot.appendChild(b);
     }
-    if (plan.tail) {
-      const t = document.createElement('span');
-      t.className = 'frame hug';
-      t.textContent = plan.tail;
-      slot.appendChild(t);
-    }
-    $('btn-say').disabled = placed.length !== plan.gaps;
+    flushRun();
+    $('btn-say').disabled = placed.length !== plan.answer.length;
   }
 
+  /* NJA-3136 Engine step 6. The engine builds the list — answer words plus red
+     herrings drawn first from items whose tags make them invalid for this slot
+     — and shuffles it deterministically. The UI only draws it. */
   function renderTray() {
     const tray = $('tray');
     tray.innerHTML = '';
-    // only the words still needed, plus decoys — never the words already locked in
-    const needed = plan.answer.slice();
-    /* §8: "already-mastered words may appear as scene glue only", and §10 caps
-       new words per turn. A decoy the child has never met is a word they are
-       being asked to rule out without ever having been taught it, so the pool
-       is everything they have already produced or heard — nothing else. The
-       tray is simply shorter early on, which is correct. */
-    /* One gap means the turn is about the word in the slot, so the wrong
-       answers are other slot words. Frame chips only join in once whole
-       sentences are being assembled, where order is what is being tested. */
-    const it = current.item;
-    const source = ((plan.gaps <= 1 || !it.slotTarget) && it.slotDecoys && it.slotDecoys.length)
-      ? it.slotDecoys : (it.distractors || []);
-    const rest = source.filter(w => !needed.includes(w));
-    /* Words they have already met make the better decoys, so those come first
-       — but a tray holding only the right answer is not a question, and turn
-       one had exactly that. Unmet words fill up the rest. They are quest
-       vocabulary and every one of them is glossed, so a child who does not
-       recognise "una bebida" can tap it and find out rather than guess. */
-    const pool = [...rest.filter(w => E.wordSeen(state, w)),
-                  ...rest.filter(w => !E.wordSeen(state, w))];
-    /* The dock wraps now, so every chip is on screen — which also means the
-       dock is as tall as the number of chips. Five is what fits in two rows on
-       a small phone; past that the panel starts eating the stage. When the
-       child is building a whole sentence they already have three chips to
-       order, and ordering is the difficulty at that rung, not telling a ticket
-       from a beer — so the decoys give way rather than the answer. */
-    const MAX_CHIPS = 5;
-    const room = Math.max(1, MAX_CHIPS - needed.length);
-    const decoys = pool.slice(0, Math.min(E.DISTRACTORS_AT[scaf] ?? 2, room));
-    const all = [...needed, ...decoys];
-    const words = all
-      .map((w, i) => ({ w, k: (i * 7 + state.turn * 13 + w.length * 3) % all.length }))
-      .sort((a, b) => a.k - b.k).map(x => x.w);
-
     const used = placed.slice();
-    for (const w of words) {
+    for (const w of E.pills(Q, state, plan)) {
       const b = document.createElement('button');
       b.className = 'chip';
       b.type = 'button';
@@ -1041,141 +845,93 @@
       const i = used.indexOf(w);
       if (i >= 0) { used.splice(i, 1); b.disabled = true; }
       b.addEventListener('click', () => {
-        if (inputLocked || placed.length >= plan.gaps) return;
+        if (inputLocked || placed.length >= plan.answer.length) return;
         placed.push(w);
         V.now(w, { speaker: 'axel', lang: TL() });
-        /* Placing a chip does NOT open the gloss card. It did for a while, so
-           that a decoy could be looked up rather than guessed at — but the card
-           then appeared uninvited on every tap of an answer, which is a box in
-           the way rather than a thing you asked for. The card is for a word you
-           deliberately tapped; the coach names anything genuinely new. */
         renderSlot(); renderTray();
       });
       tray.appendChild(b);
     }
   }
 
-  function pushDelta(d) {
-    const sign = d.to > d.from ? '+' : d.to < d.from ? '−' : '±';
-    $('t-delta').textContent = d.label + ' ' + pct(d.from) + '→' + pct(d.to) +
-      ' (' + sign + Math.abs(d.to - d.from).toFixed(2) + ', ' + d.why + ')';
-  }
-
-  /* ---------- turn loop ---------- */
+  /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
-    if (state.turn >= Q.session.turnBudget) return finish('Time to head home.');
-
-    const scene = E.sceneOf(Q, state);
-    if (!scene) return finish('That’s the whole night.');
-
-    // the scene clock: slow is not the same as wrong, and everyone sees the gig
-    if (!E.sceneDone(state, scene, Q) && E.sceneOverBudget(state, Q)) E.oweRemaining(state, scene, Q);
-
-    if (E.sceneDone(state, scene, Q)) {
-      E.advanceScene(state);
-      if (state.sceneIndex >= Q.scenes.length) return finish('That’s the whole night.');
-      if (state.sceneIndex === Q.scenes.length - 1) E.reopenOwed(state);
-      return step();
-    }
-
-    const next = E.pickNext(state, Q);
-    if (!next) { E.advanceScene(state); return step(); }
-    current = next;
+    if (E.sessionComplete(state, Q)) return finish('You got everything.');
+    if (state.turn >= Q.session.turnCap) return finish('Time to head home.');
+    const pair = E.pickNext(state, Q);
+    if (!pair) return finish('You got everything.');
+    current = pair;
     renderTurn();
   }
 
-  /* The sentence as it currently stands in the slot, gaps filled with whatever
-     the child has put there. At L0 that is their own language around one
-     Spanish chunk, which is the point of the rung — and it is what goes into
-     the conversation as their message, because claiming they said the whole
-     Spanish sentence on turn one would be a lie the transcript tells. */
+  /* The sentence as it stands, gaps filled with whatever they have tapped.
+     This is what goes into the transcript as their message: claiming they said
+     the whole target-language sentence when half of it was printed for them
+     would be a lie the chat tells. */
   function builtSentence() {
     let g = 0;
-    return (plan.cells
-      .map(c => (c.lead ? c.lead + ' ' : '') + (c.gap ? (placed[g++] || '…') : c.native))
-      .join(' ') + (plan.tail || ''))
-      .replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1');
+    return plan.cells
+      .map(c => (c.lead || '') + (c.gap ? (placed[g++] || '…') : c.w) + (c.tail || ''))
+      .join(' ').replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1');
   }
-  const fullSentence = builtSentence;
-
-  /* What gets read aloud on SAY IT: always the complete sentence, never the
-     fragment the child tapped. The gaps are always the trailing chips, so the
-     words in front of them come from the item whether or not the rung shows
-     them — at L0 the slot holds one word and the frame is in English, and the
-     child still hears the whole Spanish line. Right answer reads the target
-     (so the punctuation and accents are the real ones); a wrong one reads back
-     what they actually built, which is the point of hearing it. */
-  /* The echo reads back what is IN THE SLOT, in whatever languages that is.
-     At L0 that is the child's own language around one Spanish word — "Can I
-     have una entrada, please?" — the sentence they actually built. Reading
-     them a full Spanish sentence they never wrote was the coach modelling,
-     not an echo, and it made the rung feel harder than it is. */
-  function spokenSentence() {
-    if (plan.mode !== 'native-frame' && E.checkGaps(placed, plan, current.item).target_produced)
-      return current.item.target;
-    return builtSentence();
-  }
-  // mixed lines are led by their frame; this only steers the browser fallback
-  function spokenLang() { return plan.mode === 'native-frame' ? NL() : TL(); }
 
   async function submit(text, mode) {
     if (busy || !current) return;
     busy = true;
     $('btn-say').disabled = true;
 
-    const item = current.item;
+    const said = builtSentence();
+    if (mode === 'chips') V.now(said, { speaker: 'learner', lang: mixedLang(said) });
 
-    // Always the whole sentence, never just the words they filled in — the
-    // point is to hear the finished thing, even at the one-word rungs.
-    if (mode === 'chips') V.now(spokenSentence(), { speaker: 'learner', lang: spokenLang() });
+    const res = mode === 'chips' ? E.check(placed, plan)
+              : { correct: E.norm(text) === E.norm(plan.answer.join(' ')), why: 'spoken' };
 
-    const res = mode === 'chips' ? E.checkGaps(placed, plan, item) : await evaluateSpoken(text, item);
-
-    if (res.target_produced) {
-      /* Their answer goes into the log as their message — from the right, with
-         their own avatar. Only correct ones: the transcript is the
-         conversation that actually happened, not a list of attempts. */
-      const said = builtSentence();
+    if (res.correct) {
       say('me', spanishHTML(said), said);
-
       const before = E.overall(state, Q);
-      const d = E.applyCorrect(state, item, { mode, hinted, hints });
-      pushDelta(d);
+      const ph = E.applyCorrect(state, plan, { hinted });
       if (E.overall(state, Q) > before + 1e-6) pulseMastery();
       $('slot').classList.add('ok');
+      $('lower').classList.remove('wrong');
       $('verdict').textContent = '✓ ' + (hinted ? 'nice — that’s it' : 'spot on');
       $('verdict').className = 'good';
-      mountCharacter($('character'), { character: current.scene.onScreen.character, state: 'pose' });
+      $('t-delta').textContent = plan.pair.id + ' · pattern ' + ph.pattern +
+        (ph.item ? ' · word ' + ph.item : '');
+      mountCharacter($('character'), { character: ACTOR, state: 'pose' });
       renderHud();
-      recordTurn(current.scene, item, turnLine, turnAsk, true);
+      recordTurn(plan, turnLine, turnAsk, true);
       setTimeout(() => { busy = false; step(); }, 900);
       return;
     }
 
-    const d = E.applyWrong(state, item);
-    pushDelta(d);
+    /* "Incorrect answer handling - UI goes red, pal repeats phrase and user
+       tries again until they get it right." Taken literally that never ends,
+       so after a few tries the coach says it for them and the exchange moves
+       on — uncredited, so the pair comes back. */
+    const { attempts: n } = E.applyWrong(state, plan);
+    attempts = n;
+    hinted = true;
     renderHud();
 
-    if (E.mercyDue(state, item, Q)) {
-      const m = E.applyMercy(state, item);
-      pushDelta(m);
-      recordTurn(current.scene, item, turnLine, turnAsk, false);
-      $('verdict').textContent = '— Axel says it for you: ' + item.target;
-      await V.say(item.target, { speaker: 'axel', lang: TL() });
+    if (E.mercyDue(state)) {
+      recordTurn(plan, turnLine, turnAsk, false);
+      $('lower').classList.remove('wrong');
+      $('verdict').textContent = '— ' + COACH + ' says it for you: ' + plan.expected;
+      await V.say(plan.expected, { speaker: 'axel', lang: mixedLang(plan.expected) });
+      E.applyMercy(state, plan);
       setTimeout(() => { busy = false; step(); }, 1200);
       return;
     }
 
-    hinted = true;
-    hints += 1;
-    const why = {
-      word_order: 'Right words, wrong order.', missing_word: 'Something’s missing.',
-      wrong_word: 'Not quite.', typo: 'So close.', native_fallback: 'In Spanish this time.', none: 'Almost.'
-    }[res.error_type] || 'Almost.';
-    $('verdict').textContent = '✗ ' + why + ' Say it like this: ' + item.target;
-    $('verdict').className = '';
-    V.say(item.target, { speaker: 'axel', lang: TL() });
+    $('lower').classList.add('wrong');
+    const why = { word_order: 'Right words, wrong order.', wrong_word: 'Not quite.' }[res.why] || 'Not quite.';
+    $('verdict').textContent = '✗ ' + why + ' Try again.';
+    $('verdict').className = 'bad';
+    /* "pal repeats phrase" — the SAME bubble, formatting and all. Re-posting
+       the plain text ran the new-word badge back into the sentence as prose,
+       so the repeat read worse than the line it was repeating. */
+    say('axel', turnCoachHtml, turnAsk);
     placed = [];
     renderSlot();
     renderTray();
@@ -1184,12 +940,14 @@
 
   function finish(msg) {
     state.finished = true;
-    // the 50/50 blend, not the pattern ledger alone — §2
-    const done = E.allItems(Q).filter(it => E.itemScore(state, it) >= Q.session.canUseBar).length;
+    E.track(state, 'session_end', { turns: state.turn, overall: E.overall(state, Q) });
+    const pats = Object.values(state.patterns).filter(E.mastered).length;
+    const its  = Object.values(state.items).filter(E.mastered).length;
     $('end-msg').textContent = msg;
     $('end-score').textContent = pct(E.overall(state, Q));
-    $('end-sub').textContent = done + ' of ' + Object.keys(state.items).length +
-      ' phrases you can use · ' + state.coins + ' coins';
+    $('end-sub').textContent = pats + ' of ' + Object.keys(state.patterns).length +
+      ' phrases and ' + its + ' of ' + Object.keys(state.items).length +
+      ' words · ' + state.coins + ' coins';
     $('end').classList.remove('hidden');
   }
 
@@ -1232,25 +990,26 @@
 
   /* ---------- sheets ---------- */
   function openCoach() {
-    if (!current) return;
-    const item = current.item;
+    if (!plan) return;
     hinted = true;
-    hints += 1;
-    const scaffold = scaf;
-    $('coach-rungs').innerHTML =
-      `<div class="rung"><span class="k">WHAT TO SAY</span><span class="v">${esc(item.native)}</span></div>` +
-      `<div class="rung"><span class="k">IN SPANISH</span><span class="v"><b>${esc(item.target)}</b></span></div>` +
-      `<div class="rung"><span class="k">WORD BY WORD</span><span class="v">${item.chips.map(esc).join(' &middot; ')}</span></div>` +
-      `<div class="rung"><span class="k">SUPPORT LEVEL</span><span class="v">L${scaffold} &mdash; ` +
-      `${['one word, English frame', 'one word, Spanish frame', 'fill the gaps', 'whole sentence', 'whole sentence, no model'][scaffold]}</span></div>`;
+    const p = plan.pair;
+    const rows = [
+      ['WHAT TO SAY', esc(p.allNative)],
+      ['RIGHT NOW', '<b>' + esc(plan.expected) + '</b>'],
+      ['ALL IN ' + TL().toUpperCase(), esc(p.allTarget)],
+    ];
+    if (p.hasSlot) rows.push(['THE WORD', esc(p.item.target) + ' &middot; ' + esc(p.item.native)]);
+    $('coach-rungs').innerHTML = rows
+      .map(([k, v]) => `<div class="rung"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+      .join('');
     $('coach-sheet').classList.remove('hidden');
-    V.now(item.target, { speaker: 'axel', lang: TL() });
+    E.track(state, 'hint_opened', { pair: p.id });
+    V.now(plan.expected, { speaker: 'axel', lang: mixedLang(plan.expected) });
   }
 
-  /* The night used to be three rooms of two or three phrases, so listing every
-     one of them was the progress. It is one room of twenty-nine pattern x word
-     items now, and a list that long says nothing. §9's session summary is the
-     right shape: the constructions and how they stand, then the words met. */
+  /* The session summary, in the epic's own terms: PPP. Everything the child
+     has met sits in one of three states — presented, practising, produced —
+     and the counts behind each are what the engine actually decided on. */
   function openProgress() {
     const body = $('prog-body');
     body.innerHTML = '';
@@ -1261,45 +1020,38 @@
       h.innerHTML = `<b>${esc(t)}</b><span></span>`;
       body.appendChild(h);
     };
-    const row = (main, sub, score, seen) => {
-      const lb = E.label(score, seen, Q);
+    const row = (main, sub, rec) => {
+      const ph = E.phase(rec);
+      const label = { present: 'new', practice: 'practising', produce: 'can use' }[ph];
+      const n = rec.correct + rec.incorrect;
       const r = document.createElement('div');
       r.className = 'row';
       r.innerHTML =
         `<div class="l"><span class="t">${esc(main)}</span><span class="m">${esc(sub)}</span></div>` +
-        `<div class="r"><span class="pct">${pct(score)}</span><span class="pill ${lb.replace(' ', '')}">${lb}</span></div>`;
+        `<div class="r"><span class="pct">${n ? Math.round(E.ratio(rec) * 100) + '%' : '—'}</span>` +
+        `<span class="pill ${label.replace(' ', '')}">${label}</span></div>`;
       body.appendChild(r);
     };
 
-    head('What you can say');
-    const byPattern = new Map();
-    for (const it of E.allItems(Q)) if (!byPattern.has(it.patternId)) byPattern.set(it.patternId, it);
-    for (const [pid, sample] of byPattern) {
-      const st = state.patterns[pid] || { mastery: 0, exposures: 0 };
-      // the frame with its slot left open, since the pattern is the thing scored
-      // the frame with its slot left open; "___" rather than "…" so it does not
-      // collide with the full stop the sentence already ends on
-      const blank = '___';
-      const shown = sample.slotTarget
-        ? sample.target.replace(sample.slotTarget, blank)
-        : sample.target;
-      const meansShown = sample.slotTarget
-        ? sample.native.replace(sample.segments.find(x => x.slot).native, blank)
-        : sample.native;
-      row(shown, meansShown, st.mastery, st.exposures > 0);
+    head('Phrases');
+    for (const pid of Q.activity.patterns) {
+      const rec = state.patterns[pid];
+      if (!rec) continue;
+      const pat = Q.vocabPatterns[pid];
+      row(pat[TL()].replace(/\{[^}]+\}/g, '___'),
+          pat[NL()].replace(/\{[^}]+\}/g, '___') +
+          (rec.exposures ? `  ·  seen ${rec.exposures}, right ${rec.correct}, wrong ${rec.incorrect}` : ''),
+          rec);
     }
 
-    head('Words you have met');
-    const vocab = [...new Set(E.allItems(Q).map(it => it.slotTarget).filter(Boolean))];
-    const met = vocab.filter(w => E.wordSeen(state, w));
-    if (!met.length) {
-      const r = document.createElement('div');
-      r.className = 'row';
-      r.innerHTML = `<div class="l"><span class="m">None yet — they arrive as you go.</span></div>`;
-      body.appendChild(r);
-    }
-    for (const w of met.sort((a, b) => E.wordMastery(state, b) - E.wordMastery(state, a))) {
-      row(w, GLOSS[bare(w)] || '', E.wordMastery(state, w), true);
+    head('Words');
+    for (const iid of Q.activity.items) {
+      const rec = state.items[iid];
+      if (!rec) continue;
+      const it = Q.vocabItems[iid];
+      row(it[TL()].indefinite, it[NL()].indefinite +
+          (rec.exposures ? `  ·  seen ${rec.exposures}, right ${rec.correct}, wrong ${rec.incorrect}` : ''),
+          rec);
     }
 
     $('prog-overall').textContent = pct(E.overall(state, Q));
@@ -1309,13 +1061,14 @@
   /* ---------- boot ---------- */
   async function boot() {
     state = E.createState(Q);
-    preloadedScene = -1;
+    preloaded = false;
+    E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
     chatLog.length = 0;
     $('chat').innerHTML = '';
     buildRail();
     hideGloss();
     $('chat-full').classList.add('hidden');
-    $('t-mode').textContent = 'evaluator: local · voice: browser';
+    $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     preloadRigs();                    // loads behind the title screen
     await titleScreen();
     if (!(await probeServer())) {   // locked: ask for the code, then re-probe
@@ -1326,7 +1079,7 @@
     step();
   }
 
-  $('btn-say').addEventListener('click', () => submit(fullSentence(), 'chips'));
+  $('btn-say').addEventListener('click', () => submit(builtSentence(), 'chips'));
   $('btn-clear').addEventListener('click', () => { if (!inputLocked) { placed = []; renderSlot(); renderTray(); } });
   $('btn-mic').addEventListener('click', toggleMic);
   $('btn-pause').addEventListener('click', openProgress);
@@ -1363,7 +1116,7 @@
   let mouthTimer = null;
   V.onSpeaking((speaker, on) => {
     if (!current) return;
-    const who = current.scene.onScreen.character;
+    const who = ACTOR;
     if (speaker !== who) return;
     clearTimeout(mouthTimer);
     const set = st => mountCharacter($('character'), { character: who, state: st });
@@ -1374,9 +1127,11 @@
 
   // scriptable view of the same numbers the test strip shows
   window.__DEBUG = {
-    plan: () => plan, item: () => current && current.item, state: () => state,
-    audit: text => audit(text, metWords()),
-    newChips: () => turnFresh,
+    plan: () => plan, pair: () => current, state: () => state,
+    locked: () => inputLocked,
+    pills: () => E.pills(Q, state, plan),
+    introduced: () => [...introducedWords()],
+    events: () => state.events,
   };
 
   boot();

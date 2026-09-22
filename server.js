@@ -223,150 +223,110 @@ async function evaluateAnswer(body) {
 const TURN_SCHEMA = {
   type: 'object',
   properties: {
-    scene_line: { type: 'string' },   // what the on-screen character says
-    coach_ask:  { type: 'string' },   // what the coach says, native language
+    actor_line: { type: 'string' },   // what the person on screen says
+    coach_line: { type: 'string' },   // what the coach says to the child
   },
-  required: ['scene_line', 'coach_ask'],
+  required: ['actor_line', 'coach_line'],
 };
 
-const TURN_SYSTEM = `You write two short lines for a language game played by a 7-10 year old.
+/* NJA-3136 splits an exchange in two: the character asks, the coach hints.
+   Neither of them decides anything. The engine has already picked what is
+   being practised, which half of the sentence is in the target language and
+   what the right answer is; this prompt is told all of it and writes the two
+   lines around it.
 
-You are given a scene, a character, a target phrase the child must produce, and
-a support level 0-4. You do NOT choose the target and you do NOT judge anything.
+   That split is deliberate. The epic records the failure it avoids — "the
+   agent adds/takes away too much of the language" — which is what happens
+   when a model is asked to do the substituting itself. */
+const TURN_SYSTEM = `You write two short lines for a language game played by a
+7-10 year old. You do not decide what is taught, how much of it is in which
+language, or what the right answer is. All of that is given to you. Write the
+dialogue and nothing else.
 
-scene_line: what the on-screen character says, which must make the target
-phrase the natural thing to say back. It continues the conversation you are
-shown — it does not restart it, greet someone already greeted, or ask
-something already answered.
+THE CHARACTER (actor_line)
+A person the child is talking to, in the situation you are given. One or two
+short sentences.
 
-He is a person behind a counter, not a teacher. He NEVER tells the child what
-to say, never names the words they should use, never says "say X" or "the word
-is X" or "try saying". Somebody else in this game does that; when he does it
-too, two voices are giving instructions and neither is worth listening to. He
-serves, he answers, he reacts, he moves on.
+They react to what the child just said, then say the thing that makes the
+expected answer the natural reply. If the child has finished everything, they
+close the conversation warmly instead.
 
-He also never asks a question the child has no way to answer. The child has
-one short list of words. "Which ticket do you need?", "what size?", "how many?"
-— each of these demands vocabulary they have not got, and the turn dies there.
-If he asks anything, the target phrase must be a complete answer to it.
-Accepting what they said and carrying on is always better than a follow-up.
+They are NOT a teacher. They never tell the child what to say, never name the
+words to use, never say "say X" or "try saying". Somebody else does that; when
+they do it too, two voices are giving instructions and neither is worth
+listening to. They serve, they answer, they move on.
 
-At the NATIVE levels, the target-language word you drop in is not decoration
-and it is not your choice: it is the word this turn is teaching, which you are
-given. "Do you need a ticket for the show?" keeps every other rule and teaches
-nobody anything, because the one word the turn is about went past in the
-child's own language. Use the word itself.
+They never ask a question the child cannot answer with what they know. The
+child has one short list of words. "Which one would you like?", "what size?",
+"how many?" each demand vocabulary they have not got, and the exchange dies
+there. If they ask anything, the expected answer must be a complete reply to it.
 
-Two lists govern its vocabulary. Nothing outside the second list may appear
-at all: those are the only words the game can explain when the child taps
-them, and an unexplainable word is a dead end. Of the words that are in it
-but not yet in the first list, you may use at most two — they are new to this
-child. Reaching for a word they were never taught is worse than saying
-something simpler.
+LANGUAGE — the rule that matters most
+Write the character's line in the SUPPORT language, EXCEPT for the target
+language words you are given as already introduced: those you must use in the
+target language, never translated back. You may not use a target-language word
+that is not on that list. Not one. The list is the whole of what this child has
+met, and reaching past it teaches vocabulary nobody chose.
 
-The support level governs this line too, not just the coach's, because a
-child on their first turn cannot read the person in front of them either.
+When you are told the character is INTRODUCING a word, that word must appear in
+their line, in the target language, used naturally in the situation. That is the
+child's first meeting with it.
 
-  scene_line mode NATIVE (levels 0 and 1): write the line in the NATIVE
-  language, with the target-language words dropped into it. At level 0 that
-  means EXACTLY ONE target-language word in an otherwise native sentence —
-  the meaning is carried in the language the child already has, and the one
-  new word is met in context. At level 1 up to three. The line must not be
-  entirely in the target language, and must contain no target-language word
-  you invented.
+THE COACH (coach_line)
+The child's own guide, speaking only to them. One short sentence in the SUPPORT
+language. They make sure the child understood what was just said, and tell them
+what to say back — without handing over the whole answer.
 
-  scene_line mode TARGET (levels 2 and up): write the line in the target
-  language, within the word limit you are given. A fluent sentence is
-  unreadable to a child three words into the language however correct it is,
-  so at the lower of these levels the character speaks in short bursts and the
-  coach carries the meaning.
+When you are told the coach is INTRODUCING a construction, they say it and what
+it means: this is the child's first sight of that pattern and there is no other
+way for them to know it.
 
-You are told which mode and which limits apply. The game counts the words and
-throws your line away if it breaks them.
+The coach never writes in the target language except for a word or construction
+being introduced.
 
-If the scene's character speaks the native language, write it entirely in the
-native language, with NOT ONE target-language word in it — no greeting, no
-flourish, nothing. A coach who opens on "¡Hola!" to a child who has never
-seen the language is showing off, not teaching, and the game will throw the
-line away. The word limits above do not apply to a native-language line.
-
-coach_ask: one short sentence from the coach, Axel, who has just heard the
-character speak and is helping. Where the character said something in the
-target language, Axel makes its meaning clear before telling the child what
-to say back — that is his job on the turn. Do not hand over the whole target
-phrase; the game shows that separately when the support level allows it.
-
-THE ONE EXCEPTION, and it outranks everything else here. You are given a list
-of words this turn asks for that the child has NEVER MET. If that list is not
-empty, Axel must say those words and what they mean, in the same breath as the
-ask — "you'll want PERDONA for that, it means excuse me". A child cannot pick
-a word out of a tray they have never seen, and the alternative is a guess. If
-the list IS empty, name none of it: the child has the word, and printing it
-turns the turn into copying.
-
-The support level decides how much of the child's own language you may lean
-on. It is not a style choice, it is the rule:
-
-  0  meaning carried entirely in the NATIVE language
-  1  a NATIVE-language sentence with the target words dropped into it
-  2  NATIVE language, plus at most one short phrase of the target language
-  3  NATIVE language for framing the situation only
-  4  no NATIVE-language help at all
-
-At levels 0-3 coach_ask is written in the NATIVE language. Only at level 4 may
-it be entirely in the target language. Writing the target language at a lower
-level makes the turn unreadable to a child who has not met those words, and
-the game will throw your line away and use its own.
-
-Introduce at most two target-language words the child has not already met, and
-never use a target-language word that is not in the allowed list.
-
-Stay in character. No stage directions, no emoji, no praise, no questions to
-the adult. Vary the wording every time so it never reads like a template.
-Return JSON only.`;
+No stage directions, no emoji, no praise, no questions to an adult. Vary your
+wording. Return JSON only.`;
 
 async function generateTurn(b) {
-  const { character, characterNote, sceneTitle, sceneSpeaks, sceneGoal, target, native,
-          scaffold, sceneMode, maxSceneWords, maxSceneTargetWords,
-          nativeLang, targetLang, allowed, glossable, newWords, history, recent } = b;
+  const { prompt, actor, coach, objectives, nativeLang, targetLang,
+          expected, expectedNative, introduced, glossable, introducing,
+          history, recent } = b;
   const lines = [
-    `Scene: ${sceneTitle}${sceneGoal ? ' — ' + sceneGoal : ''}`,
-    `On-screen character: ${character}${characterNote ? ' — ' + characterNote : ''}`,
-    `That character speaks: ${sceneSpeaks === 'native' ? nativeLang + ' (they are the coach)' : targetLang}`,
-    `Target phrase (${targetLang}): ${target}`,
-    `The word this turn is teaching — scene_line must contain it, in ${targetLang}, when writing in NATIVE mode: ${
-      (target || '').split(/\s+/).slice(-1)[0].replace(/[¿?¡!.,;:]/g, '')}`,
-    `Which means (${nativeLang}): ${native}`,
-    `Support level: ${scaffold} of 4 (0 = brand new, 4 = nearly mastered)`,
-    sceneMode === 'native'
-      ? `scene_line mode: NATIVE — write it in ${nativeLang}, with at most ${maxSceneTargetWords || 1} ${targetLang} word(s) in it`
-      : `scene_line mode: TARGET — write it in ${targetLang}, at most ${maxSceneWords || 12} words`,
-    `Words this child has already met: ${(allowed || []).join(', ')}`,
-    (newWords && newWords.length)
-      ? `NEW to this child this turn — coach_ask must name these and say what they mean: ${
-          newWords.map(w => `${w.target} = ${w.means}`).join('; ')}`
-      : 'Nothing is new to this child this turn — coach_ask must not spell out the answer.',
-    `Words the game can explain at all — nothing outside this list may appear: ${(glossable || []).join(', ')}`,
-  ];
+    `Situation: ${prompt}`,
+    `The character is: ${actor}. The coach is: ${coach}.`,
+    `What the child wants tonight: ${(objectives || []).join(', ')}`,
+    `Support language (the one they already have): ${nativeLang}`,
+    `Target language (the one they are learning): ${targetLang}`,
+    '',
+    `The child must reply with exactly: ${expected}`,
+    `Which means: ${expectedNative}`,
+    '',
+    introduced && introduced.length
+      ? `Target-language words this child HAS met — use these, in ${targetLang}: ${introduced.join(', ')}`
+      : `This child has met no ${targetLang} words yet.`,
+    introducing
+      ? (introducing.by === 'actor'
+          ? `NEW THIS EXCHANGE — the CHARACTER introduces the word "${introducing.target}" (${introducing.means}). It must appear in actor_line.`
+          : `NEW THIS EXCHANGE — the COACH introduces the construction "${introducing.target}" (${introducing.means}). coach_line must say it and what it means.`)
+      : 'Nothing new this exchange. Do not spell the answer out.',
+    `Nothing outside this list may appear in ${targetLang} at all: ${(glossable || []).join(', ')}`,
+  ].filter(Boolean);
+
   if (history && history.length) {
     lines.push('', 'The conversation so far, oldest first. Continue it:');
     for (const h of history) {
-      lines.push(`- ${h.character} said: ${h.said}`);
-      if (h.coached) lines.push(`  coach: ${h.coached}`);
+      lines.push(`- ${actor}: ${h.actor}`);
+      if (h.coach) lines.push(`  ${coach}: ${h.coach}`);
       lines.push(`  the child was asked for "${h.wanted}" — ${h.got}`);
     }
-  } else {
-    lines.push('', 'This is the first exchange of the scene.');
   }
   if (recent && recent.length) {
     lines.push('', 'Coach lines already used, do not repeat them:');
     for (const r of recent) lines.push('- ' + r);
   }
-  const prompt = lines.join('\n');
-  /* One attempt, short fuse. A slow turn is worse than a templated one: the
-     client has a hand-written line ready and a child is watching a spinner. */
+
   return await askJSON({
-    system: TURN_SYSTEM, parts: [{ text: prompt }], schema: TURN_SCHEMA,
+    system: TURN_SYSTEM, parts: [{ text: lines.join('\n') }], schema: TURN_SCHEMA,
     temperature: 1.0, tries: 1, timeoutMs: 8000,
   });
 }

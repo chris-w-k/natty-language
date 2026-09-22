@@ -23,6 +23,7 @@
   --good:#2C9A5B;
   --good-soft:#E7F5ED;
   --warn:#C25B2B;
+  --warn-soft:#FBEDE7;
 
   --r-sm:9px;
   --r-md:14px;
@@ -262,6 +263,19 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
   max-height:132px;overflow-y:auto;
 }
 #slot.ok{background:var(--good-soft);}
+
+/* "Incorrect answer handling - UI goes red, pal repeats phrase and user tries
+   again until they get it right." The red is on the answer panel rather than
+   the whole screen: it is the answer that was wrong, and a screen that flashes
+   red at a seven-year-old reads as punishment rather than as a correction. */
+#lower.wrong #slot{background:var(--warn-soft);box-shadow:inset 0 0 0 1.5px var(--warn);}
+#lower.wrong #slot-label{color:var(--warn);}
+#verdict.bad{color:var(--warn);}
+@keyframes slot-shake{
+  0%,100%{transform:translateX(0);} 20%{transform:translateX(-5px);}
+  40%{transform:translateX(5px);} 60%{transform:translateX(-3px);} 80%{transform:translateX(3px);}
+}
+#lower.wrong #slot{animation:slot-shake .32s ease;}
 #slot .frame{color:var(--ink-2);font-size:14.5px;}
 #slot .frame.hug{margin-left:-8px;}
 #slot .gap{

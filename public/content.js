@@ -1,396 +1,213 @@
-/* The quest content.
+/* The scenario, in the shape the real build stores it.
 
-   ONE stage, one person to talk to. The scenario used to be three rooms with
-   two or three phrases each, and the model had almost nothing to work with in
-   any of them — three phrases is not a conversation, it is a menu, which is
-   why the same line kept coming back. Everything now lives in one room with
-   five constructions and nine nouns, so the generator has somewhere to go and
-   the learner model has something to choose between.
+   NJA-3139 / NJA-3152 put this in Directus as four collections. We have no
+   Directus, so the same four collections live here as plain objects with the
+   same field names. When the content moves, it moves as data — nothing in the
+   engine knows where it came from.
 
-   A PATTERN is a construction with one slot. A WORD drops into that slot.
-   "Can I have a ticket" and "Can I have a t-shirt" are the same pattern met
-   twice, not two things to learn — so the pattern's mastery carries while each
-   new word starts from nothing. That gap is what the support ladder rides on.
+     nlt_vocab_items     id, slot_tags, and bare / definite / indefinite
+                         in every supported language
+     nlt_vocab_patterns  id, and a template per language whose slots are typed:
+                         "I want {item:indefinite} and {item#2:indefinite}"
+     nlt_slot_tags       the tag vocabulary that joins the two
+     activity            actor, coach, background, prompt, and the lists of
+                         patterns and items this scenario draws on
 
-   expand() turns patterns x words into the flat item list the engine plays. */
+   Vocabulary and phrases are NJA-3145's experiment scenario, verbatim apart
+   from one spelling fix ("Cervesa" -> "Cerveza") noted back to the ticket. */
 
 window.QUEST = (function () {
 
-  const quest = {
-    "id": "axel-gig",
-    "title": "Axel goes to a gig",
-    "coach": "axel",
-    "nativeLang": "en",
-    "targetLang": "es",
+  /* Which language the child already has, and which they are here to learn.
+     Reversible by design (NJA-3136, multi-language): nothing below assumes
+     English is either one. The MVP runs en -> es so Chris can play it; the
+     real product runs es/pt/... -> en with the same content. */
+  const LANGS = { native: 'en', target: 'es' };
 
-    "session": {
-      "turnBudget": 32,
-      "masteryBar": 0.85,
-      "canUseBar": 0.75,
-      "mercyAfterFailedTurns": 4
-    },
+  const slotTags = ['item', 'likeable'];
 
-    /* Word-level glosses. Every Spanish word a child can see is tappable, and
-       this is what the tooltip shows. It is also the whitelist: the generator
-       may not use a target-language word that is not in here, because a word
-       with no gloss is a dead end. Wide enough to hold a conversation —
-       a fifty-word list meant the model's line was thrown away nearly every
-       turn and the same hand-written sentence came back instead. */
-    "glossary": {
-      /* what is being taught */
-      "tienes": "do you have", "tengo": "I have", "hay": "there is",
-      "me": "me", "das": "will you give", "gusta": "do you like",
-      "me gusta": "I like", "por": "for", "favor": "please",
-      "por favor": "please", "gracias": "thank you", "perdona": "excuse me",
-      "no": "no", "sí": "yes",
-      "una": "a", "un": "a", "el": "the", "la": "the", "los": "the", "las": "the",
-      "este": "this", "esta": "this", "esto": "this",
-      "entrada": "ticket", "entradas": "tickets",
-      "agua": "water", "refresco": "soft drink", "refrescos": "soft drinks",
-      "cerveza": "beer", "grupo": "band", "banda": "band",
-      "camiseta": "t-shirt", "camisetas": "t-shirts",
-      "disco": "record", "discos": "records",
-      "efectivo": "cash", "tarjeta": "card",
+  /* bare / definite / indefinite, per language — the three forms a slot can
+     ask for. English fills all three even where two are identical, because
+     the pattern picks the form and the pattern does not know the language. */
+  const vocabItems = {
+    ticket:   { tags: ['item', 'likeable'],
+                en: { bare: 'ticket',   definite: 'the ticket',   indefinite: 'a ticket' },
+                es: { bare: 'entrada',  definite: 'la entrada',   indefinite: 'una entrada' } },
+    water:    { tags: ['item', 'likeable'],
+                en: { bare: 'water',    definite: 'water',        indefinite: 'water' },
+                es: { bare: 'agua',     definite: 'el agua',      indefinite: 'agua' } },
+    soda:     { tags: ['item', 'likeable'],
+                en: { bare: 'soda',     definite: 'the soda',     indefinite: 'a soda' },
+                es: { bare: 'refresco', definite: 'el refresco',  indefinite: 'un refresco' } },
+    beer:     { tags: ['item', 'likeable'],
+                en: { bare: 'beer',     definite: 'the beer',     indefinite: 'a beer' },
+                es: { bare: 'cerveza',  definite: 'la cerveza',   indefinite: 'una cerveza' } },
+    sandwich: { tags: ['item', 'likeable'],
+                en: { bare: 'sandwich', definite: 'the sandwich', indefinite: 'a sandwich' },
+                es: { bare: 'bocadillo', definite: 'el bocadillo', indefinite: 'un bocadillo' } },
+    record:   { tags: ['item', 'likeable'],
+                en: { bare: 'record',   definite: 'the record',   indefinite: 'a record' },
+                es: { bare: 'disco',    definite: 'el disco',     indefinite: 'un disco' } },
+    tshirt:   { tags: ['item', 'likeable'],
+                en: { bare: 't-shirt',  definite: 'the t-shirt',  indefinite: 'a t-shirt' },
+                es: { bare: 'camiseta', definite: 'la camiseta',  indefinite: 'una camiseta' } },
+    /* A band is not something you can be handed across a counter, so it
+       carries `likeable` only and the engine will never pair it with
+       "Can I have ___". That tag check is the whole point of NJA-3152's
+       slot_tags: adding a noun is a tag, not an edit to seven patterns. */
+    band:     { tags: ['likeable'],
+                en: { bare: 'band',     definite: 'the band',     indefinite: 'a band' },
+                es: { bare: 'grupo',    definite: 'el grupo',     indefinite: 'un grupo' } },
+    singer:   { tags: ['likeable'],
+                en: { bare: 'singer',   definite: 'the singer',   indefinite: 'a singer' },
+                es: { bare: 'cantante', definite: 'el cantante',  indefinite: 'un cantante' } },
+  };
 
-      /* scene glue — what a person behind a counter actually says */
-      "hola": "hello", "adiós": "bye", "buenas": "hello", "noches": "evening",
-      "días": "day", "tardes": "afternoon",
-      "qué": "what", "quién": "who", "cómo": "how", "dónde": "where",
-      "cuánto": "how much", "cuántos": "how many", "cuál": "which",
-      "y": "and", "o": "or", "pero": "but", "que": "that", "de": "of",
-      "a": "to", "en": "in", "con": "with", "sin": "without", "para": "for",
-      "tu": "your", "tus": "your", "mi": "my", "te": "you", "tú": "you",
-      "yo": "I", "es": "is", "son": "are", "está": "is", "están": "are",
-      "quieres": "do you want", "quiero": "I want", "puedo": "can I",
-      "puedes": "can you", "pongo": "shall I get you", "dame": "give me",
-      "toma": "take it", "aquí": "here", "allí": "there", "ahí": "there",
-      "ahora": "now", "luego": "later", "ya": "already", "todavía": "still",
-      "muy": "very", "más": "more", "mucho": "a lot", "poco": "a little",
-      "bien": "good", "mal": "bad", "bueno": "good", "buena": "good",
-      "genial": "great", "guay": "cool", "vale": "okay", "claro": "of course",
-      "venga": "come on", "pasa": "go through", "adelante": "go ahead",
-      "espera": "wait", "mira": "look", "oye": "hey", "escucha": "listen",
-      "perdón": "sorry", "siento": "sorry",
-      "euros": "euros", "euro": "euro", "dinero": "money",
-      "cuesta": "does it cost", "cuestan": "do they cost", "precio": "price",
-      "gratis": "free", "cambio": "change", "queda": "is left",
-      "quedan": "are left", "último": "last", "últimas": "last",
-      "noche": "night", "hoy": "today", "música": "music", "concierto": "gig",
-      "tocando": "playing", "tocan": "they play", "suena": "it sounds",
-      "escenario": "stage", "puerta": "door", "barra": "bar", "cola": "queue",
-      "gente": "people", "chico": "kid", "chica": "kid", "amigo": "friend",
-      "zumo": "juice", "hielo": "ice", "vaso": "glass", "talla": "size",
-      "otra": "another", "otro": "another", "siguiente": "next",
-      "encanta": "I love", "encantan": "I love", "mejor": "better",
-      "favorita": "favourite", "favorito": "favourite",
-      "increíble": "amazing", "fuerte": "loud",
-      "primero": "first", "solo": "only", "también": "too",
-      "nada": "nothing", "algo": "something", "todo": "everything",
-      "grande": "big", "pequeña": "small", "pequeño": "small",
-      "negra": "black", "blanca": "white", "roja": "red",
-      "tomar": "to have", "beber": "to drink", "ver": "to see",
-      "decir": "to say", "dime": "tell me", "verdad": "right",
-      "señor": "sir", "chaval": "kid", "vamos": "let's go",
-      "eso": "that", "esa": "that", "ese": "that",
-      "tranquilo": "easy", "cuidado": "careful",
-      "bebida": "drink", "bebidas": "drinks", "botella": "bottle",
-      "lata": "can", "entradas": "tickets", "grupos": "bands",
-      "cola": "queue", "caja": "till", "bolsa": "bag",
-      "pequeña": "small", "mediana": "medium", "grandes": "big"
-    },
+  /* Slot syntax is NJA-3152's: {tag#number:article}. The number distinguishes
+     two slots drawing on the same tag; the article names which form to fill
+     it with. A pattern with no slot is said whole. */
+  const vocabPatterns = {
+    'excuse-me':    { en: 'Excuse me.',                es: 'Perdona.',                  opensOnly: true },
+    'do-you-have':  { en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
+    'can-i-have':   { en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
+    'i-have':       { en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
+    'i-dont-have':  { en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
+    'there-is-no':  { en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
+    'do-you-like':  { en: 'Do you like {likeable:definite}?',     es: '¿Te gusta {likeable:definite}?' },
+    'i-like':       { en: 'I like {likeable:definite}.',          es: 'Me gusta {likeable:definite}.' },
+    'thank-you':    { en: 'Thank you.',                es: 'Gracias.' },
+  };
 
-    /* The constructions, declared as SEGMENTS that line up across the two
-       languages. Each segment has the child's version and the target version,
-       and one carries the slot. Aligning them is what lets the sentence start
-       mostly in English and lose an English chunk per rung:
+  /* One activity, standing in for a row of quest_activities_nlt_prototype.
+     `order` is what Directus list order gives the real build, and the engine
+     uses it exactly as NJA-3136 says: first in list when mastery ties. */
+  const activity = {
+    id: 'dev_nlt_activity_gig',
+    title: 'Axel goes to a gig',
+    background: 'venue-bar',
+    actor: { id: 'bartender', name: 'Bartender', speaks: 'target' },
+    coach: { id: 'axel', name: 'Coach' },
+    prompt: 'You are the one person behind the counter at a music venue — you sell the tickets, the drinks and the merch. A kid has come up to you. You are gruff but good-natured, you have seen it all, and there is a queue behind them.',
+    objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
+    patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
+               'there-is-no', 'do-you-like', 'i-like', 'thank-you'],
+    items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
+  };
 
-         L0   Can I have [una entrada] please?
-         L1   Can I have [una entrada] [por favor?]
-         L2   [¿Me das] [una entrada] [por favor?]
-
-       Cloze over bare words could not do that — there is no English word that
-       "por" replaces.
-
-       The slot names which FORM of the word it wants. "Can I have a beer" and
-       "I like this beer" need "una cerveza" and "esta cerveza"; one slot value
-       per word would have produced "I like this a beer". `lead` and `tail` are
-       punctuation that belongs to the sentence rather than to a chip — nobody
-       can read a chip that says ", por favor?" or "?". */
-    "patterns": {
-      "do-you-have": {
-        "segments": [
-          { "native": "Do you have", "target": "¿Tienes" },
-          { "native": "{x}", "target": "{x}", "slot": true, "form": "a" }
-        ],
-        "tail": "?",
-        "coachLine": "Ask him if he's got one.",
-        "coachLines": ["Ask him if he's got one.", "Find out if there's any.",
-                       "Ask whether he has it.", "See if they've got one."],
-        "words": ["ticket", "water", "soda", "beer", "tshirt", "record"]
-      },
-
-      "can-i-have": {
-        "segments": [
-          { "native": "Can I have", "target": "¿Me das" },
-          { "native": "{x}", "target": "{x}", "slot": true, "form": "a" },
-          { "native": "please?", "target": "por favor?", "lead": "," }
-        ],
-        "coachLine": "Ask for it.",
-        "coachLines": ["Ask for it.", "Go on — ask him.", "Your turn. Ask.",
-                       "Say what you want."],
-        "words": ["ticket", "water", "soda", "beer", "tshirt", "record"]
-      },
-
-      "there-is-no": {
-        "segments": [
-          { "native": "There is no", "target": "No hay" },
-          { "native": "{x}", "target": "{x}", "slot": true, "form": "bare" }
-        ],
-        "tail": ".",
-        "coachLine": "Say what they've run out of.",
-        "coachLines": ["Say what they've run out of.", "Tell him there isn't any.",
-                       "Say there's none left.", "Say what's missing."],
-        "words": ["ticket", "water", "soda", "beer", "tshirt", "record"]
-      },
-
-      "there-is": {
-        "segments": [
-          { "native": "There is", "target": "Hay" },
-          { "native": "{x}", "target": "{x}", "slot": true, "form": "a" }
-        ],
-        "tail": ".",
-        "coachLine": "Say what you can see.",
-        "coachLines": ["Say what you can see.", "Tell him what's there.",
-                       "Point it out.", "Say what's on."],
-        "words": ["band", "record", "tshirt"]
-      },
-
-      "i-like-this": {
-        "segments": [
-          { "native": "I like", "target": "Me gusta" },
-          { "native": "{x}", "target": "{x}", "slot": true, "form": "demo" }
-        ],
-        "tail": ".",
-        "coachLine": "Tell him what you think.",
-        "coachLines": ["Tell him what you think.", "Say you like it.",
-                       "Tell him your verdict.", "Let him know."],
-        "words": ["band", "record", "tshirt", "beer", "soda"]
-      },
-
-      /* No slot: said whole, or they are not said at all. "please" lives
-         inside can-i-have; these two stand on their own. */
-      "thank-you": {
-        "segments": [{ "native": "Thank you.", "target": "Gracias." }],
-        "coachLine": "Say the polite thing.",
-        "coachLines": ["Say the polite thing.", "Don't forget your manners.",
-                       "One more word.", "Be polite."]
-      },
-      "excuse-me": {
-        "segments": [{ "native": "Excuse me.", "target": "Perdona." }],
-        /* Only as an opener. Asking a child to get the attention of someone
-           who has just answered them is not a lesson, it is a non sequitur —
-           and it was the clearest sign the conversation was being assembled
-           rather than held. */
-        "opensOnly": true,
-        "coachLine": "Get his attention first.",
-        "coachLines": ["Get his attention first.", "He hasn't seen you — say something.",
-                       "Start politely.", "Catch his eye first."]
-      },
-      "pay-how": {
-        "segments": [{ "native": "Card.", "target": "Tarjeta." }],
-        "coachLine": "He's asking how you're paying — cash or card. Either works.",
-        "coachLines": ["He's asking how you're paying — cash or card. Either works.",
-                       "Cash or card? Your call.", "How are you paying? Either is fine.",
-                       "Pick one — cash or card."],
-        /* Both answers are right — this is a choice, not a drill. */
-        "acceptAny": ["Tarjeta.", "Efectivo."]
-      }
-    },
-
-    /* Each word carries every form the patterns ask for, in BOTH languages,
-       because the two sides have to stay aligned for the cloze to peel one
-       chunk at a time. `a` is what you ask for, `bare` is what there is none
-       of, `demo` is what you are pointing at. */
-    "words": {
-      "ticket": { "a": ["una entrada", "a ticket"],   "bare": ["entrada", "ticket"],   "demo": ["esta entrada", "this ticket"] },
-      "water":  { "a": ["agua", "water"],             "bare": ["agua", "water"],         "demo": ["esta agua", "this water"] },
-      "soda":   { "a": ["un refresco", "a soda"],     "bare": ["refresco", "soda"],      "demo": ["este refresco", "this soda"] },
-      "beer":   { "a": ["una cerveza", "a beer"],     "bare": ["cerveza", "beer"],       "demo": ["esta cerveza", "this beer"] },
-      "band":   { "a": ["un grupo", "a band"],        "bare": ["grupo", "band"],       "demo": ["este grupo", "this band"] },
-      "tshirt": { "a": ["una camiseta", "a t-shirt"], "bare": ["camiseta", "t-shirt"], "demo": ["esta camiseta", "this t-shirt"] },
-      "record": { "a": ["un disco", "a record"],      "bare": ["disco", "record"],     "demo": ["este disco", "this record"] }
-    },
-
-    "scenes": [
-      {
-        "id": "s1-the-bar",
-        "title": "The counter",
-        "background": "venue-bar",
-        "goal": "get a ticket, something to drink and a t-shirt",
-        "onScreen": { "character": "bartender", "role": "npc", "speaks": "target" },
-        /* §6 L0-L1: meaning in the child's own language, the target word
-           appearing once. The generator normally writes these; these are what
-           the game falls back to when it cannot, and there are several because
-           one apiece meant a rejected line produced the same screen every
-           turn. */
-        "opening": "¡Hola! ¿Qué quieres?",
-        "openingNative": "Evening! Still after an entrada?",
-        /* He is behind a counter, not teaching. "Go on then, say the word —
-           cerveza?" was him doing the coach's job, and the two voices telling
-           the child what to say made neither of them worth listening to. He
-           serves, he answers, he moves on. */
-        "lines": {
-          "native": [
-            "Evening! Still after an entrada?",
-            "Busy night. Long queue behind you.",
-            "Yes? There's still a camiseta or two left.",
-            "Right then. What'll it be?"
-          ],
-          "target": [
-            "¡Hola! ¿Qué quieres?",
-            "¿Sí? Dime.",
-            "¿Y para ti?",
-            "Venga, ¿qué te pongo?"
-          ]
-        },
-        /* One room, so the beats are not a script — they are the starting
-           order. The engine takes over after the first construction, choosing
-           by mastery (§7) rather than walking a list. */
-        "opens": ["excuse-me", "do-you-have", "can-i-have", "thank-you",
-                  "there-is-no", "there-is", "i-like-this", "pay-how"]
-      }
-    ]
+  const session = {
+    /* NJA-3136 ends a session on mastery, not on a clock. The cap is a
+       backstop so a child who cannot get one item right still reaches an
+       ending — without it, "repeat until they get it right" has no exit. */
+    turnCap: 40,
+    masteryBar: 0.8,       // correct / (correct + incorrect) to count as produced
+    minExposures: 2,       // ...but not before this many tries, or 1/1 = mastered
+    mercyAfterFailedTurns: 4,
   };
 
   /* ---------- expansion ----------
-     Every pattern x word pairing the matrix allows becomes one item.
-     `patternId` lets the engine keep ONE mastery score for the construction
-     across every word it is met with, and the aligned segments give the cloze
-     something to peel: the slot goes first because that is what the turn is
-     about, then the English chunks are replaced from the end inwards. */
-  function expand(q) {
-    const join = parts => parts.filter(Boolean).join(' ')
-      .replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1').trim();
+     NJA-3136, Engine step 1: build the pattern x item pairs and validate them
+     by slot tag. Step 2: keep them in the order the lists declare. */
+  const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z|]+)\}/gi;
 
-    const items = [];
-    for (const [pid, pat] of Object.entries(q.patterns)) {
-      const wordIds = pat.words && pat.words.length ? pat.words : [null];
-      for (const wid of wordIds) {
-        const word = wid ? q.words[wid] : null;
-        if (wid && !word) throw new Error('unknown word: ' + wid);
+  function slotsOf(template) {
+    const out = [];
+    let m;
+    SLOT.lastIndex = 0;
+    while ((m = SLOT.exec(template)) !== null) {
+      out.push({ raw: m[0], tag: m[1], n: m[2] ? Number(m[2]) : 1, forms: m[3].split('|') });
+    }
+    return out;
+  }
 
-        const segments = pat.segments.map(seg => {
-          const form = seg.slot ? (seg.form || 'a') : null;
-          const pair = (word && form) ? word[form] : null;
-          if (seg.slot && !pair) throw new Error(`${wid} has no "${form}" form`);
-          return {
-            slot: !!seg.slot,
-            lead: seg.lead || '',
-            target: seg.slot ? pair[0] : seg.target,
-            native: seg.slot ? pair[1] : seg.native,
-          };
-        });
+  function expand() {
+    const q = {
+      id: activity.id, title: activity.title, activity,
+      nativeLang: LANGS.native, targetLang: LANGS.target,
+      slotTags, vocabItems, vocabPatterns, session,
+      glossary: {}, chipGloss: {},
+    };
 
-        const lead = (s, k) => (s.lead ? s.lead + ' ' : '') + s[k];
-        const tail = pat.tail || '';
-        const chips = segments.map(s => s.target);
-        const slot = segments.findIndex(s => s.slot);
+    const pairs = [];
+    for (const pid of activity.patterns) {
+      const pat = vocabPatterns[pid];
+      if (!pat) throw new Error('unknown pattern: ' + pid);
+      const slots = slotsOf(pat[LANGS.native]);
 
-        /* Gap order: the slot, then the remaining chunks from the end inwards.
-           "Can I have [___] please?" becomes "Can I have [___] [___]" becomes
-           "[___] [___] [___]" — one English chunk leaving per rung. */
-        const order = [];
-        if (slot >= 0) order.push(slot);
-        for (let i = segments.length - 1; i >= 0; i--) if (i !== slot) order.push(i);
-
-        const target = join(segments.map(s => lead(s, 'target'))) + tail;
-        items.push({
-          id: pid + (wid ? '-' + wid : ''),
-          patternId: pid,
-          slotId: wid || null,
-          slotTarget: slot >= 0 ? segments[slot].target : null,
-          segments, tail,
-          target,
-          native: join(segments.map(s => lead(s, 'native'))) + tail,
-          coachLine: pat.coachLine,
-          coachLines: pat.coachLines || [pat.coachLine],
-          opensOnly: !!pat.opensOnly,
-          chips,
-          gapOrder: order,
-          acceptAny: pat.acceptAny || null,
-          accept: [target.toLowerCase()],
-          distractors: []
-        });
+      if (!slots.length) {                       // said whole: one pair, no item
+        pairs.push(makePair(q, pid, pat, [], []));
+        continue;
       }
+      if (slots.length > 1) throw new Error('one slot per pattern for now: ' + pid);
+
+      const slot = slots[0];
+      const usable = activity.items.filter(id => (vocabItems[id].tags || []).includes(slot.tag));
+      if (!usable.length) throw new Error('pattern has no valid vocab items: ' + pid);
+      // the article the slot asks for; "a|b" means either is acceptable, first wins
+      const form = slot.forms[0];
+      for (const iid of usable) pairs.push(makePair(q, pid, pat, [slot], [{ id: iid, form }]));
     }
 
-    // one room: every item belongs to it
-    q.scenes[0].items = items;
+    q.pairs = pairs;
 
-    /* Every chip that can appear on screen, mapped to what it means. The
-       glossary is keyed on single words, so "una entrada" has no entry in it
-       and a tapped chip had nothing to say — and a decoy borrowed from another
-       item had nowhere to look at all. The segments are already aligned across
-       the two languages, so the meaning is sitting right there; this just
-       collects it. */
-    q.chipGloss = {};
-    for (const it of items) {
-      for (const seg of it.segments) {
-        const k = String(seg.target).toLowerCase().trim();
-        if (k && !q.chipGloss[k]) q.chipGloss[k] = seg.native;
+    /* Every word the child can see, and what it means. Built from the content
+       rather than hand-written, so a new item is glossed the moment it is
+       added — the whitelist and the tap-to-translate modal both read this. */
+    for (const [iid, item] of Object.entries(vocabItems)) {
+      for (const form of ['bare', 'definite', 'indefinite']) {
+        const t = item[LANGS.target][form], n = item[LANGS.native][form];
+        q.chipGloss[t.toLowerCase()] = n;
+        for (const tok of t.split(/\s+/)) q.glossary[bare(tok)] = q.glossary[bare(tok)] || n;
       }
     }
-
-    /* A decoy has to be a plausible wrong answer, not just another word on the
-       board. When the turn asks for the SLOT, the other slot words are the
-       real competition — a ticket, a water, a t-shirt all fit "¿Me das ___"
-       and telling them apart is the point. Frame chips only come in once the
-       child is building whole sentences, where word order is what is tested. */
-    const key = w => String(w).toLowerCase().replace(/[¿?¡!.,;:]/g, '').trim();
-    const slotWords = [...new Set(items.map(it => it.slotTarget).filter(Boolean))];
-    // whole utterances with no slot — "Gracias.", "Perdona.", "Tarjeta."
-    const solos = [...new Set(items.filter(it => !it.slotTarget).map(it => it.target))];
-    const frameChips = [...new Set(
-      items.flatMap(it => it.chips).filter(c => !slotWords.includes(c)))];
-
-    for (const it of items) {
-      const own = new Set(it.chips.map(key));
-      /* Decoys in the SAME form as the answer. Offering "esta cerveza" against
-         "una cerveza" would be testing a distinction nothing has taught. */
-      const form = (it.segments.find(s => s.slot) || {}).target;
-      const sameShape = w => !form || w.split(' ').length === form.split(' ').length;
-      const near = slotWords.filter(w => !own.has(key(w)) && sameShape(w));
-      let far    = frameChips.filter(c => !own.has(key(c)));
-      /* Kept apart, because they are not interchangeable. When the turn asks
-         for the SLOT, the competition is other slot words — offering the whole
-         of "Perdona." against "¿Tienes ___?" is not a distractor, it is a
-         category error, and it turned up because a sentence already produced
-         counts as a word the child has met. Frame chips are for the rungs
-         where whole sentences are being ordered. */
-      it.slotDecoys  = near;
-      it.frameDecoys = far;
-      /* A phrase said whole competes with other phrases said whole. Nouns
-         against "Perdona." are no more a choice than sentences against a noun
-         slot, and the fragments in `far` ("¿Tienes", "por favor?") are worse
-         than either. */
-      if (!it.slotTarget) {
-        it.slotDecoys = solos.filter(w => !own.has(key(w)));
-        far = [...it.slotDecoys, ...far];
-      } else {
-        /* And the reverse: a whole utterance has no business being offered
-           against a sentence being assembled out of its own parts. Ordering
-           "¿Tienes" and "una entrada" is the test; "Perdona." is not a wrong
-           order, it is a different conversation. */
-        far = far.filter(c => !solos.includes(c));
+    for (const p of pairs) {
+      for (const seg of p.frame.target.split(/\s+/)) {
+        const k = bare(seg);
+        if (k && !q.glossary[k]) q.glossary[k] = '(part of "' + p.frame.native.trim() + '")';
       }
-      it.distractors = [...near, ...far];
-      if (it.acceptAny) for (const alt of it.acceptAny) if (!own.has(key(alt))) {
-        it.distractors.unshift(alt);
-        it.slotDecoys = [alt, ...it.slotDecoys];
-      }
+      q.chipGloss[p.frame.target.trim().toLowerCase()] = p.frame.native.trim();
     }
     return q;
   }
 
-  return expand(quest);
+  const bare = w => String(w).toLowerCase().replace(/[¿?¡!.,;:"“”]/g, '').trim();
+
+  /* One playable pair. The FRAME is the pattern with its slot removed — the
+     part the child learns as a construction — and the ITEM is what drops into
+     it. They are tracked separately because the engine flips one or the other
+     into the target language (NJA-3136, Engine step 4). */
+  function makePair(q, pid, pat, slots, fills) {
+    const render = (lang, itemLang) => {
+      let s = pat[lang];
+      for (let i = 0; i < slots.length; i++) {
+        const f = fills[i];
+        s = s.replace(slots[i].raw, vocabItems[f.id][itemLang || lang][f.form]);
+      }
+      return s;
+    };
+    const fill = fills[0] || null;
+    return {
+      id: pid + (fill ? '-' + fill.id : ''),
+      patternId: pid,
+      itemId: fill ? fill.id : null,
+      form: fill ? fill.form : null,
+      opensOnly: !!pat.opensOnly,
+      hasSlot: slots.length > 0,
+      // the frame with the slot blanked, for showing the construction alone
+      frame: {
+        native: slots.length ? pat[LANGS.native].replace(slots[0].raw, '___') : pat[LANGS.native],
+        target: slots.length ? pat[LANGS.target].replace(slots[0].raw, '___') : pat[LANGS.target],
+      },
+      item: fill ? {
+        native: vocabItems[fill.id][LANGS.native][fill.form],
+        target: vocabItems[fill.id][LANGS.target][fill.form],
+      } : null,
+      // the four renderings the engine chooses between
+      allNative:   render(LANGS.native),
+      allTarget:   render(LANGS.target),
+      itemTarget:  render(LANGS.native, LANGS.target),   // native frame, target word
+      frameTarget: render(LANGS.target, LANGS.native),   // target frame, native word
+    };
+  }
+
+  return expand();
 })();
