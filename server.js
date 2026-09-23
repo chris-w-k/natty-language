@@ -311,6 +311,12 @@ function turnVars(b) {
     coach_name: b.coach,
     objectives: b.objectives,
     introduced_words: (b.introduced || []).length ? b.introduced : '(none yet)',
+    /* The same list split by whose line it is. The character gets the words he
+       may say; the words that are the child's alone are named so he can avoid
+       them, and the client rejects his line outright if he uses one anyway. */
+    actor_may_use: (b.actorMayUse || b.introduced || []).length
+      ? (b.actorMayUse || b.introduced) : '(none yet)',
+    learner_only: (b.learnerOnly || []).length ? b.learnerOnly : '(none yet)',
     new_thing: !intro
       ? 'Nothing new is being introduced this exchange. Do not spell the answer out.'
       : intro.by === 'actor'

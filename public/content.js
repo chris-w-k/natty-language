@@ -65,17 +65,43 @@ window.QUEST = (function () {
 
   /* Slot syntax is NJA-3152's: {tag#number:article}. The number distinguishes
      two slots drawing on the same tag; the article names which form to fill
-     it with. A pattern with no slot is said whole. */
+     it with. A pattern with no slot is said whole.
+
+     `speaker` is ours, and NJA-3152's pattern collection has no field for it —
+     which is a gap worth closing there, because without it the conversation
+     goes wrong in a way that is hard to trace. The engine tells the character
+     which target-language words the child has met so he can use them; a
+     construction the CHILD is learning to say to HIM then ends up in his
+     mouth, and he opens with "Alright, perdona, what can I do for ya?" —
+     saying the customer's own line back at them. "Excuse me", "Can I have"
+     and "Thank you" belong to the person at the counter, not behind it.
+
+       learner  only the child says this; the character must never say it back
+       actor    only the character says it, so the child is never DRILLED on
+                it. "There is no sandwich" is the person behind the counter
+                telling you they are out; a child declining an offer with it
+                is being taught to say the wrong thing. These are dropped from
+                the pairs below rather than merely discouraged, because a
+                pattern the engine can select is a pattern the coach will
+                eventually tell the child to say.
+       either   natural from either side
+
+     A shared item word ("entrada") is never restricted by this — only the
+     frame, which is what carries the pragmatic role. */
   const vocabPatterns = {
-    'excuse-me':    { en: 'Excuse me.',                es: 'Perdona.',                  opensOnly: true },
-    'do-you-have':  { en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
-    'can-i-have':   { en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
-    'i-have':       { en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
-    'i-dont-have':  { en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
-    'there-is-no':  { en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
-    'do-you-like':  { en: 'Do you like {likeable:definite}?',     es: '¿Te gusta {likeable:definite}?' },
-    'i-like':       { en: 'I like {likeable:definite}.',          es: 'Me gusta {likeable:definite}.' },
-    'thank-you':    { en: 'Thank you.',                es: 'Gracias.' },
+    'excuse-me':    { speaker: 'learner', en: 'Excuse me.',       es: 'Perdona.',                  opensOnly: true },
+    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
+    'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
+    'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
+    'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
+    /* What you say to turn down what you have just been offered. The set had
+       no way to decline at all, so the only near-miss the engine could reach
+       for was the barman's own "there is no ___". */
+    'i-dont-want':  { speaker: 'learner', en: "I don't want {item:indefinite}.",       es: 'No quiero {item:indefinite}.' },
+    'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
+    'do-you-like':  { speaker: 'either',  en: 'Do you like {likeable:definite}?',     es: '¿Te gusta {likeable:definite}?' },
+    'i-like':       { speaker: 'either',  en: 'I like {likeable:definite}.',          es: 'Me gusta {likeable:definite}.' },
+    'thank-you':    { speaker: 'learner', en: 'Thank you.',       es: 'Gracias.' },
   };
 
   /* One activity, standing in for a row of quest_activities_nlt_prototype.
@@ -97,7 +123,7 @@ window.QUEST = (function () {
     prompt: 'You are the one person behind the counter at a music venue — you sell the tickets, the drinks and the merch. A kid has come up to you. You are gruff but good-natured, you have seen it all, and there is a queue behind them.',
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
     patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
-               'there-is-no', 'do-you-like', 'i-like', 'thank-you'],
+               'i-dont-want', 'there-is-no', 'do-you-like', 'i-like', 'thank-you'],
     items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
   };
 
@@ -141,10 +167,19 @@ anything, their expected answer must be a complete reply to it.
 LANGUAGE — the rule that matters most
 Write in {{native_language}}, EXCEPT for these {{target_language}} words, which
 the child has already met and which you must use in {{target_language}}, never
-translated back: {{introduced_words}}
+translated back: {{actor_may_use}}
 You may not use a {{target_language}} word that is not on that list. Not one.
-That list is the whole of what this child has met, and reaching past it teaches
-vocabulary nobody chose.
+That list is the whole of what this child may hear from you, and reaching past
+it teaches vocabulary nobody chose.
+
+WHOSE LINE IS WHOSE
+These are the CHILD'S words, said by a customer to you. Never say them back to
+them, in either language, not even as filler: {{learner_only}}
+You are the one behind the counter. A server who greets a customer with the
+customer's own opening line is not having a conversation with them.
+
+Do not say the child's expected answer, or the substance of it, before they
+have. Leave them something to say.
 
 {{new_thing}}
 
@@ -215,6 +250,10 @@ Return JSON only.`,
     for (const pid of activity.patterns) {
       const pat = vocabPatterns[pid];
       if (!pat) throw new Error('unknown pattern: ' + pid);
+      /* A pattern only the character says is scenery, not curriculum: it is
+         defined so the writing can lean on it, but the child is never asked
+         to produce it. */
+      if (pat.speaker === 'actor') continue;
       const slots = slotsOf(pat[LANGS.native]);
 
       if (!slots.length) {                       // said whole: one pair, no item

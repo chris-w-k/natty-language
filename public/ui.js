@@ -292,6 +292,46 @@
     return out;
   }
 
+  /* Every word of every introduced vocab item. These belong to both sides —
+     "entrada" is the same word whoever says it — so they are never restricted
+     by the speaker rule below. */
+  function itemWords() {
+    const out = new Set();
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    for (const [id, rec] of Object.entries(state.items))
+      if (rec.introduced) for (const f of ['bare', 'definite', 'indefinite'])
+        add(Q.vocabItems[id][TL()][f]);
+    return out;
+  }
+
+  /* What the CHARACTER may say in the target language: the introduced items,
+     plus the introduced constructions that are his to say. A construction
+     marked `learner` is the child's line to him — he must not say it back. */
+  function actorAllowed() {
+    const out = itemWords();
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    for (const [id, rec] of Object.entries(state.patterns))
+      if (rec.introduced && (Q.vocabPatterns[id].speaker || 'either') !== 'learner')
+        add(Q.vocabPatterns[id][TL()].replace(/\{[^}]+\}/g, ' '));
+    return out;
+  }
+
+  /* The other half: words that are the child's alone. Kept as its own list
+     because the guard on a generated line needs to REJECT these, not merely
+     fail to permit them — "perdona" is on the introduced list for
+     highlighting, so a check that only asks "was this introduced?" lets the
+     bartender say it. Item words are subtracted, since they belong to nobody
+     in particular. */
+  function learnerOnlyWords() {
+    const out = new Set();
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    for (const [id, rec] of Object.entries(state.patterns))
+      if (rec.introduced && Q.vocabPatterns[id].speaker === 'learner')
+        add(Q.vocabPatterns[id][TL()].replace(/\{[^}]+\}/g, ' '));
+    for (const w of itemWords()) out.delete(w);
+    return out;
+  }
+
   function chipMeaning(w) {
     const k = String(w).toLowerCase().trim();
     return Q.chipGloss[k] || gloss(w) || '';
@@ -387,8 +427,11 @@
       nativeLang: NL(), targetLang: TL(),
       expected: plan.expected,
       expectedNative: plan.pair.allNative,
-      // what has crossed over, so the character may use it and nothing else
+      // what has crossed over — for highlighting, and for the coach
       introduced: [...introducedWords()],
+      // ...and the same list split by whose line it is, for the character
+      actorMayUse: [...actorAllowed()],
+      learnerOnly: [...learnerOnlyWords()],
       // the ONE new thing, and whose job it is to hand it over
       introducing: newThing(plan),
       history: history.slice(-4),
@@ -432,6 +475,15 @@
     const a = auditLine(j.actorText, allowed);
     if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
     if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
+
+    /* And the line must not be the CHILD'S line said back at them. Asking the
+       prompt nicely is not enough here: "perdona" is on the introduced list,
+       so every other check passes it happily, and the bartender opens with
+       "Alright, perdona, what can I do for ya?" — the customer's own words,
+       in the server's mouth, used as filler. */
+    const mine = learnerOnlyWords();
+    const stolen = String(j.actorText).split(/\s+/).map(bare).filter(w => w && mine.has(w));
+    if (stolen.length) { lastGenWhy = "said the child's own line: " + stolen.join(', '); return null; }
     /* And when the character is the one introducing a word, the word has to be
        in their mouth. */
     if (intro && intro.by === 'actor' && !carriesWord(j.actorText, intro.target)) {
