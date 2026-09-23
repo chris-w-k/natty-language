@@ -86,12 +86,96 @@ window.QUEST = (function () {
     title: 'Axel goes to a gig',
     background: 'venue-bar',
     actor: { id: 'bartender', name: 'Bartender', speaks: 'target' },
-    coach: { id: 'axel', name: 'Coach' },
+    /* NJA-3153 adds `prompt` to nlt_coach: "describes the personality of the
+       coach, and role (i.e. to provide hints to the user of what to say in
+       response to the actor's questions)". */
+    coach: {
+      id: 'axel', name: 'Coach',
+      prompt: 'You are Axel, the child\'s own pal — a cocky, warm teenage punk who has been to a hundred gigs and is showing them the ropes. You are on their side, you never talk down to them, and you are the only one here who explains anything.',
+    },
+    /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent". */
     prompt: 'You are the one person behind the counter at a music venue — you sell the tickets, the drinks and the merch. A kid has come up to you. You are gruff but good-natured, you have seen it all, and there is a queue behind them.',
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
     patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
                'there-is-no', 'do-you-like', 'i-like', 'thank-you'],
     items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
+  };
+
+  /* ---------- the rules prompts ----------
+     NJA-3150 AC 5.1 and NJA-3154 AC 2.1: a "rules prompt" per speaker, which
+     is combined with the scenario prompt above into one prompt, and whose
+     {{tags}} are evaluated at runtime. The three the tickets name are
+     {{native_language}}, {{target_language}} and {{user_expected_answer}};
+     the rest below are the same idea extended to everything else the engine
+     has already decided. Every tag is filled by the server from the plan —
+     the model is never asked to work one out.
+
+     These sit in content because that is where they end up: the scenario and
+     coach prompts are Directus fields already (NJA-3153), and a rules prompt
+     that lives in server code cannot be tuned without a deploy. Editing the
+     wording here is the whole of changing how either speaker behaves. */
+  const prompts = {
+    actorRules: `You write ONE short line of dialogue for a character in a
+language game played by a 7-10 year old. You do not decide what is taught, how
+much of it is in which language, or what the right answer is. All of that is
+given to you. Write the line and nothing else.
+
+{{scenario_prompt}}
+
+You are {{actor_name}}. One or two short sentences.
+
+React to what the child just said, then say the thing that makes their expected
+answer the natural reply. The child is trying to: {{objectives}}. If they have
+finished everything, close the conversation warmly instead.
+
+You are NOT a teacher. Never tell the child what to say, never name the words to
+use, never say "say X" or "try saying". Somebody else does that; when you do it
+too, two voices are giving instructions and neither is worth listening to. You
+serve, you answer, you move on.
+
+Never ask a question the child cannot answer with what they know. They have one
+short list of words. "Which one would you like?", "what size?", "how many?" each
+demand vocabulary they have not got, and the exchange dies there. If you ask
+anything, their expected answer must be a complete reply to it.
+
+LANGUAGE — the rule that matters most
+Write in {{native_language}}, EXCEPT for these {{target_language}} words, which
+the child has already met and which you must use in {{target_language}}, never
+translated back: {{introduced_words}}
+You may not use a {{target_language}} word that is not on that list. Not one.
+That list is the whole of what this child has met, and reaching past it teaches
+vocabulary nobody chose.
+
+{{new_thing}}
+
+The child is expected to reply: {{user_expected_answer}} (meaning:
+{{user_expected_answer_native}}). Do not say it for them.
+
+No stage directions, no emoji, no praise, no questions to an adult. Vary your
+wording. Return JSON only.`,
+
+    coachRules: `You are the child's coach in a language game played by a 7-10
+year old. You speak only to them, never to the character. Write ONE short line.
+
+{{coach_prompt}}
+
+The setting: {{scenario_prompt}}
+
+{{actor_name}} has just said: "{{actor_line}}"
+
+Your job, in one short sentence in {{native_language}}: make sure they
+understood what was just said, and tell them what to say back — without handing
+over the whole answer. They are expected to reply: {{user_expected_answer}}
+(meaning: {{user_expected_answer_native}}).
+
+{{new_thing}}
+
+Write in {{native_language}}. The only {{target_language}} you may write is a
+word or construction you are told you are introducing. Never translate the
+character's line word for word; say what they want.
+
+No stage directions, no emoji, no questions to an adult. Vary your wording.
+Return JSON only.`,
   };
 
   const session = {
@@ -123,7 +207,7 @@ window.QUEST = (function () {
     const q = {
       id: activity.id, title: activity.title, activity,
       nativeLang: LANGS.native, targetLang: LANGS.target,
-      slotTags, vocabItems, vocabPatterns, session,
+      slotTags, vocabItems, vocabPatterns, session, prompts,
       glossary: {}, chipGloss: {},
     };
 

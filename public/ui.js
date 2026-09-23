@@ -16,7 +16,7 @@
   const ACTOR = Q.activity.actor.id;
   const COACH = Q.activity.coach.name;
   let inputLocked = false;
-  let turnLine = '', turnAsk = '', turnCoachHtml = '';   // this turn's words, for history and the repeat
+  let turnLine = '', turnAsk = '', turnCoachHtml = '', turnCoachFrags = null;   // this turn's words, for history and the repeat
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
 
   /* ---------- character renderer ----------
@@ -262,7 +262,8 @@
      The engine has already chosen the phrase and the support level. This asks
      the model to write the words for it, and falls back to the templates in
      content.js when there is no server. Either way the numbers are the same. */
-  const recentLines = [];
+  const F = window.FRAGMENTS;
+  const recentActor = [], recentCoach = [];   // so neither agent repeats itself
   const history = [];          // what has actually been said in this scene
 
   /* ---------- what the child has met ----------
@@ -321,13 +322,12 @@
     return String(line).split(/\s+/).some(t => bare(t).startsWith(stem));
   }
 
-  const looksForeign = tok => /[¿¡]/.test(tok) || /[áéíóúñü]/i.test(tok);
-
-  /* Spanish words that are also ordinary English words. Finding one in a line
-     is no evidence the line is Spanish. */
-  const AMBIGUOUS = new Set(['a', 'no', 'me', 'son', 'solo', 'nada', 'van',
-                             'mira', 'pasa', 'o', 'es', 'la', 'el', 'te',
-                             'tu', 'mi', 'y', 'en', 'con', 'toma']);
+  /* Both of these now come from fragments.js, which the server also loads.
+     When the two disagreed about whether "no" was Spanish, the audit and the
+     highlighting disagreed with each other — the line passed the guard and
+     then rendered a blue English word. */
+  const looksForeign = F.looksForeign;
+  const AMBIGUOUS = F.AMBIGUOUS;
   const countsAsTarget = (tok, vocab) => {
     const w = bare(tok);
     return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
@@ -357,68 +357,136 @@
     }
     return { over, unglossable };
   }
+  /* ---------- the two agents ----------
+     NJA-3154: the actor's line and the coach's hint are two Gemini calls, in
+     series, because the coach's job is to explain what the actor ACTUALLY
+     said. One call writing both lines is writing a reaction to a line it has
+     not settled on yet.
 
-  /* ---------- the two lines of an exchange ----------
-     NJA-3136 fixes the order: the character asks, the coach hints, the child
-     answers. Both lines are generated, but neither decides anything — the
-     engine has already chosen the pair, which half is in the target language
-     and what the right answer is. The model writes dialogue around that. */
+     In series does not have to mean twice the wait. The coach's bubble has
+     never appeared until the character has finished speaking — posting both at
+     once lets a child read the hint before they have heard the question — so
+     the second call runs while his audio plays and is almost always back
+     before it is wanted. */
   const TURN_DEADLINE_MS = 5000;
+  const COACH_DEADLINE_MS = 6000;
   let lastGenMs = 0, lastGenWhy = 'template';
+  let lastCoachMs = 0, lastCoachWhy = 'template';
 
-  async function generateTurn(plan) {
-    if (!serverUp) { lastGenWhy = 'no server'; return null; }
-    const t0 = Date.now();
+  /* Everything both calls need. All of it is the engine's, none of it is the
+     model's to decide — which is why the same object serves both. */
+  function turnBody(plan) {
+    return {
+      prompt: Q.activity.prompt,
+      coachPrompt: Q.activity.coach.prompt,
+      actorRules: Q.prompts.actorRules,
+      coachRules: Q.prompts.coachRules,
+      actor: Q.activity.actor.name,
+      coach: Q.activity.coach.name,
+      objectives: Q.activity.objectives,
+      nativeLang: NL(), targetLang: TL(),
+      expected: plan.expected,
+      expectedNative: plan.pair.allNative,
+      // what has crossed over, so the character may use it and nothing else
+      introduced: [...introducedWords()],
+      // the ONE new thing, and whose job it is to hand it over
+      introducing: newThing(plan),
+      history: history.slice(-4),
+    };
+  }
+
+  async function post(path, body, deadline) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), TURN_DEADLINE_MS);
-    const intro = newThing(plan);
+    const timer = setTimeout(() => ctl.abort(), deadline);
     try {
-      const r = await fetch('/api/turn', {
+      const r = await fetch(path, {
         signal: ctl.signal,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: Q.activity.prompt,
-          actor: Q.activity.actor.name,
-          coach: Q.activity.coach.name,
-          objectives: Q.activity.objectives,
-          nativeLang: NL(), targetLang: TL(),
-          expected: plan.expected,
-          expectedNative: plan.pair.allNative,
-          // what has crossed over, so the character may use it and nothing else
-          introduced: [...introducedWords()],
-          glossable: [...glossable()],
-          // the ONE new thing, and whose job it is to hand it over
-          introducing: intro,
-          history: history.slice(-4),
-          recent: recentLines.slice(-6),
-        })
+        body: JSON.stringify(body),
       });
-      lastGenMs = Date.now() - t0;
-      if (!r.ok) { lastGenWhy = 'http ' + r.status; return null; }
+      if (!r.ok) return { fail: 'http ' + r.status };
       const j = await r.json();
-      if (!j || !j.actor_line || !j.coach_line) {
-        lastGenWhy = j && j.error ? 'error' : 'empty'; return null;
-      }
-
-      /* The guard. The engine's list is the whole of what may appear in the
-         target language; a line reaching past it is inventing curriculum. */
-      const allowed = introducedWords();
-      if (intro) for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
-      const a = auditLine(j.actor_line, allowed);
-      if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
-      if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
-      /* And when the character is the one introducing a word, the word has to
-         be in their mouth. */
-      if (intro && intro.by === 'actor' && !carriesWord(j.actor_line, intro.target)) {
-        lastGenWhy = 'new word missing'; return null;
-      }
-      recentLines.push(j.coach_line);
-      return j;
+      if (j && j.error) return { fail: 'error' };
+      return j || { fail: 'empty' };
     } catch (e) {
-      lastGenMs = Date.now() - t0;
-      lastGenWhy = (e && e.name === 'AbortError') ? 'timed out' : 'unreachable';
-      return null;
+      return { fail: (e && e.name === 'AbortError') ? 'timed out' : 'unreachable' };
     } finally { clearTimeout(timer); }
+  }
+
+  /* The character's line. The guard is unchanged: the engine's list is the
+     whole of what may appear in the target language, and a line reaching past
+     it is inventing curriculum — the failure the epic names. */
+  async function generateActorLine(plan) {
+    if (!serverUp) { lastGenWhy = 'no server'; return null; }
+    const t0 = Date.now();
+    const intro = newThing(plan);
+    const j = await post('/api/turn',
+      Object.assign(turnBody(plan), { recentActor: recentActor.slice(-6) }),
+      TURN_DEADLINE_MS);
+    lastGenMs = Date.now() - t0;
+    if (j.fail) { lastGenWhy = j.fail; return null; }
+    if (!j.actorText) { lastGenWhy = 'empty'; return null; }
+
+    const allowed = introducedWords();
+    if (intro) for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
+    const a = auditLine(j.actorText, allowed);
+    if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
+    if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
+    /* And when the character is the one introducing a word, the word has to be
+       in their mouth. */
+    if (intro && intro.by === 'actor' && !carriesWord(j.actorText, intro.target)) {
+      lastGenWhy = 'new word missing'; return null;
+    }
+    recentActor.push(j.actorText);
+    return j;
+  }
+
+  /* The coach's line, asked for only once the character's is settled. */
+  async function generateCoachLine(plan, actorLine) {
+    if (!serverUp) { lastCoachWhy = 'no server'; return null; }
+    const t0 = Date.now();
+    const j = await post('/api/coach',
+      Object.assign(turnBody(plan), { actorLine, recentCoach: recentCoach.slice(-6) }),
+      COACH_DEADLINE_MS);
+    lastCoachMs = Date.now() - t0;
+    if (j.fail) { lastCoachWhy = j.fail; return null; }
+    if (!j.coachText) { lastCoachWhy = 'empty'; return null; }
+    /* A coach who answers in the language the child is learning is not a
+       coach. The one exception is the construction they are introducing, which
+       the audit below already allows for. */
+    const intro = newThing(plan);
+    const allowed = introducedWords();
+    if (intro && intro.by === 'coach') for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
+    if (auditLine(j.coachText, allowed).over > 0) { lastCoachWhy = 'wrote in the target language'; return null; }
+    lastCoachWhy = 'gemini';
+    recentCoach.push(j.coachText);
+    return j;
+  }
+
+  /* ---------- fragments ----------
+     NJA-3149: a message is a role plus a list of {type, text} fragments, and a
+     `target` fragment renders highlighted. The server returns them for the two
+     generated lines; these build the same shape for everything else — template
+     lines, and the child's own answer — so one renderer serves the lot. */
+  function toFragments(text, extraAllowed) {
+    const allowed = introducedWords();
+    for (const w of extraAllowed || []) for (const t of String(w).split(/\s+/)) allowed.add(bare(t));
+    return F.fragments(text, allowed);
+  }
+
+  /* Render fragments to HTML. A `target` fragment is blue, bold, underlined
+     and tappable — the same button `spanishHTML` produced word by word, except
+     that what counts as target is now data rather than a guess made at paint
+     time. */
+  function fragmentsHTML(frags) {
+    return (frags || []).map(f => {
+      if (f.type !== 'target') return esc(f.text);
+      return String(f.text).split(/(\s+)/).map(tok =>
+        tok.trim()
+          ? '<button type="button" class="w" data-w="' + esc(tok) + '">' + esc(tok) + '</button>'
+          : tok
+      ).join('');
+    }).join('');
   }
 
   /* What gets said when the model is slow, unreachable or off the rails.
@@ -451,17 +519,22 @@
      the character's job, so the coach does not double up on it. */
   function coachCopy(plan, gen) {
     const fb = fallbackLines(plan);
-    let ask = gen && gen.coach_line ? gen.coach_line : fb.coach_line;
-    if (looksTargetLanguage(ask) && !(gen && gen.coach_line === fb.coach_line)) ask = fb.coach_line;
+    const ask = gen && gen.coachText ? gen.coachText : fb.coach_line;
+    const frags = gen && gen.chatHistory && gen.chatHistory[0]
+      ? gen.chatHistory[0].messageFragments
+      : toFragments(ask);
 
     const intro = newThing(plan);
     const owed = intro && intro.by === 'coach' &&
                  !ask.toLowerCase().includes(intro.target.replace(/_+/g, '').trim().toLowerCase());
     const badge = owed
-      ? `<span class="newword">${spanishHTML(intro.target)} <i>${esc(intro.means)}</i></span>` : '';
+      ? `<span class="newword">${fragmentsHTML(toFragments(intro.target, [intro.target]))} <i>${esc(intro.means)}</i></span>` : '';
     return {
       askText: owed ? `${ask} — ${intro.target} — ${intro.means}` : ask,
-      html: esc(ask) + badge,
+      html: fragmentsHTML(frags) + badge,
+      fragments: owed ? frags.concat(toFragments(' ' + intro.target, [intro.target]),
+                                     [{ type: 'text', text: ' — ' + intro.means }])
+                      : frags,
     };
   }
 
@@ -476,28 +549,17 @@
     return GLOSS[k] || GLOSS[k.replace(/[^a-zñáéíóúü ]/g, '')] || null;
   }
 
-  /* Only words the game can explain become blue and tappable. Lines are mixed
-     now — at the lowest rung a character speaks the child's own language with
-     one target word in it — and making "Have" or "you" tappable would offer a
-     translation that does not exist. */
   /* Feature 8.3: a target-language word is highlighted and clickable once it
      has been introduced. Before that it is not on screen in that language at
      all, and afterwards it always is — so "blue" and "introduced" are the same
-     fact, read from the same place. */
+     fact, read from the same place.
+
+     Since NJA-3149 that fact travels as fragments rather than being worked out
+     again at paint time, so this is now one line: split the text the same way
+     the server does, and render it. Kept as a function because the child's own
+     answers and the gloss card still arrive as plain strings. */
   function spanishHTML(text) {
-    const can = glossable();
-    const met = introducedWords();
-    return String(text).split(/(\s+)/).map(tok => {
-      if (!tok.trim()) return tok;
-      if (!can.has(bare(tok)) || !met.has(bare(tok))) return esc(tok);
-      /* "No entry without an entrada" had THREE blue words in it — "No", "a"
-         and "entrada" — and tapping the first two offered a child translations
-         of their own language. AMBIGUOUS already exists for counting how much
-         of a line is Spanish; a word only reads as Spanish here on the same
-         terms. */
-      if (AMBIGUOUS.has(bare(tok)) && !looksForeign(tok)) return esc(tok);
-      return '<button type="button" class="w" data-w="' + esc(tok) + '">' + esc(tok) + '</button>';
-    }).join('');
+    return fragmentsHTML(toFragments(text));
   }
 
   /* ---------- the conversation ----------
@@ -506,6 +568,9 @@
      child's own answers sit in the same history as everything said to them. */
   const chatLog = [];
 
+  /* NJA-3149's three roles. Everyone who is not the coach or the child is
+     the actor, whatever the scenario has named them. */
+  const ROLE = who => who === 'axel' ? 'coach' : who === 'me' ? 'user' : 'actor';
   const AVATARS = { axel: 'img/axel-avatar.png' };
   const LABEL   = { axel: 'Coach', me: 'You' };
   const label = who => LABEL[who] || (who.charAt(0).toUpperCase() + who.slice(1));
@@ -562,8 +627,16 @@
     return row;
   }
 
-  function say(who, html, text) {
-    chatLog.push({ who, html, text: text || '' });
+  /* NJA-3149's chat history: every entry is a role and a list of fragments.
+     `html` is kept alongside for the two places that add their own markup on
+     top — the coach's new-word badge — but the fragments are the record, and
+     the expanded view and any future renderer read those. */
+  function say(who, html, text, frags) {
+    chatLog.push({
+      who, html, text: text || '',
+      role: ROLE(who),
+      messageFragments: frags || toFragments(text || ''),
+    });
     const chat = $('chat');
     chat.appendChild(messageEl(chatLog[chatLog.length - 1], { enter: true }));
     // keep the live view short; the whole night lives in the expanded view
@@ -709,18 +782,24 @@
     setLocked(true);
     $('turn-loading').classList.remove('hidden');
     preloadScene();
-    const gen = await generateTurn(plan);
+
+    /* Call one: the character. Nothing can be drawn until his line exists,
+       because everything else this turn is a reaction to it. */
+    const gen = await generateActorLine(plan);
     $('turn-loading').classList.add('hidden');
-    $('t-gen').textContent = gen
-      ? 'generator: gemini ' + lastGenMs + 'ms'
-      : 'generator: template (' + lastGenWhy + (lastGenMs ? ', ' + lastGenMs + 'ms' : '') + ')';
 
     const fb = fallbackLines(plan);
-    const actorLine = gen ? gen.actor_line : fb.actor_line;
-    const coach = coachCopy(plan, gen);
+    const actorLine = gen ? gen.actorText : fb.actor_line;
+    const actorFrags = gen && gen.chatHistory && gen.chatHistory[0]
+      ? gen.chatHistory[0].messageFragments
+      : toFragments(actorLine, newThing(plan) && newThing(plan).by === 'actor'
+          ? [newThing(plan).target] : []);
     turnLine = actorLine;
-    turnAsk = coach.askText;
-    turnCoachHtml = coach.html;
+
+    /* Call two: the coach, told what the character actually said. Fired now,
+       awaited later — it has until his audio finishes, which is when the coach
+       has always been allowed to speak. */
+    const coachPending = generateCoachLine(plan, actorLine);
 
     mountBackground($('layer-bg'), Q.activity.background);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
@@ -742,16 +821,39 @@
        both at once lets a child read the hint before they have heard the
        question. */
     V.stop();
-    say(ACTOR, spanishHTML(actorLine), actorLine);
+    say(ACTOR, fragmentsHTML(actorFrags), actorLine, actorFrags);
     setLocked(true);
     const characterDone = V.say(actorLine, { speaker: ACTOR, lang: mixedLang(actorLine) });
 
     let coachShown = false;
-    const showCoach = () => {
+    const showCoach = async () => {
       if (coachShown) return;
       coachShown = true;
-      say('axel', coach.html, coach.askText);
+      /* If the coach call is still out, wait for it — but not past the point
+         where the child is staring at a silent screen. Whatever arrives first,
+         the engine's own line is always ready as the floor. */
+      const cg = await Promise.race([
+        coachPending,
+        new Promise(r => setTimeout(() => r(null), 2500)),
+      ]);
+      const coach = coachCopy(plan, cg);
+      turnAsk = coach.askText;
+      turnCoachHtml = coach.html;
+      turnCoachFrags = coach.fragments;
+      $('t-gen').textContent =
+        (gen ? 'actor: gemini ' + lastGenMs + 'ms' : 'actor: template (' + lastGenWhy + ')') +
+        ' · ' +
+        (cg ? 'coach: gemini ' + lastCoachMs + 'ms' : 'coach: template (' + lastCoachWhy + ')');
+      say('axel', coach.html, coach.askText, coach.fragments);
     };
+
+    /* The retry path reposts the coach's bubble, so it must never be empty
+       even if the child answers before the coach has spoken. */
+    const floor = coachCopy(plan, null);
+    turnAsk = floor.askText;
+    turnCoachHtml = floor.html;
+    turnCoachFrags = floor.fragments;
+
     characterDone.then(showCoach, showCoach);
     setTimeout(showCoach, 6000);
 
@@ -931,7 +1033,7 @@
     /* "pal repeats phrase" — the SAME bubble, formatting and all. Re-posting
        the plain text ran the new-word badge back into the sentence as prose,
        so the repeat read worse than the line it was repeating. */
-    say('axel', turnCoachHtml, turnAsk);
+    say('axel', turnCoachHtml, turnAsk, turnCoachFrags);
     placed = [];
     renderSlot();
     renderTray();
@@ -1131,6 +1233,7 @@
     locked: () => inputLocked,
     pills: () => E.pills(Q, state, plan),
     introduced: () => [...introducedWords()],
+    chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,
   };
 

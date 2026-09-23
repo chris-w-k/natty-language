@@ -147,10 +147,10 @@ const THINKING_SHAPES = [
 ];
 let thinkingShape = 0;
 
-async function askJSON({ system, parts, schema, temperature = 0.2, tries = 3, timeoutMs = 20000 }) {
+async function askJSON({ system, parts, contents, schema, temperature = 0.2, tries = 3, timeoutMs = 20000 }) {
   const send = () => gemini(MODEL, {
     systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-    contents: [{ role: 'user', parts }],
+    contents: contents || [{ role: 'user', parts }],
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: schema,
@@ -215,122 +215,175 @@ async function evaluateAnswer(body) {
   return await askJSON({ system: EVAL_SYSTEM, parts: [{ text: prompt }], schema: EVAL_SCHEMA });
 }
 
-/* ---------- the tutor turn generator ----------
-   The other half of the Turkish trainer: a model writes the scene line and the
-   coach's ask fresh every turn, in character, at the support level the
-   deterministic engine chose. It still decides NOTHING about scoring or about
-   which phrase is drilled — it is handed the target and asked for the words. */
-const TURN_SCHEMA = {
-  type: 'object',
-  properties: {
-    actor_line: { type: 'string' },   // what the person on screen says
-    coach_line: { type: 'string' },   // what the coach says to the child
-  },
-  required: ['actor_line', 'coach_line'],
-};
+/* ---------- the two agents ----------
+   NJA-3154 splits the exchange into two Gemini calls, in series: the actor
+   speaks first, then the coach is asked for a hint GIVEN what the actor
+   actually said. That ordering is the point. A single call that writes both
+   lines at once is writing the coach's reaction to a line it has not committed
+   to yet, and the two drift — the coach glosses a word the actor did not use,
+   or hints at a question the actor did not ask.
 
-/* NJA-3136 splits an exchange in two: the character asks, the coach hints.
-   Neither of them decides anything. The engine has already picked what is
-   being practised, which half of the sentence is in the target language and
-   what the right answer is; this prompt is told all of it and writes the two
-   lines around it.
+   Each call is built the way the ticket describes:
+     rules prompt  (per speaker, from content, with {{tags}})
+   + scenario prompt
+   = one system prompt, tags evaluated at runtime,
+   and the chat history goes in the `contents` array rather than the prompt.
 
-   That split is deliberate. The epic records the failure it avoids — "the
-   agent adds/takes away too much of the language" — which is what happens
-   when a model is asked to do the substituting itself. */
-const TURN_SYSTEM = `You write two short lines for a language game played by a
-7-10 year old. You do not decide what is taught, how much of it is in which
-language, or what the right answer is. All of that is given to you. Write the
-dialogue and nothing else.
+   Neither agent decides anything. The engine has already chosen the pair,
+   which half of the sentence is in the target language and what the right
+   answer is; these two write the dialogue around it. */
 
-THE CHARACTER (actor_line)
-A person the child is talking to, in the situation you are given. One or two
-short sentences.
+const { fragments } = require('./public/fragments.js');
 
-They react to what the child just said, then say the thing that makes the
-expected answer the natural reply. If the child has finished everything, they
-close the conversation warmly instead.
-
-They are NOT a teacher. They never tell the child what to say, never name the
-words to use, never say "say X" or "try saying". Somebody else does that; when
-they do it too, two voices are giving instructions and neither is worth
-listening to. They serve, they answer, they move on.
-
-They never ask a question the child cannot answer with what they know. The
-child has one short list of words. "Which one would you like?", "what size?",
-"how many?" each demand vocabulary they have not got, and the exchange dies
-there. If they ask anything, the expected answer must be a complete reply to it.
-
-LANGUAGE — the rule that matters most
-Write the character's line in the SUPPORT language, EXCEPT for the target
-language words you are given as already introduced: those you must use in the
-target language, never translated back. You may not use a target-language word
-that is not on that list. Not one. The list is the whole of what this child has
-met, and reaching past it teaches vocabulary nobody chose.
-
-When you are told the character is INTRODUCING a word, that word must appear in
-their line, in the target language, used naturally in the situation. That is the
-child's first meeting with it.
-
-THE COACH (coach_line)
-The child's own guide, speaking only to them. One short sentence in the SUPPORT
-language. They make sure the child understood what was just said, and tell them
-what to say back — without handing over the whole answer.
-
-When you are told the coach is INTRODUCING a construction, they say it and what
-it means: this is the child's first sight of that pattern and there is no other
-way for them to know it.
-
-The coach never writes in the target language except for a word or construction
-being introduced.
-
-No stage directions, no emoji, no praise, no questions to an adult. Vary your
-wording. Return JSON only.`;
-
-async function generateTurn(b) {
-  const { prompt, actor, coach, objectives, nativeLang, targetLang,
-          expected, expectedNative, introduced, glossable, introducing,
-          history, recent } = b;
-  const lines = [
-    `Situation: ${prompt}`,
-    `The character is: ${actor}. The coach is: ${coach}.`,
-    `What the child wants tonight: ${(objectives || []).join(', ')}`,
-    `Support language (the one they already have): ${nativeLang}`,
-    `Target language (the one they are learning): ${targetLang}`,
-    '',
-    `The child must reply with exactly: ${expected}`,
-    `Which means: ${expectedNative}`,
-    '',
-    introduced && introduced.length
-      ? `Target-language words this child HAS met — use these, in ${targetLang}: ${introduced.join(', ')}`
-      : `This child has met no ${targetLang} words yet.`,
-    introducing
-      ? (introducing.by === 'actor'
-          ? `NEW THIS EXCHANGE — the CHARACTER introduces the word "${introducing.target}" (${introducing.means}). It must appear in actor_line.`
-          : `NEW THIS EXCHANGE — the COACH introduces the construction "${introducing.target}" (${introducing.means}). coach_line must say it and what it means.`)
-      : 'Nothing new this exchange. Do not spell the answer out.',
-    `Nothing outside this list may appear in ${targetLang} at all: ${(glossable || []).join(', ')}`,
-  ].filter(Boolean);
-
-  if (history && history.length) {
-    lines.push('', 'The conversation so far, oldest first. Continue it:');
-    for (const h of history) {
-      lines.push(`- ${actor}: ${h.actor}`);
-      if (h.coach) lines.push(`  ${coach}: ${h.coach}`);
-      lines.push(`  the child was asked for "${h.wanted}" — ${h.got}`);
+/* {{tag}} evaluation. A tag with no value evaluates to empty rather than
+   being left on the page as literal braces — an unreplaced {{tag}} reaching
+   the model is worse than a missing sentence, because it reads as an
+   instruction nobody wrote. Unknown tags are logged once so a typo in a
+   Directus-authored prompt is visible rather than silent. */
+const warnedTags = new Set();
+function evaluateTags(template, vars) {
+  return String(template || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, name) => {
+    const key = name.toLowerCase();
+    if (!(key in vars)) {
+      if (!warnedTags.has(key)) {
+        warnedTags.add(key);
+        console.warn('\x1b[33m⚠\x1b[0m prompt tag {{' + key + '}} has no value');
+      }
+      return '';
     }
-  }
-  if (recent && recent.length) {
-    lines.push('', 'Coach lines already used, do not repeat them:');
-    for (const r of recent) lines.push('- ' + r);
-  }
-
-  return await askJSON({
-    system: TURN_SYSTEM, parts: [{ text: lines.join('\n') }], schema: TURN_SCHEMA,
-    temperature: 1.0, tries: 1, timeoutMs: 8000,
+    const v = vars[key];
+    return Array.isArray(v) ? v.join(', ') : (v == null ? '' : String(v));
   });
 }
 
+const ACTOR_SCHEMA = {
+  type: 'object',
+  properties: { actor_line: { type: 'string' } },
+  required: ['actor_line'],
+};
+const COACH_SCHEMA = {
+  type: 'object',
+  properties: { coach_line: { type: 'string' } },
+  required: ['coach_line'],
+};
+
+/* The chat history as Gemini `contents`, not as prose inside the prompt
+   (NJA-3154 AC 2.4). Each agent sees its OWN past lines as `model` turns and
+   everything else as `user` turns, which is what stops either of them
+   repeating a line they already said — the thing a flattened transcript in the
+   prompt never quite manages.
+
+   A conversation may not open on a model turn, so a bare opening beat is
+   prepended when the oldest entry is one of ours. */
+function historyContents(history, mine, names) {
+  const out = [];
+  const push = (role, text) => text && out.push({ role, parts: [{ text }] });
+  for (const h of history || []) {
+    if (mine === 'coach') {
+      push('user', `${names.actor}: ${h.actor}`);
+      push('model', h.coach);
+    } else {
+      push('model', h.actor);
+      if (h.coach) push('user', `${names.coach} told them: ${h.coach}`);
+    }
+    push('user', h.got === 'the child said it'
+      ? `The child answered correctly: "${h.wanted}"`
+      : `The child did not manage "${h.wanted}".`);
+  }
+  if (out.length && out[0].role === 'model') {
+    out.unshift({ role: 'user', parts: [{ text: 'The conversation so far:' }] });
+  }
+  return out;
+}
+
+/* The tag values both agents share. Everything here is a decision the engine
+   has already made; nothing is left for a model to infer. */
+function turnVars(b) {
+  const intro = b.introducing;
+  return {
+    native_language: b.nativeLang,
+    target_language: b.targetLang,
+    user_expected_answer: b.expected,
+    user_expected_answer_native: b.expectedNative,
+    scenario_prompt: b.prompt,
+    coach_prompt: b.coachPrompt,
+    actor_name: b.actor,
+    coach_name: b.coach,
+    objectives: b.objectives,
+    introduced_words: (b.introduced || []).length ? b.introduced : '(none yet)',
+    new_thing: !intro
+      ? 'Nothing new is being introduced this exchange. Do not spell the answer out.'
+      : intro.by === 'actor'
+        ? `NEW THIS EXCHANGE: you introduce the word "${intro.target}" (it means "${intro.means}"). It must appear in your line, in ${b.targetLang}, used naturally. This is the child's first meeting with it.`
+        : `NEW THIS EXCHANGE: the CHARACTER is introducing the word "${intro.target}" (it means "${intro.means}"). Do not introduce anything yourself.`,
+    actor_line: b.actorLine || '',
+  };
+}
+
+/* The coach's version of {{new_thing}} is the mirror image: a construction is
+   the coach's to hand over, a word is the character's. */
+function coachVars(b) {
+  const v = turnVars(b);
+  const intro = b.introducing;
+  v.new_thing = !intro
+    ? 'Nothing new is being introduced this exchange. Remind them what to say without giving the whole line.'
+    : intro.by === 'coach'
+      ? `NEW THIS EXCHANGE: you introduce the construction "${intro.target}", which means "${intro.means}". Say it and say what it means — this is the child's first sight of it and there is no other way for them to know it.`
+      : `NEW THIS EXCHANGE: ${b.actor} has just used the new word "${intro.target}". Tell the child what it means, in ${b.nativeLang}.`;
+  return v;
+}
+
+async function generateActor(b) {
+  const vars = turnVars(b);
+  const system = evaluateTags(b.actorRules, vars);
+  const ask = [
+    `It is the child's turn to speak to you next. Say your line.`,
+    (b.recentActor || []).length
+      ? `Lines you have already used — do not repeat them:\n` + b.recentActor.map(r => '- ' + r).join('\n')
+      : '',
+  ].filter(Boolean).join('\n\n');
+
+  const contents = historyContents(b.history, 'actor', { actor: b.actor, coach: b.coach });
+  contents.push({ role: 'user', parts: [{ text: ask }] });
+
+  const out = await askJSON({
+    system, contents, schema: ACTOR_SCHEMA,
+    temperature: 1.0, tries: 1, timeoutMs: 8000,
+  });
+  return {
+    actorText: out.actor_line,
+    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || []) }],
+  };
+}
+
+async function generateCoach(b) {
+  const vars = coachVars(b);
+  const system = evaluateTags(b.coachRules, vars);
+  const ask = [
+    `${b.actor} has just said: "${b.actorLine}". Say your line to the child.`,
+    (b.recentCoach || []).length
+      ? `Lines you have already used — do not repeat them:\n` + b.recentCoach.map(r => '- ' + r).join('\n')
+      : '',
+  ].filter(Boolean).join('\n\n');
+
+  const contents = historyContents(b.history, 'coach', { actor: b.actor, coach: b.coach });
+  contents.push({ role: 'user', parts: [{ text: ask }] });
+
+  const out = await askJSON({
+    system, contents, schema: COACH_SCHEMA,
+    temperature: 1.0, tries: 1, timeoutMs: 8000,
+  });
+  /* The coach may legitimately write one target-language phrase: the
+     construction they are introducing. Everything else of theirs is the
+     child's own language, so only that phrase is eligible to highlight. */
+  const allowed = (b.introducing && b.introducing.by === 'coach')
+    ? [...(b.introduced || []), ...String(b.introducing.target).split(/\s+/)]
+    : (b.introduced || []);
+  return {
+    coachText: out.coach_line,
+    chatHistory: [{ role: 'coach', messageFragments: fragments(out.coach_line, allowed) }],
+  };
+}
 /* ---------- text to speech ----------
    Same call shape as jailbreak-camera. Gemini returns raw 24 kHz mono PCM,
    so it gets a WAV header here and the browser plays it directly. */
@@ -441,15 +494,32 @@ http.createServer(async (req, res) => {
     }
   }
 
+  /* Two calls, in the order NJA-3154 fixes: the actor speaks, then the coach
+     hints at what the actor actually said. In the real build these are the two
+     halves of one startSession response; here they are two requests so the
+     client can put the character on screen the moment his line lands and ask
+     for the coach's while his audio is still playing. */
   if (url === '/api/turn' && req.method === 'POST') {
     try {
       const b = await readBody(req);
       if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
       if (MOCK) return json(res, 200, { mock: true });
       checkRate(req);
-      return json(res, 200, await generateTurn(b));
+      return json(res, 200, await generateActor(b));
     } catch (e) {
       // the client falls back to its own templates, so this is never fatal
+      return json(res, 200, { error: e.message });
+    }
+  }
+
+  if (url === '/api/coach' && req.method === 'POST') {
+    try {
+      const b = await readBody(req);
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
+      if (MOCK) return json(res, 200, { mock: true });
+      checkRate(req);
+      return json(res, 200, await generateCoach(b));
+    } catch (e) {
       return json(res, 200, { error: e.message });
     }
   }

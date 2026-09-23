@@ -80,6 +80,7 @@
   </div>
 </main>
 
+<script src="fragments.js"></script>
 <script src="content.js"></script>
 <script src="engine.js"></script>
 <script>
@@ -135,33 +136,73 @@
       target: pl.introducing === 'item' ? pl.pair.item.target : pl.pair.frame.target.trim(),
       means:  pl.introducing === 'item' ? pl.pair.item.native : pl.pair.frame.native.trim(),
     } : null;
-    const t0 = Date.now();
+
+    const body = {
+      prompt: Q.activity.prompt, coachPrompt: Q.activity.coach.prompt,
+      actorRules: Q.prompts.actorRules, coachRules: Q.prompts.coachRules,
+      actor: Q.activity.actor.name, coach: Q.activity.coach.name,
+      objectives: Q.activity.objectives,
+      nativeLang: Q.nativeLang, targetLang: Q.targetLang,
+      expected: pl.expected, expectedNative: pl.pair.allNative,
+      introduced: introducedFor(pl),
+      introducing: intro, history: [],
+    };
+
+    /* Two calls, as NJA-3154 has them: the actor first, then the coach told
+       what the actor actually said. Both are timed separately, because the
+       second one runs under the character's audio in the game and the only
+       number that matters there is whether it beats him finishing. */
     try {
-      const r = await fetch('/api/turn', {
+      const t0 = Date.now();
+      const ar = await fetch('/api/turn', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: Q.activity.prompt, actor: Q.activity.actor.name, coach: Q.activity.coach.name,
-          objectives: Q.activity.objectives,
-          nativeLang: Q.nativeLang, targetLang: Q.targetLang,
-          expected: pl.expected, expectedNative: pl.pair.allNative,
-          introduced: introducedFor(pl), glossable: Object.keys(Q.glossary),
-          introducing: intro, history: [], recent: [],
-        })
+        body: JSON.stringify(body),
       });
-      const j = await r.json();
-      const ms = Date.now() - t0;
-      if (!j || (!j.actor_line && !j.coach_line)) {
-        $('out').innerHTML = `<p class="bad">No lines back${j && j.error ? ' — ' + j.error : ''} (${ms}ms). The game would use its own.</p>`;
-      } else {
-        $('out').innerHTML =
-          `<div class="line"><b>${Q.activity.actor.name}</b>${esc(j.actor_line || '')}</div>` +
-          `<div class="line"><b>${Q.activity.coach.name}</b>${esc(j.coach_line || '')}</div>` +
-          `<p style="font-size:12px;color:var(--ink3);margin:10px 0 0">${ms}ms</p>` + checks(j, pl);
+      const aj = await ar.json();
+      const actorMs = Date.now() - t0;
+      if (!aj || !aj.actorText) {
+        $('out').innerHTML = `<p class="bad">No actor line back${aj && aj.error ? ' — ' + aj.error : ''} (${actorMs}ms). The game would use its own.</p>`;
+        $('run').disabled = false;
+        return;
       }
+
+      const t1 = Date.now();
+      const cr = await fetch('/api/coach', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ actorLine: aj.actorText }, body)),
+      });
+      const cj = await cr.json();
+      const coachMs = Date.now() - t1;
+
+      $('out').innerHTML =
+        `<div class="line"><b>${Q.activity.actor.name}</b>${frag(aj.chatHistory)}</div>` +
+        `<div class="line"><b>${Q.activity.coach.name}</b>${cj && cj.coachText ? frag(cj.chatHistory) : '<i class="bad">no coach line — the game would use its own</i>'}</div>` +
+        `<p style="font-size:12px;color:var(--ink3);margin:10px 0 0">actor ${actorMs}ms · coach ${coachMs}ms</p>` +
+        checks(aj, pl) + fragTable(aj, cj);
     } catch (e) {
       $('out').innerHTML = `<p class="bad">${esc(String(e.message || e))}</p>`;
     }
     $('run').disabled = false;
+  }
+
+  /* Render a returned chatHistory entry the way the chat pane will: plain
+     fragments as text, target fragments highlighted. */
+  function frag(chatHistory) {
+    const frags = (chatHistory && chatHistory[0] && chatHistory[0].messageFragments) || [];
+    return frags.map(f => f.type === 'target'
+      ? '<b style="color:#2f6bd8;text-decoration:underline">' + esc(f.text) + '</b>'
+      : esc(f.text)).join('') || '<i>—</i>';
+  }
+
+  /* The fragments themselves, since the shape is the thing the FE consumes. */
+  function fragTable(aj, cj) {
+    const rows = [];
+    for (const src of [aj, cj]) {
+      for (const m of (src && src.chatHistory) || []) {
+        rows.push(`<tr><td>${esc(m.role)}</td><td>${esc(JSON.stringify(m.messageFragments))}</td></tr>`);
+      }
+    }
+    return '<table><tr><th>role</th><th>messageFragments</th></tr>' + rows.join('') + '</table>';
   }
 
   /* The same guards the game applies, shown rather than applied — the point of
@@ -169,7 +210,7 @@
   function checks(j, pl) {
     const allowed = new Set(introducedFor(pl).map(w => w.toLowerCase()));
     const gloss = new Set(Object.keys(Q.glossary));
-    const toks = String(j.actor_line || '').split(/\s+/)
+    const toks = String(j.actorText || '').split(/\s+/)
       .map(t => t.toLowerCase().replace(/[¿?¡!.,;:"“”]/g, '')).filter(Boolean);
     const foreign = toks.filter(t => gloss.has(t));
     const over = foreign.filter(t => !allowed.has(t));
