@@ -12,7 +12,9 @@
   const TL = () => Q.targetLang;
   const NL = () => Q.nativeLang;
 
-  let state, current = null, plan = null, placed = [], hinted = false, attempts = 0;
+  let state, current = null, plan = null, hinted = false, attempts = 0;
+  /* slot-indexed and sparse; marks[i] is null until judged (NJA-3162) */
+  let placed = [], marks = [], submitted = false;
   const ACTOR = Q.activity.actor.id;
   const COACH = Q.activity.coach.name;
   let inputLocked = false;
@@ -410,6 +412,11 @@
      before it is wanted. */
   const TURN_DEADLINE_MS = 5000;
   const COACH_DEADLINE_MS = 6000;
+  /* Shorter than the other two on purpose. The character's reaction is a
+     flourish — the turn is already judged and the banner is already up — so a
+     slow one must not hold a child in front of a red rectangle. It gets barely
+     longer than the banner's own minimum, and is dropped if it misses. */
+  const REACT_DEADLINE_MS = 3500;
   let lastGenMs = 0, lastGenWhy = 'template';
   let lastCoachMs = 0, lastCoachWhy = 'template';
 
@@ -743,8 +750,11 @@
     $('lower').classList.toggle('locked', inputLocked);
     // #controls has not existed since the rebuild; the buttons live in #dock-side,
     // so the mic and the bin stayed live through every lock
-    for (const el of document.querySelectorAll('#tray .chip, #dock-side .btn')) el.disabled = inputLocked;
-    if (!inputLocked && plan) $('btn-say').disabled = placed.length !== plan.answer.length;
+    for (const el of document.querySelectorAll('#dock-side .btn')) el.disabled = inputLocked;
+    /* A tray pill already sitting in a slot is disabled on its own account, so
+       re-enabling every chip on unlock would offer the same word twice. Let
+       the tray redraw itself instead of poking its buttons. */
+    if (plan) { renderTray(); syncSay(); }
   }
 
   /* label by how many gaps there actually are, not by the level */
@@ -830,6 +840,12 @@
     const pair = current;
     plan = E.planTurn(state, pair);
     E.seen(state, plan);
+    /* Before the first lock, not after: setLocked redraws the pane, and with
+       the new plan in place but last turn's pills still in `placed` it would
+       draw one frame of the wrong answer. */
+    clearAnswer();
+    submitted = false;
+    hideBanner();
 
     setLocked(true);
     $('turn-loading').classList.remove('hidden');
@@ -856,7 +872,6 @@
     mountBackground($('layer-bg'), Q.activity.background);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
 
-    placed = [];
     hinted = false;
     attempts = 0;
     $('slot-label').textContent = slotLabel(plan);
@@ -865,7 +880,6 @@
     setMic(false);
     $('verdict').textContent = '';
     $('verdict').className = '';
-    $('lower').classList.remove('wrong');
     renderHud();
 
     /* The order the epic fixes: character asks, coach hints, child answers.
@@ -932,10 +946,39 @@
   /* The sentence with its gaps. Words already in the child's own language are
      printed; words that have crossed into the target language are theirs to
      supply. */
+  /* ---------- the answer pane (NJA-3162) ----------
+     `placed` is SLOT-INDEXED and sparse: placed[2] is whatever is sitting in
+     the third gap, and a hole is a ghost. It used to be a push-list, which
+     made "remove the wrong pill and leave the others where they are" (AC 8.3)
+     impossible to express — taking one out shuffled every pill after it along
+     by one, so fixing the third word appeared to break the fourth.
+
+     `marks` is the judgement: null until they submit, then true or false per
+     slot. A slot marked true is locked (AC 8.1). */
+  function slotCount() { return plan && plan.answer ? plan.answer.length : 0; }
+  function filledCount() { let n = 0; for (let i = 0; i < slotCount(); i++) if (placed[i] !== undefined) n++; return n; }
+  function firstFreeSlot() { for (let i = 0; i < slotCount(); i++) if (placed[i] === undefined) return i; return -1; }
+  function judged() { return marks.some(m => m !== null && m !== undefined); }
+
+  function clearAnswer() {
+    placed = new Array(slotCount());
+    marks = new Array(slotCount()).fill(null);
+  }
+
+  /* AC 4: enabled only when every ghost slot is filled, disabled the moment it
+     is pressed, and enabled again if they change their answer afterwards. The
+     `submitted` latch is what makes a double- or triple-tap act once (AC 4.3)
+     — `busy` alone unlatches too early, between the judgement and the
+     character's reaction. */
+  function syncSay() {
+    $('btn-say').disabled = inputLocked || submitted || filledCount() !== slotCount() || slotCount() === 0;
+  }
+
   function renderSlot() {
     const slot = $('slot');
-    slot.classList.remove('ok');
+    slot.className = '';
     slot.innerHTML = '';
+    if (judged()) slot.classList.add(marks.every(m => m === true) ? 'judged-ok' : 'judged-bad');
 
     let g = 0;
     /* Runs of printed words are one span, not one per word: laid out as
@@ -963,13 +1006,23 @@
           slot.appendChild(e);
         } else {
           const b = document.createElement('button');
-          b.className = 'chip placed';
+          b.className = 'chip placed' +
+            (marks[i] === true ? ' right' : marks[i] === false ? ' wrong' : '');
           b.type = 'button';
           b.textContent = placed[i];
-          b.addEventListener('click', () => {
-            if (inputLocked) return;
-            placed.splice(i, 1); renderSlot(); renderTray();
-          });
+          /* A pill judged right stays put. A pill judged wrong, or one not yet
+             judged, comes back out and leaves a ghost behind it. */
+          if (marks[i] !== true) {
+            b.addEventListener('click', () => {
+              if (inputLocked) return;
+              placed[i] = undefined;
+              marks[i] = null;
+              submitted = false;           // AC 4.4
+              renderSlot(); renderTray(); syncSay();
+            });
+          } else {
+            b.disabled = true;
+          }
           slot.appendChild(b);
         }
       }
@@ -981,7 +1034,7 @@
       }
     }
     flushRun();
-    $('btn-say').disabled = placed.length !== plan.answer.length;
+    syncSay();
   }
 
   /* NJA-3136 Engine step 6. The engine builds the list — answer words plus red
@@ -990,7 +1043,8 @@
   function renderTray() {
     const tray = $('tray');
     tray.innerHTML = '';
-    const used = placed.slice();
+    const used = [];
+    for (let i = 0; i < slotCount(); i++) if (placed[i] !== undefined) used.push(placed[i]);
     for (const w of E.pills(Q, state, plan)) {
       const b = document.createElement('button');
       b.className = 'chip';
@@ -999,10 +1053,15 @@
       const i = used.indexOf(w);
       if (i >= 0) { used.splice(i, 1); b.disabled = true; }
       b.addEventListener('click', () => {
-        if (inputLocked || placed.length >= plan.answer.length) return;
-        placed.push(w);
+        /* AC 8.4: an option pill goes into the first free ghost slot. */
+        if (inputLocked) return;
+        const at = firstFreeSlot();
+        if (at < 0) return;
+        placed[at] = w;
+        marks[at] = null;
+        submitted = false;
         V.now(w, { speaker: 'axel', lang: TL() });
-        renderSlot(); renderTray();
+        renderSlot(); renderTray(); syncSay();
       });
       tray.appendChild(b);
     }
@@ -1026,36 +1085,103 @@
   function builtSentence() {
     let g = 0;
     return plan.cells
-      .map(c => (c.lead || '') + (c.gap ? (placed[g++] || '…') : c.w) + (c.tail || ''))
+      .map(c => (c.lead || '') + (c.gap ? (placed[g++] !== undefined ? placed[g - 1] : '…') : c.w) + (c.tail || ''))
       .join(' ').replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1');
   }
 
+  /* ---------- the result banner (NJA-3158) ---------- */
+  function showBanner(kind) {
+    const el = $('banner');
+    el.querySelector('span').textContent =
+      Q.uiStrings[kind === 'good' ? 'answer-pane-correct-text' : 'answer-pane-incorrect-text'];
+    el.className = kind;
+  }
+  function hideBanner() { $('banner').className = 'hidden'; }
+
+  /* The banner is a beat, not a status light. It comes down when the character
+     has finished reacting — but a fast reply would flash it for 30ms and the
+     child would never know their answer had been judged, so it holds for a
+     readable minimum however quick the model is. */
+  const BANNER_MIN_MS = 1300;
+  const atLeast = (p, ms) => Promise.all([p, new Promise(r => setTimeout(r, ms))]);
+
+  /* ---------- the character reacts ----------
+     The beat the storyboard has between the answer and the next question: the
+     one line in the whole exchange that is a reply to what the child ACTUALLY
+     said rather than to what they were meant to say. Guarded like the others —
+     it may not reach past the introduced words, and it may not say the child's
+     own line back at them. */
+  async function reactTo(said, wasCorrect) {
+    if (!serverUp) return null;
+    const j = await post('/api/react', Object.assign(turnBody(plan), {
+      reactRules: Q.prompts.reactRules,
+      actorLine: turnLine,
+      childSaid: said,
+      wasCorrect,
+    }), REACT_DEADLINE_MS);
+    if (j.fail || !j.actorText) return null;
+
+    const allowed = introducedWords();
+    if (auditLine(j.actorText, allowed).over > 0) return null;
+    const mine = learnerOnlyWords();
+    if (String(j.actorText).split(/\s+/).map(bare).some(w => w && mine.has(w))) return null;
+    /* And it must not hand over the answer, which is the one thing a reaction
+       to a wrong answer is most tempted to do. */
+    if (E.norm(j.actorText).includes(E.norm(plan.expected))) return null;
+    recentActor.push(j.actorText);
+    return j;
+  }
+
+  async function sayReaction(said, wasCorrect) {
+    const r = await reactTo(said, wasCorrect);
+    if (!r) return;
+    const frags = (r.chatHistory && r.chatHistory[0] && r.chatHistory[0].messageFragments)
+      || toFragments(r.actorText);
+    say(ACTOR, fragmentsHTML(frags), r.actorText, frags);
+    await V.say(r.actorText, { speaker: ACTOR, lang: mixedLang(r.actorText) });
+  }
+
   async function submit(text, mode) {
-    if (busy || !current) return;
+    if (busy || !current || submitted) return;
     busy = true;
+    submitted = true;
     $('btn-say').disabled = true;
 
     const said = builtSentence();
     if (mode === 'chips') V.now(said, { speaker: 'learner', lang: mixedLang(said) });
 
-    const res = mode === 'chips' ? E.check(placed, plan)
-              : { correct: E.norm(text) === E.norm(plan.answer.join(' ')), why: 'spoken' };
+    /* The judgement. Per pill for the pane, and the same booleans collapse to
+       the verdict for the engine — one source, so the banner and the mastery
+       number can never say different things. */
+    let v;
+    if (mode === 'chips') {
+      v = E.validate(placed, plan);
+      marks = v.marks;
+    } else {
+      const ok = E.norm(text) === E.norm(plan.answer.join(' '));
+      v = { correct: ok };
+      marks = new Array(slotCount()).fill(ok);
+    }
+    renderSlot();
 
-    if (res.correct) {
+    if (v.correct) {
       say('me', spanishHTML(said), said);
       const before = E.overall(state, Q);
       const ph = E.applyCorrect(state, plan, { hinted });
       if (E.overall(state, Q) > before + 1e-6) pulseMastery();
-      $('slot').classList.add('ok');
-      $('lower').classList.remove('wrong');
-      $('verdict').textContent = '✓ ' + (hinted ? 'nice — that’s it' : 'spot on');
-      $('verdict').className = 'good';
+      showBanner('good');
+      $('verdict').textContent = '';
       $('t-delta').textContent = plan.pair.id + ' · pattern ' + ph.pattern +
         (ph.item ? ' · word ' + ph.item : '');
       mountCharacter($('character'), { character: ACTOR, state: 'pose' });
       renderHud();
       recordTurn(plan, turnLine, turnAsk, true);
-      setTimeout(() => { busy = false; step(); }, 900);
+
+      setLocked(true);
+      await atLeast(sayReaction(said, true), BANNER_MIN_MS);
+      hideBanner();
+      busy = false;
+      step();
       return;
     }
 
@@ -1063,6 +1189,7 @@
        tries again until they get it right." Taken literally that never ends,
        so after a few tries the coach says it for them and the exchange moves
        on — uncredited, so the pair comes back. */
+    say('me', spanishHTML(said), said);
     const { attempts: n } = E.applyWrong(state, plan);
     attempts = n;
     hinted = true;
@@ -1070,25 +1197,39 @@
 
     if (E.mercyDue(state)) {
       recordTurn(plan, turnLine, turnAsk, false);
-      $('lower').classList.remove('wrong');
+      hideBanner();
       $('verdict').textContent = '— ' + COACH + ' says it for you: ' + plan.expected;
       await V.say(plan.expected, { speaker: 'axel', lang: mixedLang(plan.expected) });
       E.applyMercy(state, plan);
-      setTimeout(() => { busy = false; step(); }, 1200);
+      setTimeout(() => { busy = false; submitted = false; step(); }, 1200);
       return;
     }
 
-    $('lower').classList.add('wrong');
-    const why = { word_order: 'Right words, wrong order.', wrong_word: 'Not quite.' }[res.why] || 'Not quite.';
-    $('verdict').textContent = '✗ ' + why + ' Try again.';
+    showBanner('bad');
+    $('verdict').textContent = '';
     $('verdict').className = 'bad';
+
+    /* The character reacts ONCE, on the first miss. He has nothing new to say
+       on the third attempt at the same sentence, and four generated shrugs in
+       a row is a worse experience than one plus the coach repeating himself. */
+    setLocked(true);
+    await atLeast(attempts === 1 ? sayReaction(said, false) : Promise.resolve(), BANNER_MIN_MS);
+    hideBanner();
+
     /* "pal repeats phrase" — the SAME bubble, formatting and all. Re-posting
        the plain text ran the new-word badge back into the sentence as prose,
        so the repeat read worse than the line it was repeating. */
+    if (attempts === 1) say('axel', esc(Q.uiStrings['coach-retry']), Q.uiStrings['coach-retry']);
     say('axel', turnCoachHtml, turnAsk, turnCoachFrags);
-    placed = [];
+
+    /* Wrong pills stay on screen, marked, and come out when tapped. Clearing
+       the whole answer meant a child who got three words of four right had to
+       find all four again, which reads as being punished for the near miss. */
+    setLocked(false);
+    submitted = false;
     renderSlot();
     renderTray();
+    syncSay();
     busy = false;
   }
 
@@ -1234,7 +1375,14 @@
   }
 
   $('btn-say').addEventListener('click', () => submit(builtSentence(), 'chips'));
-  $('btn-clear').addEventListener('click', () => { if (!inputLocked) { placed = []; renderSlot(); renderTray(); } });
+  /* The bin clears what is still in play. A pill already judged right is not
+     in play — it is part of the sentence now — so it stays. */
+  $('btn-clear').addEventListener('click', () => {
+    if (inputLocked) return;
+    for (let i = 0; i < slotCount(); i++) if (marks[i] !== true) { placed[i] = undefined; marks[i] = null; }
+    submitted = false;
+    renderSlot(); renderTray(); syncSay();
+  });
   $('btn-mic').addEventListener('click', toggleMic);
   $('btn-pause').addEventListener('click', openProgress);
   $('coach-close').addEventListener('click', () => $('coach-sheet').classList.add('hidden'));
@@ -1287,6 +1435,9 @@
     introduced: () => [...introducedWords()],
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,
+    marks: () => marks.slice(),
+    placed: () => Array.from({ length: slotCount() }, (_, i) => placed[i]),
+    banner: () => { const b = document.getElementById('banner'); return b.className === 'hidden' ? null : { kind: b.className, text: b.textContent.trim() }; },
   };
 
   boot();

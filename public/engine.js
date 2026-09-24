@@ -315,6 +315,33 @@ window.ENGINE = (function () {
   }
 
   /* ---------- checking ---------- */
+  /* ---------- per-pill validation (NJA-3162) ----------
+     "A pill is counted as correct if its position in the input list matches
+     the position in the expectedAnswerPills list", and incorrect if it is not
+     in that list or not in the right place. Both of those reduce to the same
+     test — is the right value in this slot — which is why there is one
+     comparison here and not two.
+
+     Comparison is by VALUE, normalised, never by identity: the ticket's fourth
+     case is a sentence with "dog" in it twice, and which of the two the child
+     tapped is not a thing anyone should be able to get wrong.
+
+     `placed` is slot-indexed and sparse. A hole is an unfilled slot, which is
+     neither right nor wrong yet — it is not an answer. */
+  function validate(placed, plan) {
+    const want = plan.answer || [];
+    const marks = want.map((w, i) =>
+      placed[i] === undefined ? null : (norm(placed[i]) === norm(w)));
+    const filled = marks.filter(m => m !== null).length;
+    return {
+      marks,
+      filled,
+      complete: filled === want.length,
+      correct: want.length > 0 && marks.every(m => m === true),
+      wrongAt: marks.map((m, i) => (m === false ? i : -1)).filter(i => i >= 0),
+    };
+  }
+
   function check(placed, plan) {
     const a = placed.map(norm).join(' ').trim();
     const b = plan.answer.map(norm).join(' ').trim();
@@ -389,7 +416,7 @@ window.ENGINE = (function () {
   }
 
   return {
-    createState, pickNext, planTurn, pills, check,
+    createState, pickNext, planTurn, pills, check, validate,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     expected, gaps, tagOfPattern, norm, words,

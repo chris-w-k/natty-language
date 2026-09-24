@@ -268,14 +268,13 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
    again until they get it right." The red is on the answer panel rather than
    the whole screen: it is the answer that was wrong, and a screen that flashes
    red at a seven-year-old reads as punishment rather than as a correction. */
-#lower.wrong #slot{background:var(--warn-soft);box-shadow:inset 0 0 0 1.5px var(--warn);}
-#lower.wrong #slot-label{color:var(--warn);}
+#slot.judged-bad ~ #slot-label,#lower:has(#slot.judged-bad) #slot-label{color:var(--warn);}
 #verdict.bad{color:var(--warn);}
 @keyframes slot-shake{
   0%,100%{transform:translateX(0);} 20%{transform:translateX(-5px);}
   40%{transform:translateX(5px);} 60%{transform:translateX(-3px);} 80%{transform:translateX(3px);}
 }
-#lower.wrong #slot{animation:slot-shake .32s ease;}
+#slot.judged-bad{animation:slot-shake .32s ease;}
 #slot .frame{color:var(--ink-2);font-size:14.5px;}
 #slot .frame.hug{margin-left:-8px;}
 #slot .gap{
@@ -416,3 +415,37 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 @media (prefers-reduced-motion:reduce){
   #chat .msg.enter,#gloss,.mastery-pill.gained,#rail.gained::after{animation:none;}
 }
+
+
+/* ---------- validation UI (NJA-3162) ----------
+   A judged answer marks every pill, not just the sentence: dark outline and a
+   drop shadow, pale fill. The child can see WHICH word was wrong, which is the
+   whole reason for judging per pill rather than per sentence. */
+#slot .chip.right{
+  background:var(--good-soft);
+  box-shadow:0 0 0 1.5px var(--good), 0 2px 5px rgba(20,120,60,.22);
+  color:var(--ink);
+  cursor:default;
+}
+#slot .chip.wrong{
+  background:var(--warn-soft);
+  box-shadow:0 0 0 1.5px var(--warn), 0 2px 5px rgba(160,40,40,.22);
+  color:var(--ink);
+}
+/* AC 7: the field takes the colour of the whole verdict. */
+#slot.judged-ok{background:var(--good-soft);box-shadow:inset 0 0 0 1.5px var(--good);}
+#slot.judged-bad{background:var(--warn-soft);box-shadow:inset 0 0 0 1.5px var(--warn);}
+
+/* The banner covers the pane. Nothing under it is tappable while it shows, so
+   a child cannot edit an answer that is being celebrated. */
+#banner{
+  position:absolute; inset:0; z-index:6;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:inherit;
+  font-size:20px; font-weight:700; letter-spacing:.2px; color:#fff;
+  animation:banner-in .18s ease;
+}
+#banner.good{background:var(--good);}
+#banner.bad{background:var(--warn);}
+#banner.hidden{display:none;}
+@keyframes banner-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}

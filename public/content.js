@@ -140,6 +140,47 @@ window.QUEST = (function () {
      coach prompts are Directus fields already (NJA-3153), and a rules prompt
      that lives in server code cannot be tuned without a deploy. Editing the
      wording here is the whole of changing how either speaker behaves. */
+  /* The character's reaction to what the child actually said — the beat the
+     storyboard has between the answer and the next question. It is generated,
+     because the whole point is that it answers what they said rather than what
+     they were supposed to say; a written line cannot do that.
+
+     It is deliberately NOT allowed to be funny at the child's expense. The
+     design frame has the bouncer say "Are you already drunk?" to a 7-10 year
+     old whose Spanish came out in the wrong order, which is a different thing
+     from a bouncer being gruff. */
+  const reactRules = `You write ONE very short line for a character in a
+language game played by a 7-10 year old. The child has just spoken to you.
+Write their reply and nothing else.
+
+{{scenario_prompt}}
+
+You are {{actor_name}}. One sentence, at most two — shorter than your last one.
+
+The child tried to say: {{user_expected_answer}}
+What actually came out of their mouth: {{child_said}}
+Did they get it right: {{was_correct}}
+
+If they got it right, react to WHAT THEY SAID as a person would — serve them,
+answer them, agree, hand it over — and move on. Do not praise their language;
+somebody else does that, and a barman who compliments a child's grammar is not
+a barman.
+
+If they got it wrong, you did not understand them. Say so the way a busy person
+does: ask them to say it again, lean in, look blank. You are never unkind about
+it and never funny at their expense — no jokes about them being drunk, slow or
+foreign. They are a child having a go in a language that is not theirs.
+
+Never tell them what to say, never name the words, never say the right answer
+or any part of it. Somebody else does that too.
+
+Write in {{native_language}}, except for these {{target_language}} words, which
+you may use and which the child has met: {{actor_may_use}}
+Use no other {{target_language}} word. These are the child's own words to you,
+never yours to say back: {{learner_only}}
+
+No stage directions, no emoji. Return JSON only.`;
+
   const prompts = {
     actorRules: `You write ONE short line of dialogue for a character in a
 language game played by a 7-10 year old. You do not decide what is taught, how
@@ -189,6 +230,7 @@ The child is expected to reply: {{user_expected_answer}} (meaning:
 No stage directions, no emoji, no praise, no questions to an adult. Vary your
 wording. Return JSON only.`,
 
+    reactRules,
     coachRules: `You are the child's coach in a language game played by a 7-10
 year old. You speak only to them, never to the character. Write ONE short line.
 
@@ -212,6 +254,21 @@ character's line word for word; say what they want.
 No stage directions, no emoji, no questions to an adult. Vary your wording.
 Return JSON only.`,
   };
+
+  /* NJA-3157 / NJA-3158's ui_strings collection. Copy the UI owns rather than
+     the model, so it is identical every time and translatable as a unit. */
+  const uiStrings = {
+    'answer-pane-correct-text':   'Nice Job!',
+    'answer-pane-incorrect-text': 'Not quite!',
+    'pause-menu-skip': 'Skip',
+    'pause-menu-exit': 'Exit',
+    /* The coach's line after a wrong answer. Written, not generated: it is the
+       same sentence every time by design, it must never be wrong, and it is
+       the one beat in the loop where a child is waiting to try again. */
+    'coach-retry': "Let's try that again.",
+  };
+
+
 
   const session = {
     /* NJA-3136 ends a session on mastery, not on a clock. The cap is a
@@ -242,7 +299,7 @@ Return JSON only.`,
     const q = {
       id: activity.id, title: activity.title, activity,
       nativeLang: LANGS.native, targetLang: LANGS.target,
-      slotTags, vocabItems, vocabPatterns, session, prompts,
+      slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
       glossary: {}, chipGloss: {},
     };
 

@@ -362,6 +362,36 @@ async function generateActor(b) {
   };
 }
 
+/* The character's reaction to what the child actually said. A third call, and
+   the only one that sees the child's own words — which is the point of it. It
+   runs after the answer is judged, so it decides nothing about the judgement;
+   the verdict is already on screen when this is asked for. */
+const REACT_SCHEMA = {
+  type: 'object',
+  properties: { actor_line: { type: 'string' } },
+  required: ['actor_line'],
+};
+
+async function generateReaction(b) {
+  const vars = turnVars(b);
+  vars.child_said = b.childSaid;
+  vars.was_correct = b.wasCorrect ? 'yes' : 'no';
+  const system = evaluateTags(b.reactRules, vars);
+
+  const contents = historyContents(b.history, 'actor', { actor: b.actor, coach: b.coach });
+  contents.push({ role: 'model', parts: [{ text: b.actorLine }] });
+  contents.push({ role: 'user', parts: [{ text: `The child said: "${b.childSaid}". Say your line.` }] });
+
+  const out = await askJSON({
+    system, contents, schema: REACT_SCHEMA,
+    temperature: 1.0, tries: 1, timeoutMs: 6000,
+  });
+  return {
+    actorText: out.actor_line,
+    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || []) }],
+  };
+}
+
 async function generateCoach(b) {
   const vars = coachVars(b);
   const system = evaluateTags(b.coachRules, vars);
@@ -514,6 +544,18 @@ http.createServer(async (req, res) => {
       return json(res, 200, await generateActor(b));
     } catch (e) {
       // the client falls back to its own templates, so this is never fatal
+      return json(res, 200, { error: e.message });
+    }
+  }
+
+  if (url === '/api/react' && req.method === 'POST') {
+    try {
+      const b = await readBody(req);
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
+      if (MOCK) return json(res, 200, { mock: true });
+      checkRate(req);
+      return json(res, 200, await generateReaction(b));
+    } catch (e) {
       return json(res, 200, { error: e.message });
     }
   }
