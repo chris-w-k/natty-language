@@ -42,11 +42,14 @@ const VOICES = {
    voice without SSML. One per speaker, so Axel coaches and the bouncer
    does not. */
 const STYLES = {
-  axel:      process.env.STYLE_AXEL      || 'Say in a warm, cocky, laddish teenage-punk voice, like a big brother coaching a kid through it — encouraging, never babyish, and clear enough to copy:',
-  bouncer:   process.env.STYLE_BOUNCER   || 'Say in a deep, gruff, slightly bored doorman voice, unhurried and a little intimidating but not unkind:',
-  bartender: process.env.STYLE_BARTENDER || 'Say in a deep, gruff but good-natured voice over a noisy bar — a big bloke behind the counter who has seen it all, brisk and unbothered but never unkind:',
-  fan:       process.env.STYLE_FAN       || 'Say shouted happily over loud live music, delighted and a bit breathless:',
-  learner:   process.env.STYLE_LEARNER   || 'Say clearly and simply, at a learner\'s pace, like a child repeating a phrase they have just worked out:',
+  axel:      process.env.STYLE_AXEL      || 'Say in a cheeky British rockstar voice — quick, cocky, full of attitude, like an older kid who has played a hundred gigs and is showing you the ropes. Keep the same English accent on any Spanish words, and stay clear enough to copy:',
+  bouncer:   process.env.STYLE_BOUNCER   || 'Say with a Spanish accent, in a deep, gruff, slightly bored doorman voice, unhurried and a little intimidating but not unkind. Keep the Spanish accent even on the English words:',
+  /* The accent is pinned to the PERSON, not to the sentence. Without saying so
+     the model reads an English line in English and a Spanish line in Spanish,
+     and the same barman changes nationality between one turn and the next. */
+  bartender: process.env.STYLE_BARTENDER || 'Say with a Spanish accent, in a deep, warm, slightly weary voice over a noisy bar — a big bloke behind the counter who has seen it all, patient but with a queue building. Keep the Spanish accent throughout, INCLUDING on every English word:',
+  fan:       process.env.STYLE_FAN       || 'Say with a Spanish accent, shouted happily over loud live music, delighted and a bit breathless:',
+  learner:   process.env.STYLE_LEARNER   || 'Say clearly and simply, at a learner\'s pace, like a British child carefully repeating a phrase they have just worked out:',
 };
 const ACCESS_CODE = (process.env.ACCESS_CODE || '').trim();
 const MOCK        = process.env.MOCK === '1' || !API_KEY;

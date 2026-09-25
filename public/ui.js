@@ -906,7 +906,7 @@
     V.stop();
     say(ACTOR, fragmentsHTML(actorFrags), actorLine, actorFrags);
     setLocked(true);
-    const characterDone = V.say(actorLine, { speaker: ACTOR, lang: mixedLang(actorLine) });
+    const characterDone = V.say(actorLine, { speaker: ACTOR, lang: accentOf(ACTOR) });
 
     let coachShown = false;
     const showCoach = async () => {
@@ -951,13 +951,20 @@
     setTimeout(release, 12000);
   }
 
-  /* A line is a mix of the two languages by design, so the voice follows
-     whichever one carries most of it. */
-  function mixedLang(line) {
-    const v = glossable();
-    const toks = String(line).split(/\s+/).filter(t => bare(t));
-    const t = toks.filter(x => countsAsTarget(x, v)).length;
-    return t * 2 >= toks.length ? TL() : NL();
+  /* ---------- who sounds like what ----------
+     A character has ONE voice. Letting the line's language pick it meant the
+     bartender answered in English with an English voice and in Spanish with a
+     Spanish one — the same person, two accents, switching mid-conversation
+     depending on how much of the sentence had crossed over. A Spaniard
+     speaking English still sounds Spanish.
+
+     The accent lives on the character in content, so a scenario set somewhere
+     else brings its own. */
+  function accentOf(who) {
+    if (who === Q.activity.actor.id) return Q.activity.actor.accent || TL();
+    if (who === 'axel') return Q.activity.coach.accent || NL();
+    if (who === 'learner' || who === 'me') return Q.activity.coach.accent || NL();
+    return NL();
   }
 
   /* The sentence with its gaps. Words already in the child's own language are
@@ -1409,7 +1416,7 @@
     const frags = (r.chatHistory && r.chatHistory[0] && r.chatHistory[0].messageFragments)
       || toFragments(r.actorText);
     say(ACTOR, fragmentsHTML(frags), r.actorText, frags);
-    await V.say(r.actorText, { speaker: ACTOR, lang: mixedLang(r.actorText) });
+    await V.say(r.actorText, { speaker: ACTOR, lang: accentOf(ACTOR) });
   }
 
   async function submit(text, mode) {
@@ -1419,7 +1426,7 @@
     $('btn-say').disabled = true;
 
     const said = builtSentence();
-    if (mode === 'chips') V.now(said, { speaker: 'learner', lang: mixedLang(said) });
+    if (mode === 'chips') V.now(said, { speaker: 'learner', lang: accentOf('learner') });
 
     /* The judgement. Per pill for the pane, and the same booleans collapse to
        the verdict for the engine — one source, so the banner and the mastery
@@ -1448,8 +1455,17 @@
       renderHud();
       recordTurn(plan, turnLine, turnAsk, true);
 
+      /* No separate reaction bubble on the way out. The bartender served the
+         child and then immediately spoke again to open the next turn, which is
+         two bubbles for one breath — and because the reaction was in the
+         history by then, his next line tended to repeat it word for word
+         ("Here's your agua." / "Here's your agua. You also want un refresco?").
+         His acknowledgement belongs in the same sentence as what he says next,
+         which is what the actor prompt already asks him for. The reaction call
+         survives only where there IS no next line: a wrong answer, where the
+         turn does not advance. */
       setLocked(true);
-      await atLeast(sayReaction(said, true), BANNER_MIN_MS);
+      await new Promise(r => setTimeout(r, BANNER_MIN_MS));
       hideBanner();
       busy = false;
       step();
@@ -1470,7 +1486,7 @@
       recordTurn(plan, turnLine, turnAsk, false);
       hideBanner();
       $('verdict').textContent = '— ' + COACH + ' says it for you: ' + plan.expected;
-      await V.say(plan.expected, { speaker: 'axel', lang: mixedLang(plan.expected) });
+      await V.say(plan.expected, { speaker: 'axel', lang: accentOf('axel') });
       E.applyMercy(state, plan);
       setTimeout(() => { busy = false; submitted = false; step(); }, 1200);
       return;
@@ -1570,7 +1586,7 @@
       .join('');
     $('coach-sheet').classList.remove('hidden');
     E.track(state, 'hint_opened', { pair: p.id });
-    V.now(plan.expected, { speaker: 'axel', lang: mixedLang(plan.expected) });
+    V.now(plan.expected, { speaker: 'axel', lang: accentOf('axel') });
   }
 
   /* The session summary, in the epic's own terms: PPP. Everything the child
@@ -1710,6 +1726,7 @@
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,
     marks: () => marks.slice(),
+    accent: who => accentOf(who),
     placed: () => Array.from({ length: slotCount() }, (_, i) => placed[i]),
     banner: () => { const b = document.getElementById('banner'); return b.className === 'hidden' ? null : { kind: b.className, text: b.textContent.trim() }; },
   };
