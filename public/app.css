@@ -449,3 +449,29 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 #banner.bad{background:var(--warn);}
 #banner.hidden{display:none;}
 @keyframes banner-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+
+/* ---------- user message colours (NJA-3169) ----------
+   The child's own bubble takes the verdict. Actor and coach bubbles are
+   untouched and stay white — only the person being marked gets marked. */
+#chat .msg.mine.right .bubble{background:var(--good);}
+#chat .msg.mine.wrong .bubble{background:var(--warn);}
+
+
+/* ---------- dragging pills (NJA-3161, NJA-3178) ---------- */
+/* A pill under the finger must not also be selected, scrolled or long-press
+   menued — on iOS all three happen at once otherwise. */
+#tray .chip, #slot .chip{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+body.dragging{cursor:grabbing;}
+body.dragging *{-webkit-user-select:none;user-select:none;}
+
+.chip.drag-ghost{
+  position:fixed;z-index:60;pointer-events:none;margin:0;
+  opacity:.95;transform:scale(1.06);
+  box-shadow:0 8px 20px rgba(0,0,0,.24);
+}
+/* the pill left behind while its copy travels */
+#slot .chip.lifted{opacity:.35;}
+/* where it would land */
+#slot .recv-hot{box-shadow:0 0 0 2px var(--accent);border-radius:var(--r-pill);}
+#slot .gap.recv-hot{background:color-mix(in srgb, var(--accent) 18%, transparent);}

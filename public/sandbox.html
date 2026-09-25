@@ -121,8 +121,9 @@
       `<span class="k">introducing  </span>${pl.introducing ? pl.introducing + '  (' + pl.introducedBy + ' says it first)' : 'nothing'}`;
 
     const pills = E.pills(Q, state, pl);
+    const answerIds = new Set((pl.expectedAnswerPills || []).map(p => p.id));
     $('pills').innerHTML = pills.map(w =>
-      `<span class="pill${pl.answer.includes(w) ? ' ans' : ''}">${w}</span>`).join('') +
+      `<span class="pill${answerIds.has(w.id) ? ' ans' : ''}" title="${esc(w.id + ' / ' + w.value)}">${esc(w.label)}</span>`).join('') +
       `<div style="font-size:11.5px;color:var(--ink3);margin-top:6px">green = part of the answer</div>`;
     return pl;
   }

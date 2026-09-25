@@ -262,6 +262,16 @@ Return JSON only.`,
     'answer-pane-incorrect-text': 'Not quite!',
     'pause-menu-skip': 'Skip',
     'pause-menu-exit': 'Exit',
+    /* NJA-3168. {0} is the number, and the marker is INSIDE the string on
+       purpose: Turkish writes the percent before the figure with no space, so
+       any code that appends "%" itself is wrong in Turkish and right nowhere
+       it matters. */
+    'mastery-display-string': {
+      en: 'Mastery: {0}%',
+      es: 'Maestría: {0}%',
+      pt: 'Mestria: {0}%',
+      tr: 'Ustalık: %{0}',
+    },
     /* The coach's line after a wrong answer. Written, not generated: it is the
        same sentence every time by design, it must never be wrong, and it is
        the one beat in the loop where a child is waiting to try again. */

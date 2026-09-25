@@ -15,6 +15,9 @@
   let state, current = null, plan = null, hinted = false, attempts = 0;
   /* slot-indexed and sparse; marks[i] is null until judged (NJA-3162) */
   let placed = [], marks = [], submitted = false;
+  /* set while a pointer drag is in flight, so the click that ends a drag is
+     not also read as a tap (NJA-3161 AC 1.3, NJA-3178 AC 1.4) */
+  let dragMoved = false;
   const ACTOR = Q.activity.actor.id;
   const COACH = Q.activity.coach.name;
   let inputLocked = false;
@@ -661,7 +664,8 @@
   function messageEl(entry, opts = {}) {
     const row = document.createElement('div');
     row.className = 'msg' + (entry.who === 'me' ? ' mine' : '') +
-                    (entry.who === 'axel' ? ' coach' : '') + (opts.enter ? ' enter' : '');
+                    (entry.who === 'axel' ? ' coach' : '') +
+                    (entry.verdict ? ' ' + entry.verdict : '') + (opts.enter ? ' enter' : '');
     const av = avatarEl(entry.who);
     if (entry.who === 'axel') {
       const b = document.createElement('button');
@@ -690,11 +694,15 @@
      `html` is kept alongside for the two places that add their own markup on
      top — the coach's new-word badge — but the fragments are the record, and
      the expanded view and any future renderer read those. */
-  function say(who, html, text, frags) {
+  function say(who, html, text, frags, verdict) {
     chatLog.push({
       who, html, text: text || '',
       role: ROLE(who),
       messageFragments: frags || toFragments(text || ''),
+      /* NJA-3169: the child's own bubble carries the verdict, so it is green
+         when they got it right and red when they did not. Actor and coach
+         bubbles have no verdict and stay white. */
+      verdict: verdict || null,
     });
     const chat = $('chat');
     chat.appendChild(messageEl(chatLog[chatLog.length - 1], { enter: true }));
@@ -803,9 +811,18 @@
     fill.style.width = (E.overall(state, Q) * 100).toFixed(1) + '%';
   }
 
+  /* A ui_string, in the child's own language, with {0} filled in. A string
+     that is a plain string is the same in every language; one that is a map is
+     looked up by native language and falls back to English. */
+  function t(key, ...args) {
+    const raw = Q.uiStrings[key];
+    const s = (raw && typeof raw === 'object') ? (raw[NL()] || raw.en || '') : (raw || '');
+    return args.reduce((acc, v, i) => acc.split('{' + i + '}').join(String(v)), s);
+  }
+
   function renderHud() {
     renderRail();
-    $('mastery').textContent = 'Mastery: ' + pct(E.overall(state, Q));
+    $('mastery').textContent = t('mastery-display-string', Math.round(E.overall(state, Q) * 100));
     $('coins').textContent = String(state.coins);
     $('t-obj').textContent = plan ? plan.pair.id : '—';
     $('t-scaf').textContent = plan
@@ -955,7 +972,7 @@
 
      `marks` is the judgement: null until they submit, then true or false per
      slot. A slot marked true is locked (AC 8.1). */
-  function slotCount() { return plan && plan.answer ? plan.answer.length : 0; }
+  function slotCount() { return plan && plan.expectedAnswerPills ? plan.expectedAnswerPills.length : 0; }
   function filledCount() { let n = 0; for (let i = 0; i < slotCount(); i++) if (placed[i] !== undefined) n++; return n; }
   function firstFreeSlot() { for (let i = 0; i < slotCount(); i++) if (placed[i] === undefined) return i; return -1; }
   function judged() { return marks.some(m => m !== null && m !== undefined); }
@@ -992,45 +1009,36 @@
     };
 
     for (const cell of plan.cells) {
-      if (cell.lead) pushWord(cell.lead);
-      if (!cell.gap) {
-        pushWord(cell.w + (cell.tail || ''));
-        continue;
-      }
-      {
-        flushRun();
-        const i = g++;
-        if (placed[i] === undefined) {
-          const e = document.createElement('span');
-          e.className = 'gap';
-          slot.appendChild(e);
+      if (!cell.gap) { pushWord(cell.w); continue; }
+      flushRun();
+      const i = g++;
+      if (placed[i] === undefined) {
+        const e = document.createElement('span');
+        e.className = 'gap';
+        e.dataset.slot = String(i);
+        slot.appendChild(e);
+      } else {
+        const b = document.createElement('button');
+        b.className = 'chip placed' +
+          (marks[i] === true ? ' right' : marks[i] === false ? ' wrong' : '');
+        b.type = 'button';
+        b.textContent = placed[i].label;
+        b.dataset.slot = String(i);
+        b.dataset.pill = placed[i].id;
+        /* A pill judged right stays put. A pill judged wrong, or one not yet
+           judged, comes back out and leaves a ghost behind it. */
+        if (marks[i] !== true) {
+          b.addEventListener('click', () => {
+            if (inputLocked || dragMoved) return;
+            placed[i] = undefined;
+            marks[i] = null;
+            submitted = false;           // AC 4.4
+            renderSlot(); renderTray(); syncSay();
+          });
         } else {
-          const b = document.createElement('button');
-          b.className = 'chip placed' +
-            (marks[i] === true ? ' right' : marks[i] === false ? ' wrong' : '');
-          b.type = 'button';
-          b.textContent = placed[i];
-          /* A pill judged right stays put. A pill judged wrong, or one not yet
-             judged, comes back out and leaves a ghost behind it. */
-          if (marks[i] !== true) {
-            b.addEventListener('click', () => {
-              if (inputLocked) return;
-              placed[i] = undefined;
-              marks[i] = null;
-              submitted = false;           // AC 4.4
-              renderSlot(); renderTray(); syncSay();
-            });
-          } else {
-            b.disabled = true;
-          }
-          slot.appendChild(b);
+          b.disabled = true;
         }
-      }
-      if (cell.tail) {
-        const c = document.createElement('span');
-        c.className = 'frame hug';
-        c.textContent = cell.tail;
-        slot.appendChild(c);
+        slot.appendChild(b);
       }
     }
     flushRun();
@@ -1043,28 +1051,287 @@
   function renderTray() {
     const tray = $('tray');
     tray.innerHTML = '';
-    const used = [];
-    for (let i = 0; i < slotCount(); i++) if (placed[i] !== undefined) used.push(placed[i]);
-    for (const w of E.pills(Q, state, plan)) {
+    /* Keyed on id, not on the word. Two pills reading "dog" are two pills, and
+       telling them apart by counting matches was always going to come apart on
+       the day a sentence had three of them. */
+    const used = new Set();
+    for (let i = 0; i < slotCount(); i++) if (placed[i] !== undefined) used.add(placed[i].id);
+    for (const p of optionPills()) {
       const b = document.createElement('button');
       b.className = 'chip';
       b.type = 'button';
-      b.textContent = w;
-      const i = used.indexOf(w);
-      if (i >= 0) { used.splice(i, 1); b.disabled = true; }
+      b.textContent = p.label;
+      b.dataset.pill = p.id;
+      if (used.has(p.id)) b.disabled = true;
       b.addEventListener('click', () => {
-        /* AC 8.4: an option pill goes into the first free ghost slot. */
-        if (inputLocked) return;
-        const at = firstFreeSlot();
-        if (at < 0) return;
-        placed[at] = w;
-        marks[at] = null;
-        submitted = false;
-        V.now(w, { speaker: 'axel', lang: TL() });
-        renderSlot(); renderTray(); syncSay();
+        /* NJA-3162 AC 8.4: a TAPPED option pill goes into the first free ghost
+           slot. A DRAGGED one goes to the end (NJA-3161 AC 2) — the two
+           tickets disagree and both are implemented as written. */
+        if (inputLocked || dragMoved) return;
+        place(p, firstFreeSlot());
       });
       tray.appendChild(b);
     }
+  }
+
+  /* One shuffled list per turn, so a re-render does not move the pill under
+     the child's thumb mid-reach. */
+  let optionCache = null, optionCacheKey = '';
+  function optionPills() {
+    const key = plan ? plan.pair.id + ':' + state.turn : '';
+    if (optionCache && optionCacheKey === key) return optionCache;
+    optionCacheKey = key;
+    optionCache = E.pills(Q, state, plan);
+    return optionCache;
+  }
+
+  function place(pill, at) {
+    if (at < 0 || at >= slotCount()) return;
+    placed[at] = pill;
+    marks[at] = null;
+    submitted = false;
+    V.now(pill.label, { speaker: 'axel', lang: TL() });
+    renderSlot(); renderTray(); syncSay();
+  }
+
+
+  /* ---------- dragging pills (NJA-3161, NJA-3178) ----------
+     Pointer events, not HTML5 drag-and-drop: the latter does not fire on touch
+     at all, which would leave this working on a laptop and dead on the phones
+     the thing is actually for.
+
+     One engine serves both tickets. A press that moves more than a few pixels,
+     or is held past a moment, becomes a drag; anything shorter stays a tap, so
+     NJA-3161 AC 1.3 and NJA-3178 AC 1.4 are the same rule read from two sides.
+
+     Where a dragged pill lands differs by where it came from, because the two
+     tickets say different things and both are the spec:
+       from the tray  -> the END of the input (NJA-3161 AC 2)
+       from the input -> the receiver under the pointer (NJA-3178 AC 2) */
+  const DRAG_SLOP_PX = 6;       // further than this and it is a drag, not a tap
+  const DRAG_HOLD_MS = 180;     // ...or longer than this, even without moving
+
+  let drag = null;              // { pill, from, ghost, startX, startY, holdTimer }
+
+  function pillFromEl(el) {
+    const id = el.dataset.pill;
+    if (!id) return null;
+    const slot = el.dataset.slot;
+    if (slot !== undefined && placed[Number(slot)]) return placed[Number(slot)];
+    return optionPills().find(p => p.id === id) || null;
+  }
+
+  /* The floating copy that follows the finger. A clone rather than the pill
+     itself, so the layout underneath does not jump the moment a drag starts. */
+  function makeGhost(el, x, y) {
+    const g = el.cloneNode(true);
+    const r = el.getBoundingClientRect();
+    g.className = 'chip drag-ghost';
+    g.style.width = r.width + 'px';
+    g.style.height = r.height + 'px';
+    g.dataset.dx = String(r.left - x);
+    g.dataset.dy = String(r.top - y);
+    document.body.appendChild(g);
+    moveGhost(g, x, y);
+    return g;
+  }
+  function moveGhost(g, x, y) {
+    g.style.left = (x + Number(g.dataset.dx)) + 'px';
+    g.style.top  = (y + Number(g.dataset.dy)) + 'px';
+  }
+
+  /* NJA-3178: every ghost slot has two receivers, a first half and a second
+     half, and they touch — no gap between one slot's second receiver and the
+     next slot's first, or a pill dropped on the seam lands nowhere. A final
+     receiver takes the rest of the input. Built from the live geometry each
+     time a drag starts, so it survives the pane reflowing. */
+  function receivers() {
+    const slot = $('slot');
+    const box = slot.getBoundingClientRect();
+    const out = [];
+    for (const el of slot.querySelectorAll('[data-slot]')) {
+      const i = Number(el.dataset.slot);
+      const r = el.getBoundingClientRect();
+      out.push({ at: i, half: 0, x1: r.left, x2: r.left + r.width / 2, y1: r.top, y2: r.bottom });
+      out.push({ at: i, half: 1, x1: r.left + r.width / 2, x2: r.right, y1: r.top, y2: r.bottom });
+    }
+    /* ...and the rest of the field, so a drop in the empty space to the right
+       is a drop at the end rather than a drop that does nothing. */
+    const last = out[out.length - 1];
+    if (last) out.push({ at: slotCount(), half: 0, x1: last.x2, x2: box.right, y1: last.y1, y2: last.y2 });
+    return out;
+  }
+
+  function receiverAt(x, y) {
+    const rs = receivers();
+    /* Vertical bands first — the field wraps onto two lines on a narrow phone,
+       and the nearest receiver by straight-line distance is then the one on
+       the wrong row. */
+    const onRow = rs.filter(r => y >= r.y1 - 6 && y <= r.y2 + 6);
+    const pool = onRow.length ? onRow : rs;
+    let best = null, bestD = Infinity;
+    for (const r of pool) {
+      const dx = x < r.x1 ? r.x1 - x : x > r.x2 ? x - r.x2 : 0;
+      const dy = y < r.y1 ? r.y1 - y : y > r.y2 ? y - r.y2 : 0;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    return best;
+  }
+
+  /* Is this slot the child's to move? A pill judged right is settled — NJA-3162
+     AC 8.1 says it can no longer be removed — so it neither travels nor gets
+     shoved along by something dropped before it. Neither ticket says what
+     should happen here; this is the reading that keeps 8.1 true. */
+  const movable = i => marks[i] !== true;
+
+  /* The slots a pill may occupy, in order. A locked pill is pinned to its own
+     slot and is simply not in this list, so an insertion steps over it rather
+     than shoving it along. */
+  function movableSlots() {
+    const out = [];
+    for (let i = 0; i < slotCount(); i++) if (movable(i)) out.push(i);
+    return out;
+  }
+
+  function applySequence(seq) {
+    const ms = movableSlots();
+    for (let k = 0; k < ms.length; k++) {
+      const i = ms[k];
+      const p = seq[k];
+      if (placed[i] !== p) { placed[i] = p; marks[i] = null; }
+    }
+    submitted = false;
+    renderSlot(); renderTray(); syncSay();
+  }
+
+  function lastFree() {
+    for (let i = slotCount() - 1; i >= 0; i--) if (placed[i] === undefined && movable(i)) return i;
+    return -1;
+  }
+
+  /* Reordering, NJA-3178 AC 3. Expressed as a remove-then-insert on the
+     sequence of movable slots rather than as slot arithmetic, because the
+     obvious slot version has a trap in it: clearing the pill's own slot first
+     makes that slot look like one of AC 3.1's "ghost pills before the
+     receiver", so every drag to the right bounced the pill straight back to
+     where it started. The slot a pill is leaving is not a gap. */
+  function dropInto(pill, rec, fromSlot) {
+    const ms = movableSlots();
+    const k = ms.indexOf(fromSlot);
+    if (k < 0) return;
+
+    /* AC 3.1 — a slot before the receiver that was ALREADY empty wins. */
+    for (const i of ms) {
+      if (i >= rec.at) break;
+      if (i !== fromSlot && placed[i] === undefined) {
+        const seq = ms.map(j => placed[j]);
+        seq[k] = undefined;
+        seq[ms.indexOf(i)] = pill;
+        return applySequence(seq);
+      }
+    }
+
+    /* AC 3.2-3.4 — otherwise take it out and put it back at the receiver,
+       everything after it moving over one. */
+    const seq = ms.map(j => placed[j]);
+    let target = ms.filter(i => i < rec.at).length + (rec.half ? 1 : 0);
+    seq.splice(k, 1);
+    if (target > k) target -= 1;
+    target = Math.max(0, Math.min(target, seq.length));
+    seq.splice(target, 0, pill);
+    while (seq.length < ms.length) seq.push(undefined);
+    applySequence(seq.slice(0, ms.length));
+  }
+
+  function endDrag(x, y) {
+    if (!drag) return;
+    const { pill, from, ghost } = drag;
+    if (ghost) ghost.remove();
+    document.body.classList.remove('dragging');
+    for (const el of document.querySelectorAll('.recv-hot')) el.classList.remove('recv-hot');
+
+    if (drag.moved && pill) {
+      if (from === null) {
+        /* NJA-3161 AC 2: from the tray, always the end of the input. */
+        const at = lastFree();
+        if (at >= 0) { placed[at] = pill; marks[at] = null; submitted = false; }
+        renderSlot(); renderTray(); syncSay();
+        V.now(pill.label, { speaker: 'axel', lang: TL() });
+      } else {
+        const rec = receiverAt(x, y);
+        if (rec) dropInto(pill, rec, from);
+        else { renderSlot(); renderTray(); syncSay(); }
+      }
+    }
+    const moved = drag.moved;
+    drag = null;
+    /* Let the click that follows this pointerup know it was a drag. Cleared on
+       the next frame, after the click has been and gone. */
+    dragMoved = moved;
+    requestAnimationFrame(() => { dragMoved = false; });
+  }
+
+  function startDragMaybe(ev, el, from) {
+    if (inputLocked) return;
+    const pill = pillFromEl(el);
+    if (!pill) return;
+    if (from !== null && !movable(from)) return;     // a settled pill does not travel
+    drag = { pill, from, ghost: null, moved: false, x: ev.clientX, y: ev.clientY,
+             startX: ev.clientX, startY: ev.clientY, el };
+    drag.holdTimer = setTimeout(() => { if (drag && !drag.moved) beginDrag(); }, DRAG_HOLD_MS);
+    try { el.setPointerCapture(ev.pointerId); } catch {}
+  }
+
+  function beginDrag() {
+    if (!drag || drag.moved) return;
+    drag.moved = true;
+    drag.ghost = makeGhost(drag.el, drag.x, drag.y);
+    document.body.classList.add('dragging');
+    if (drag.from !== null) drag.el.classList.add('lifted');
+  }
+
+  function onPointerMove(ev) {
+    if (!drag) return;
+    drag.x = ev.clientX; drag.y = ev.clientY;
+    if (!drag.moved) {
+      const far = Math.abs(ev.clientX - drag.startX) > DRAG_SLOP_PX ||
+                  Math.abs(ev.clientY - drag.startY) > DRAG_SLOP_PX;
+      if (!far) return;
+      beginDrag();
+    }
+    ev.preventDefault();
+    moveGhost(drag.ghost, ev.clientX, ev.clientY);
+    /* Show where it would land, but only for an input drag — a tray drag has
+       one destination and highlighting a receiver would be a lie. */
+    for (const el of document.querySelectorAll('.recv-hot')) el.classList.remove('recv-hot');
+    if (drag.from !== null) {
+      const rec = receiverAt(ev.clientX, ev.clientY);
+      if (rec) {
+        const t = $('slot').querySelector('[data-slot="' + Math.min(rec.at, slotCount() - 1) + '"]');
+        if (t) t.classList.add('recv-hot');
+      }
+    }
+  }
+
+  function wireDrag() {
+    const onDown = ev => {
+      if (ev.button !== undefined && ev.button !== 0) return;
+      const chip = ev.target.closest && ev.target.closest('.chip');
+      if (!chip || chip.disabled) return;
+      const inSlot = chip.closest('#slot');
+      startDragMaybe(ev, chip, inSlot ? Number(chip.dataset.slot) : null);
+    };
+    $('tray').addEventListener('pointerdown', onDown);
+    $('slot').addEventListener('pointerdown', onDown);
+    document.addEventListener('pointermove', onPointerMove, { passive: false });
+    document.addEventListener('pointerup', ev => {
+      if (drag) clearTimeout(drag.holdTimer);
+      endDrag(ev.clientX, ev.clientY);
+    });
+    document.addEventListener('pointercancel', () => {
+      if (drag) { clearTimeout(drag.holdTimer); endDrag(-1, -1); }
+    });
   }
 
   /* ---------- the turn loop ---------- */
@@ -1085,15 +1352,19 @@
   function builtSentence() {
     let g = 0;
     return plan.cells
-      .map(c => (c.lead || '') + (c.gap ? (placed[g++] !== undefined ? placed[g - 1] : '…') : c.w) + (c.tail || ''))
-      .join(' ').replace(/\s+([,.!?])/g, '$1').replace(/([¿¡])\s+/g, '$1');
+      .map(c => {
+        if (!c.gap) return c.w;
+        const p = placed[g++];
+        return p === undefined ? '…' : p.label;
+      })
+      .join(' ');
   }
 
   /* ---------- the result banner (NJA-3158) ---------- */
   function showBanner(kind) {
     const el = $('banner');
     el.querySelector('span').textContent =
-      Q.uiStrings[kind === 'good' ? 'answer-pane-correct-text' : 'answer-pane-incorrect-text'];
+      t(kind === 'good' ? 'answer-pane-correct-text' : 'answer-pane-incorrect-text');
     el.className = kind;
   }
   function hideBanner() { $('banner').className = 'hidden'; }
@@ -1158,14 +1429,14 @@
       v = E.validate(placed, plan);
       marks = v.marks;
     } else {
-      const ok = E.norm(text) === E.norm(plan.answer.join(' '));
+      const ok = E.norm(text) === E.norm(plan.expectedAnswerPills.map(p => p.label).join(' '));
       v = { correct: ok };
       marks = new Array(slotCount()).fill(ok);
     }
     renderSlot();
 
     if (v.correct) {
-      say('me', spanishHTML(said), said);
+      say('me', spanishHTML(said), said, null, 'right');
       const before = E.overall(state, Q);
       const ph = E.applyCorrect(state, plan, { hinted });
       if (E.overall(state, Q) > before + 1e-6) pulseMastery();
@@ -1189,7 +1460,7 @@
        tries again until they get it right." Taken literally that never ends,
        so after a few tries the coach says it for them and the exchange moves
        on — uncredited, so the pair comes back. */
-    say('me', spanishHTML(said), said);
+    say('me', spanishHTML(said), said, null, 'wrong');
     const { attempts: n } = E.applyWrong(state, plan);
     attempts = n;
     hinted = true;
@@ -1219,7 +1490,7 @@
     /* "pal repeats phrase" — the SAME bubble, formatting and all. Re-posting
        the plain text ran the new-word badge back into the sentence as prose,
        so the repeat read worse than the line it was repeating. */
-    if (attempts === 1) say('axel', esc(Q.uiStrings['coach-retry']), Q.uiStrings['coach-retry']);
+    if (attempts === 1) say('axel', esc(t('coach-retry')), t('coach-retry'));
     say('axel', turnCoachHtml, turnAsk, turnCoachFrags);
 
     /* Wrong pills stay on screen, marked, and come out when tapped. Clearing
@@ -1354,9 +1625,12 @@
   }
 
   /* ---------- boot ---------- */
+  let dragWired = false;
+
   async function boot() {
     state = E.createState(Q);
     preloaded = false;
+    if (!dragWired) { wireDrag(); dragWired = true; }
     E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
     chatLog.length = 0;
     $('chat').innerHTML = '';
@@ -1431,7 +1705,7 @@
   window.__DEBUG = {
     plan: () => plan, pair: () => current, state: () => state,
     locked: () => inputLocked,
-    pills: () => E.pills(Q, state, plan),
+    pills: () => optionPills(),
     introduced: () => [...introducedWords()],
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,

@@ -30,14 +30,38 @@ window.ENGINE = (function () {
   const norm = s => fold(String(s || '').toLowerCase())
     .replace(/[^\p{L}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const words = s => String(s).trim().split(/\s+/).filter(Boolean);
-  /* A pill is a word, not a word plus the sentence's punctuation: "entrada?"
-     and "agua," are not things a child recognises. The marks are peeled off
-     here and put back when the sentence is rendered. */
+  /* NJA-3151 fixes the tokenisation: a pill is a whitespace-delimited token,
+     punctuation included. "coffee?", "Hello,", "¿Quieres" and "C'est" are each
+     one pill. We used to peel the marks off and print them separately, which
+     read better on screen but is not the contract the FE consumes, so the
+     ticket wins.
+
+     `split` survives for one job only: building decoys out of OTHER sentences,
+     where the source word's own punctuation is not wanted. */
   const LEAD = /^[¿¡"“(]+/, TAIL = /[.,;:!?"”)]+$/;
   function split(w) {
     const lead = (LEAD.exec(w) || [''])[0];
     const tail = (TAIL.exec(w) || [''])[0];
     return { lead, tail, word: w.slice(lead.length, w.length - tail.length) };
+  }
+
+  /* ---------- pill objects (NJA-3151) ----------
+     { id, label, value }. The LABEL is what the child reads. The VALUE is the
+     slug, and two pills with the same value are interchangeable — which is the
+     whole point of the ticket's "a dog eat dog world" case: which of the two
+     "dog" pills they tapped is not something anyone should be able to get
+     wrong. The ID is the value plus an increment, so the UI can key on
+     something unique without the two copies fighting over one identity. */
+  const slug = s => fold(String(s).toLowerCase()).replace(/[^\p{L}\p{N}]+/gu, '');
+
+  function makePills(labels) {
+    const seen = new Map();
+    return labels.map(label => {
+      const value = slug(label);
+      const n = (seen.get(value) || 0) + 1;
+      seen.set(value, n);
+      return { id: n === 1 ? value : value + '-' + n, label, value };
+    });
   }
 
   /* ---------- state ----------
@@ -207,17 +231,23 @@ window.ENGINE = (function () {
      language is scene-setting and stays on the page. On the turn everything
      has crossed, they build the whole sentence. */
   function gaps(pair, frameTarget, itemTarget) {
-    const sentence = words(expected(pair, frameTarget, itemTarget)).map(split);
-    const mark = cells => ({ answer: cells.filter(c => c.gap).map(c => c.w), cells });
+    const sentence = words(expected(pair, frameTarget, itemTarget));
+    const mark = cells => {
+      const answer = cells.filter(c => c.gap).map(c => c.w);
+      return { answer, cells, expectedAnswerPills: makePills(answer) };
+    };
 
     if (!pair.hasSlot) {
-      return mark(sentence.map(s => ({ w: s.word, lead: s.lead, tail: s.tail, gap: frameTarget })));
+      return mark(sentence.map(w => ({ w, gap: frameTarget })));
     }
+    /* The item's words are matched on their bare form, because the sentence
+       may have punctuation hanging off the last of them ("una entrada?") while
+       the item itself does not. */
     const itemWords = words(itemTarget ? pair.item.target : pair.item.native).map(x => split(x).word);
-    const at = indexOfRun(sentence.map(s => s.word), itemWords);
-    return mark(sentence.map((s, i) => {
+    const at = indexOfRun(sentence.map(x => split(x).word), itemWords);
+    return mark(sentence.map((w, i) => {
       const inItem = at >= 0 && i >= at && i < at + itemWords.length;
-      return { w: s.word, lead: s.lead, tail: s.tail, gap: inItem ? itemTarget : frameTarget };
+      return { w, gap: inItem ? itemTarget : frameTarget };
     }));
   }
 
@@ -244,6 +274,17 @@ window.ENGINE = (function () {
     if (!answer.length) return [];
 
     const taken = new Set(answer.map(norm));
+
+    /* The answer's punctuation, slot by slot. A decoy has to wear the same
+       marks as the pill it competes with, or the question mark on "entrada?"
+       is a tell — the child picks the one with the punctuation without reading
+       any of them. NJA-3151 defers decoys to a later ticket, so this shape is
+       ours; the tokenisation it borrows is the ticket's. */
+    const dress = i => {
+      const a = answer[Math.min(i, answer.length - 1)] || '';
+      const { lead, tail } = split(a);
+      return w => lead + w + tail;
+    };
     /* Decoys in the same language as the answer. A phrase said whole — no slot
        — is answered in whichever language the frame is in, so its wrong
        answers have to be too: offering "ticket" and "water" against "Perdona"
@@ -264,7 +305,8 @@ window.ENGINE = (function () {
           if (w && !taken.has(norm(w)) && !solos.some(x => norm(x) === norm(w))) solos.push(w);
         }
       }
-      return shuffle([...answer, ...solos.slice(0, count)], state);
+      const dressed = solos.slice(0, count).map((w, i) => dress(i + answer.length)(w));
+      return makePills(shuffle([...answer, ...dressed], state));
     }
 
     const invalid = [], valid = [], frames = [];
@@ -297,7 +339,8 @@ window.ENGINE = (function () {
       if (!decoys.some(d => norm(d) === norm(w))) decoys.push(w);
     }
 
-    return shuffle([...answer, ...decoys], state);
+    const dressed = decoys.map((w, i) => dress(i + answer.length)(w));
+    return makePills(shuffle([...answer, ...dressed], state));
   }
 
   /* "pills are displayed in a randomised order" — but the same order every
@@ -329,9 +372,12 @@ window.ENGINE = (function () {
      `placed` is slot-indexed and sparse. A hole is an unfilled slot, which is
      neither right nor wrong yet — it is not an answer. */
   function validate(placed, plan) {
-    const want = plan.answer || [];
+    const want = plan.expectedAnswerPills || makePills(plan.answer || []);
+    /* By value, never by id: the ticket's own example is a sentence with "dog"
+       in it twice, and "dog-2" in the first dog's slot is right. */
+    const val = p => (p && typeof p === 'object') ? p.value : slug(p);
     const marks = want.map((w, i) =>
-      placed[i] === undefined ? null : (norm(placed[i]) === norm(w)));
+      placed[i] === undefined || placed[i] === null ? null : (val(placed[i]) === w.value));
     const filled = marks.filter(m => m !== null).length;
     return {
       marks,
@@ -416,7 +462,7 @@ window.ENGINE = (function () {
   }
 
   return {
-    createState, pickNext, planTurn, pills, check, validate,
+    createState, pickNext, planTurn, pills, check, validate, makePills, slug,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     expected, gaps, tagOfPattern, norm, words,
