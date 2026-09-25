@@ -5,8 +5,13 @@
 :root{
   --paper:#FFFFFF;
   --ground:#F4F4F6;
-  --scene:#9F94F5;          /* behind the character, full bleed */
-  --scene-deep:#7E71E8;
+  /* Behind the character, full bleed — and everywhere the stage does not
+     quite reach: the strip above it, and the corners the answer dock's rounded
+     top leaves open. These were lavender, which was right when the scene was
+     lavender and reads as two stripes of a different app now the room is dark.
+     They are the room's own shadow. */
+  --scene:#120b12;
+  --scene-deep:#0b070c;
   --fill:#ECECEF;
   --fill-2:#F6F6F8;
   --line:#D7D7DE;
@@ -60,7 +65,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);ou
   flex:none;display:flex;gap:3px;padding:0;height:5px;background:var(--scene-deep);
   position:relative;z-index:6;
 }
-#rail .seg{flex:1;background:rgba(255,255,255,.28);overflow:hidden;}
+#rail .seg{flex:1;background:rgba(255,255,255,.16);overflow:hidden;}
 #rail .seg > i{display:block;height:100%;width:0%;background:var(--good);transition:width .45s cubic-bezier(.3,.8,.3,1);}
 #rail.gained .seg > i{background:var(--good);}
 #rail.gained::after{

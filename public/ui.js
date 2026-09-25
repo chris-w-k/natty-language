@@ -479,6 +479,22 @@
      highlighting, so a check that only asks "was this introduced?" lets the
      bartender say it. Item words are subtracted, since they belong to nobody
      in particular. */
+  /* Which words of a line are the child's own, said back at them. Uses the
+     same ambiguity test as everything else that decides whether a token is
+     really in the target language: "¿Me das" puts "me" on the learner-only
+     list, and without this the bartender could never again say "run that by
+     me" — an English word thrown away for colliding with a Spanish one. */
+  function stolenWords(text) {
+    const mine = learnerOnlyWords();
+    return String(text).split(/\s+/)
+      .filter(tok => {
+        const w = bare(tok);
+        if (!w || !mine.has(w)) return false;
+        return looksForeign(tok) || !AMBIGUOUS.has(w);
+      })
+      .map(bare);
+  }
+
   function learnerOnlyWords() {
     const out = new Set();
     const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
@@ -643,8 +659,7 @@
        so every other check passes it happily, and the bartender opens with
        "Alright, perdona, what can I do for ya?" — the customer's own words,
        in the server's mouth, used as filler. */
-    const mine = learnerOnlyWords();
-    const stolen = String(j.actorText).split(/\s+/).map(bare).filter(w => w && mine.has(w));
+    const stolen = stolenWords(j.actorText);
     if (stolen.length) { lastGenWhy = "said the child's own line: " + stolen.join(', '); return null; }
     /* And when the character is the one introducing a word, the word has to be
        in their mouth. */
@@ -1236,12 +1251,18 @@
 
   /* One shuffled list per turn, so a re-render does not move the pill under
      the child's thumb mid-reach. */
-  let optionCache = null, optionCacheKey = '';
+  let optionCache = null, optionCacheFor = null;
   function optionPills() {
-    const key = plan ? plan.pair.id + ':' + state.turn : '';
-    if (optionCache && optionCacheKey === key) return optionCache;
-    optionCacheKey = key;
-    optionCache = E.pills(Q, state, plan);
+    /* Keyed on the PLAN ITSELF, not on the pair and the turn. Those two agree
+       for most of a turn and come apart at the worst moment: applyCorrect
+       increments the turn, and the redraws that happen between then and the
+       next plan being built cache the old plan's pills under the new turn's
+       key. The next turn then finds a matching key and reuses them — so the
+       construction turn was offered the word turn's pills and the first word
+       of the sentence was missing from the tray. */
+    if (optionCache && optionCacheFor === plan) return optionCache;
+    optionCacheFor = plan;
+    optionCache = plan ? E.pills(Q, state, plan) : [];
     return optionCache;
   }
 
@@ -1251,7 +1272,6 @@
     marks[at] = null;
     submitted = false;
     SFX.play('place');
-    V.now(pill.label, { speaker: 'axel', lang: TL() });
     renderSlot(); renderTray(); syncSay();
   }
 
@@ -1419,7 +1439,6 @@
         if (at >= 0) { placed[at] = pill; marks[at] = null; submitted = false; }
         SFX.play('place');
         renderSlot(); renderTray(); syncSay();
-        V.now(pill.label, { speaker: 'axel', lang: TL() });
       } else {
         const rec = receiverAt(x, y);
         if (rec) dropInto(pill, rec, from);
@@ -1556,8 +1575,7 @@
 
     const allowed = introducedWords();
     if (auditLine(j.actorText, allowed).over > 0) return null;
-    const mine = learnerOnlyWords();
-    if (String(j.actorText).split(/\s+/).map(bare).some(w => w && mine.has(w))) return null;
+    if (stolenWords(j.actorText).length) return null;
     /* And it must not hand over the answer, which is the one thing a reaction
        to a wrong answer is most tempted to do. */
     if (E.norm(j.actorText).includes(E.norm(plan.expected))) return null;
@@ -1646,7 +1664,10 @@
       recordTurn(plan, turnLine, turnAsk, false);
       hideBanner();
       $('verdict').textContent = '— ' + COACH + ' says it for you: ' + plan.expected;
-      await V.say(plan.expected, { speaker: 'axel', lang: accentOf('axel') });
+      /* Written, not spoken. The bartender is the only one who talks out loud
+         without being asked; the coach's voice is available on a tap — the
+         hint sheet has a button, and every highlighted word reads itself. */
+      await new Promise(r => setTimeout(r, 900));
       E.applyMercy(state, plan);
       setTimeout(() => { busy = false; submitted = false; step(); }, 1200);
       return;

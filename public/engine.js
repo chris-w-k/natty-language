@@ -73,6 +73,51 @@ window.ENGINE = (function () {
              correct: 0, incorrect: 0, introduced: false, lastTurn: -99 };
   }
 
+  /* ---------- the syllabus ----------
+     One stage per pattern, in the order the content declares, each carrying
+     the FIRST vocabulary item that is valid for it. A stage is taught in two
+     steps:
+
+       step 0   the word on its own — the frame stays in the child's language
+                and the item is the gap. "Do you have ___" / una entrada.
+       step 1   the whole thing — frame and item both crossed over.
+
+     Both right and the stage is done; the next pattern begins. When the last
+     stage is done, so is the night.
+
+     This replaces picking by lowest mastery. That rule kept every one of the
+     55 pairs in play at once, so a child met nine constructions and nine nouns
+     interleaved and finished none of them. A syllabus is a line, not a pool. */
+  function syllabus(quest) {
+    const byPattern = new Map();
+    for (const p of quest.pairs) {
+      if (!byPattern.has(p.patternId)) byPattern.set(p.patternId, []);
+      byPattern.get(p.patternId).push(p);
+    }
+
+    /* Which item each pattern takes. "First matching" read literally gives
+       every stage the same noun — `ticket` is valid for all of them — and a
+       night of nine constructions all about a ticket teaches one word and
+       makes the word-step of every stage after the first a turn with nothing
+       new in it. So by default the list is WALKED: each stage takes the first
+       valid item nobody has had yet, and falls back to the first valid one
+       when the nouns run out. Set session.stageItems to 'first' in content for
+       the literal reading. */
+    const walk = (quest.session && quest.session.stageItems) !== 'first';
+    const used = new Set(), out = [];
+    for (const [, list] of byPattern) {
+      let pick = list[0];
+      if (walk) pick = list.find(p => p.itemId && !used.has(p.itemId)) || list[0];
+      if (pick.itemId) used.add(pick.itemId);
+      out.push(pick);
+    }
+    return out;
+  }
+
+  /* A no-slot pattern ("Perdona.") has no word to teach first, so it is one
+     step rather than two. */
+  const stepsIn = pair => (pair && pair.hasSlot ? 2 : 1);
+
   function createState(quest) {
     const patterns = {}, items = {};
     for (const p of quest.pairs) {
@@ -83,6 +128,12 @@ window.ENGINE = (function () {
       patterns, items,
       turn: 0, coins: 0, finished: false,
       attempts: 0,          // tries at the CURRENT pair, for the retry loop
+      stage: 0,             // which pattern of the syllabus we are on
+      step: 0,              // 0 = the word, 1 = the whole construction
+      earned: 0,            // quality banked so far, one point per step at best
+      /* kept so applying an outcome can move the syllabus on without every
+         caller having to remember to pass the quest back in */
+      quest,
       log: [], events: [],
     };
   }
@@ -131,49 +182,52 @@ window.ENGINE = (function () {
 
   /* What the UI shows as a percentage: how much of this scenario's vocabulary
      and constructions the child can now produce. */
+  /* Mastery is measured against what this go actually teaches, not against
+     every pair the content could generate. Scored over all 55 it could never
+     pass about a sixth however well the child did, which is a number that
+     tells them nothing. */
   function overall(state, quest) {
-    const rs = [...Object.values(state.patterns), ...Object.values(state.items)];
-    if (!rs.length) return 0;
-    return rs.reduce((s, r) => s + (mastered(r) ? 1 : progress(r) * 0.5), 0) / rs.length;
+    const stages = syllabus(quest);
+    if (!stages.length) return 0;
+    const total = stages.reduce((n, p) => n + stepsIn(p), 0);
+    return total ? Math.min(1, state.earned / total) : 0;
   }
 
-  /* Done when everything still reachable has been produced. An opener is
-     sayable on the first turn and never again, so leaving it in this check
-     would mean no session could ever end. */
+  /* What a finished step is worth. Distance through the syllabus is not
+     mastery: measured that way a child who was shown every single line after
+     four failed goes still finished on 100%, because they had reached the end.
+     Getting there is not the same as having learnt it. */
+  const STEP_SCORE = { clean: 1, hinted: 0.6, mercy: 0 };
+
+  /* Done when the syllabus runs out. */
   function sessionComplete(state, quest) {
-    return quest.pairs.every(p => p.opensOnly || pairMastered(state, p));
+    return state.stage >= syllabus(quest).length;
   }
 
   /* ---------- 3. pick the next pair ----------
-     "Picks next pattern + vocab pair - either lowest mastery OR first in list
-     if mastery matches." The list order is the order the content declares, so
-     a scenario author controls the opening of the session by ordering their
-     patterns. */
+     Whichever stage of the syllabus we are on. There is no ranking any more:
+     the order is the order the content declares, and nothing jumps it. */
   function pickNext(state, quest) {
     if (state.finished) return null;
+    const stages = syllabus(quest);
+    return stages[state.stage] || null;
+  }
 
-    const open = quest.pairs.filter((p, i) =>
-      !pairMastered(state, p) && (!p.opensOnly || state.turn === 0));
-    if (!open.length) return null;
+  /* Both steps of this stage are behind us. */
+  function stageDone(state, quest) {
+    const stages = syllabus(quest);
+    return state.stage >= stages.length;
+  }
 
-    const order = new Map(quest.pairs.map((p, i) => [p.id, i]));
-    const ranked = open.slice().sort((a, b) => {
-      const d = pairProgress(state, a) - pairProgress(state, b);
-      if (Math.abs(d) > 1e-9) return d;
-      return order.get(a.id) - order.get(b.id);
-    });
-
-    /* Not the same pair twice running while another is available — the retry
-       loop already repeats a pair the child got wrong, and repeating one they
-       got RIGHT is just the same turn again. */
-    const top = ranked[0];
-    if (state.items && ranked.length > 1) {
-      const rec = recOf(state, top);
-      const justDone = rec.pattern.lastTurn === state.turn - 1 &&
-                       (!rec.item || rec.item.lastTurn === state.turn - 1);
-      if (justDone) return ranked[1];
-    }
-    return top;
+  /* Move on: the next step, or the next pattern when the stage is finished.
+     Called for a right answer and for a mercy escape alike — a syllabus that
+     only advances on success has no exit for a child who cannot get one word
+     out, which is the failure the retry loop already had. */
+  function advance(state, quest) {
+    const pair = pickNext(state, quest);
+    if (!pair) return;
+    state.step += 1;
+    if (state.step >= stepsIn(pair)) { state.step = 0; state.stage += 1; }
   }
 
   /* ---------- 4. which half flips to the target language ----------
@@ -189,24 +243,24 @@ window.ENGINE = (function () {
   function planTurn(state, pair) {
     const { pattern, item } = recOf(state, pair);
 
-    let introducing = null;                       // the ONE new thing this turn
-    if (!pattern.introduced && (!item || !item.introduced)) {
-      /* Nothing crossed yet. "pick lowest mastery, else prefer vocab" — a word
-         is the gentler thing to meet first, and it is what the character can
-         hand over naturally in conversation. */
-      if (!item) introducing = 'pattern';
-      else introducing = progress(pattern) < progress(item) ? 'pattern' : 'item';
-    } else if (item && !item.introduced) {
-      introducing = 'item';
-    } else if (!pattern.introduced) {
-      introducing = 'pattern';
-    }
+    /* The step decides it now, not the mastery reading. Step 0 puts the word
+       in the target language inside a frame the child already understands;
+       step 1 crosses the frame over too. A pattern with no slot has only the
+       second kind of turn. */
+    const twoStep = stepsIn(pair) === 2;
+    const frameTarget = twoStep ? state.step === 1 : true;
+    const itemTarget  = item ? true : false;
 
-    const frameTarget = pattern.introduced || introducing === 'pattern';
-    const itemTarget  = !item ? false : (item.introduced || introducing === 'item');
+    /* And one new thing per exchange, which falls out of the same two steps:
+       the word arrives with the word turn, the construction with the
+       construction turn. The character hands over vocabulary, the coach hands
+       over constructions (NJA-3136). */
+    let introducing = null;
+    if (item && !item.introduced && (!twoStep || state.step === 0)) introducing = 'item';
+    else if (!pattern.introduced && frameTarget) introducing = 'pattern';
 
     return {
-      pair, introducing,
+      pair, introducing, stage: state.stage, step: state.step,
       // who says it first: vocab comes from the character, patterns from the coach
       introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null,
       frameTarget, itemTarget,
@@ -421,9 +475,12 @@ window.ENGINE = (function () {
       if (hinted) r.timesPrompted += 1; else r.timesUnprompted += 1;
     }
     state.coins += hinted ? 5 : 10;
+    state.earned += hinted ? STEP_SCORE.hinted : STEP_SCORE.clean;
     state.turn += 1;
     state.attempts = 0;
-    track(state, 'answer', { pair: plan.pair.id, correct: true, hinted });
+    if (state.quest) advance(state, state.quest);
+    track(state, 'answer', { pair: plan.pair.id, correct: true, hinted,
+                             stage: state.stage, step: state.step });
     return { pattern: phase(pattern), item: item ? phase(item) : null };
   }
 
@@ -445,12 +502,17 @@ window.ENGINE = (function () {
      coach says it for them and the turn moves on — the item is not credited,
      so it comes back. */
   const mercyDue = state => state.attempts >= S.mercyAfterFailedTurns;
+  /* Mercy moves the syllabus on as well. A line the child cannot produce after
+     four goes must not be the end of the night — they are shown it, it is not
+     credited, and the go continues. */
   function applyMercy(state, plan) {
     const { pattern, item } = recOf(state, plan.pair);
     for (const r of [pattern, item]) { if (r) r.lastTurn = state.turn; }
     state.turn += 1;
     state.attempts = 0;
-    track(state, 'mercy', { pair: plan.pair.id });
+    state.earned += STEP_SCORE.mercy;
+    if (state.quest) advance(state, state.quest);
+    track(state, 'mercy', { pair: plan.pair.id, stage: state.stage, step: state.step });
   }
 
   /* ---------- analytics ----------
@@ -463,6 +525,7 @@ window.ENGINE = (function () {
 
   return {
     createState, pickNext, planTurn, pills, check, validate, makePills, slug,
+    syllabus, stepsIn, advance, stageDone,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     expected, gaps, tagOfPattern, norm, words,

@@ -310,6 +310,11 @@ Return JSON only.`,
     masteryBar: 0.8,       // correct / (correct + incorrect) to count as produced
     minExposures: 2,       // ...but not before this many tries, or 1/1 = mastered
     mercyAfterFailedTurns: 4,
+    /* 'walk' (default): each pattern of the syllabus takes the first noun
+       nobody has had yet, so every stage has a new word to teach.
+       'first': every pattern takes its first valid noun, which is the same
+       noun for most of them. */
+    stageItems: 'walk',
   };
 
   /* ---------- expansion ----------
