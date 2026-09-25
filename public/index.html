@@ -21,6 +21,17 @@
     <!-- the character is the background: full bleed, the chat sits over them -->
     <div class="layer" id="layer-bg">
       <img class="bgimg" alt="" hidden>
+      <!-- The room, in CSS. Keyed off the activity's `background` so another
+           scenario brings its own; when the painted art lands (NJA-3190) the
+           whole .scene block is replaced by one .bgimg. -->
+      <div class="scene" aria-hidden="true">
+        <div class="s-wall"></div>
+        <div class="s-shelf"></div>
+        <div class="s-bottles"></div>
+        <div class="s-lamps"></div>
+        <div class="s-counter"></div>
+        <div class="s-haze"></div>
+      </div>
       <span class="bglabel"></span>
     </div>
 

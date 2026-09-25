@@ -173,6 +173,10 @@
   });
 
   function mountBackground(el, key) {
+    /* The room is chosen by data attribute rather than by a class list, so the
+       CSS reads as "this is what venue-bar looks like" and a scenario with a
+       background nobody has drawn yet simply shows none. */
+    el.dataset.bg = key;
     el.querySelector('.bglabel').textContent = key.replace(/-/g, ' ');
     // el.querySelector('.bgimg').src = ASSETS.backgrounds[key];
   }
