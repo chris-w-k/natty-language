@@ -125,6 +125,16 @@ window.QUEST = (function () {
     },
     /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent". */
     prompt: 'You are the one person behind the counter at a music venue — you sell the tickets, the drinks and the merch. A kid has come up to you. You are patient by nature and you have seen it all, but a queue is building and you are easily annoyed when you cannot make out what someone is asking for — you sigh, you lean in, you ask again. You are never annoyed AT the child, only at the hold-up, and you soften the moment they get it right.',
+    /* The three screens before the game. Copy lives here rather than in the
+       markup so it travels with the scenario — a different night out brings
+       its own title, its own pep talk and its own way of getting there. */
+    intro: {
+      title: 'GOING TO A GIG',
+      sub: 'Learn the Spanish to get in, get a drink and tell someone you love the song.',
+      coach: "Tonight's gonna be unreal — but the band's Spanish, the bar's Spanish, and the fella on the door doesn't do English. Stick with me. I'll tell you what to say, you just say it.",
+      loading: 'Getting a taxi to the club…',
+      tap: 'Tap to continue',
+    },
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
     patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
                'i-dont-want', 'there-is-no', 'do-you-like', 'i-like', 'thank-you'],

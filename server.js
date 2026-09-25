@@ -470,7 +470,10 @@ async function speak(text, speaker) {
 /* ---------- static ---------- */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                 '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-                '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+                '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
+                /* the sound beds. Served as octet-stream they play in Chrome
+                   and not in Safari, which is the worst way for it to fail. */
+                '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4' };
 
 function serveStatic(req, res) {
   let rel = decodeURIComponent((req.url || '/').split('?')[0]);

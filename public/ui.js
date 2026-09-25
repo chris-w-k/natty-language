@@ -203,17 +203,117 @@
      Also the audio gesture: iOS will not play a sound until the user has
      touched something, so START doubles as the unlock and the child never
      meets a silent first turn. */
-  function titleScreen() {
+  /* ---------- the intro ----------
+     Title, Axel, taxi, then the night itself. Three panels on one backdrop,
+     and one continuous piece of audio across them: the street bed comes up on
+     the title, carries through Axel, and crosses over to the room tone during
+     the taxi ride — which is also, quietly, where the server gets probed, so
+     the five seconds is doing something real rather than only counting. */
+  const LOAD_MS = 5000;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  function tapAnywhere(el) {
     return new Promise(resolve => {
-      const sheet = $('title');
-      $('title-name').textContent = Q.title || 'Axel goes to a gig';
-      sheet.classList.remove('hidden');
-      $('title-go').addEventListener('click', () => {
-        V.unlock();
-        sheet.classList.add('hidden');
-        resolve();
-      }, { once: true });
+      const go = () => { SFX.play('tap'); el.removeEventListener('pointerdown', go); resolve(); };
+      el.addEventListener('pointerdown', go);
     });
+  }
+
+  /* Axel on the intro gets his OWN lottie rather than the game's rig. The
+     game's mountCharacter expects the scene's label elements, keeps one rig
+     per character in a shared map and crops to the top half — all correct in
+     the venue and all wrong on a title card, where he is the whole picture and
+     nothing else is on stage. */
+  let introRig = null;
+  function introAxel() {
+    const host = $('intro-axel');
+    if (introRig || typeof window.lottie === 'undefined') return;
+    host.innerHTML = '';
+    const root = document.createElement('div');
+    root.className = 'rig';
+    host.appendChild(root);
+    try {
+      introRig = window.lottie.loadAnimation({
+        container: root, renderer: 'svg', loop: true, autoplay: true,
+        path: ANIM.axel.idle,
+        rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
+      });
+    } catch { introRig = null; }
+  }
+  function dropIntroAxel() {
+    try { if (introRig) introRig.destroy(); } catch {}
+    introRig = null;
+    $('intro-axel').innerHTML = '';
+  }
+
+  function showPanel(id) {
+    for (const p of document.querySelectorAll('#intro .intro-panel')) p.classList.add('hidden');
+    $(id).classList.remove('hidden');
+  }
+
+  /* Returns whatever probeServer() resolved to, because boot needs it and the
+     taxi ride is the natural place to have found out. */
+  async function intro() {
+    const el = $('intro');
+    const copy = (Q.activity.intro || {});
+
+    /* ?intro=0 goes straight to the night. Five seconds of taxi is right once
+       and tiresome on the fortieth run, so anyone working on the game itself —
+       or a headless test that is not about the intro — can skip it. The room
+       tone still starts, because that is part of the game rather than part of
+       the intro. */
+    if (/[?&]intro=0/.test(location.search)) {
+      const ok = await probeServer();
+      SFX.bed('room', 'audio/loading.mp3', { volume: 0.12, fade: 1200 });
+      return ok;
+    }
+    $('intro-title-text').textContent = copy.title || Q.title || '';
+    $('intro-sub').textContent = copy.sub || '';
+    $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
+    $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
+    $('intro-load-text').textContent = copy.loading || '';
+    $('intro-bubble').textContent = copy.coach || '';
+
+    el.classList.remove('hidden');
+    showPanel('intro-title');
+
+    /* The gesture that starts the audio is the same tap that opens the title,
+       so the bed is asked for after it rather than before — a bed requested
+       before any gesture is a paused element and a silent first screen. */
+    await tapAnywhere(el);
+    V.unlock(); SFX.unlock();
+    SFX.bed('street', 'audio/title.mp3', { volume: 0.55, fade: 1400 });
+
+    showPanel('intro-coach');
+    introAxel();
+    /* Axel says his piece out loud, but nothing waits for it: the child can
+       tap straight through, and V.stop() below cuts him off mid-sentence the
+       way a real person gets cut off. */
+    V.say(copy.coach || '', { speaker: 'axel', lang: accentOf('axel') });
+    await tapAnywhere(el);
+    V.stop();
+
+    showPanel('intro-loading');
+    const probe = probeServer();          // the real work behind the fake wait
+
+    /* The cross: the street fades away over the whole ride, the room fades up
+       over the same five seconds, so there is no moment of silence between
+       them and no moment where both are loud. */
+    SFX.level('street', 0, LOAD_MS);
+    SFX.bed('room', 'audio/loading.mp3', { volume: 0.5, fade: LOAD_MS });
+
+    const fill = $('intro-bar-fill');
+    fill.style.transition = 'width ' + LOAD_MS + 'ms linear';
+    requestAnimationFrame(() => { fill.style.width = '100%'; });
+
+    const [, ok] = await Promise.all([wait(LOAD_MS), probe]);
+    SFX.fadeOut('street', 300);
+    /* ...and the room tone stays, well under the talking. */
+    SFX.level('room', 0.12, 1800);
+
+    el.classList.add('hidden');
+    dropIntroAxel();
+    return ok;
   }
 
   /* ---------- access code ----------
@@ -1040,6 +1140,7 @@
             placed[i] = undefined;
             marks[i] = null;
             submitted = false;           // AC 4.4
+            SFX.play('lift');
             renderSlot(); renderTray(); syncSay();
           });
         } else {
@@ -1097,6 +1198,7 @@
     placed[at] = pill;
     marks[at] = null;
     submitted = false;
+    SFX.play('place');
     V.now(pill.label, { speaker: 'axel', lang: TL() });
     renderSlot(); renderTray(); syncSay();
   }
@@ -1263,6 +1365,7 @@
         /* NJA-3161 AC 2: from the tray, always the end of the input. */
         const at = lastFree();
         if (at >= 0) { placed[at] = pill; marks[at] = null; submitted = false; }
+        SFX.play('place');
         renderSlot(); renderTray(); syncSay();
         V.now(pill.label, { speaker: 'axel', lang: TL() });
       } else {
@@ -1452,6 +1555,7 @@
       const ph = E.applyCorrect(state, plan, { hinted });
       if (E.overall(state, Q) > before + 1e-6) pulseMastery();
       showBanner('good');
+      SFX.play('right');
       $('verdict').textContent = '';
       $('t-delta').textContent = plan.pair.id + ' · pattern ' + ph.pattern +
         (ph.item ? ' · word ' + ph.item : '');
@@ -1497,6 +1601,7 @@
     }
 
     showBanner('bad');
+    SFX.play('wrong');
     $('verdict').textContent = '';
     $('verdict').className = 'bad';
 
@@ -1658,9 +1763,8 @@
     hideGloss();
     $('chat-full').classList.add('hidden');
     $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
-    preloadRigs();                    // loads behind the title screen
-    await titleScreen();
-    if (!(await probeServer())) {   // locked: ask for the code, then re-probe
+    preloadRigs();                    // loads behind the intro
+    if (!(await intro())) {         // locked: ask for the code, then re-probe
       await unlockGate();
       await probeServer();
     }
@@ -1668,7 +1772,7 @@
     step();
   }
 
-  $('btn-say').addEventListener('click', () => submit(builtSentence(), 'chips'));
+  $('btn-say').addEventListener('click', () => { SFX.play('submit'); submit(builtSentence(), 'chips'); });
   /* The bin clears what is still in play. A pill already judged right is not
      in play — it is part of the sentence now — so it stays. */
   $('btn-clear').addEventListener('click', () => {
@@ -1695,14 +1799,30 @@
   function syncSound() {
     $('sound-label').textContent = V.isEnabled() ? 'SOUND ON' : 'SOUND OFF';
   }
-  $('btn-sound').addEventListener('click', () => { V.setEnabled(!V.isEnabled()); syncSound(); });
+  $('btn-sound').addEventListener('click', () => {
+    const on = !V.isEnabled();
+    V.setEnabled(on);
+    SFX.setEnabled(on);    // one switch: speech, beds and taps go together
+    syncSound();
+  });
   syncSound();
 
   // diagnostics are not part of the game; ?debug=1 brings them back
   if (/[?&]debug=1/.test(location.search)) $('test-strip').classList.remove('hidden');
 
   // iOS will not play audio until a gesture; the first touch anywhere opens it
-  document.addEventListener('pointerdown', () => V.unlock(), { once: true });
+  document.addEventListener('pointerdown', () => { V.unlock(); SFX.unlock(); }, { once: true });
+
+  /* Tap sounds, delegated once rather than wired per control — a button added
+     later gets its click for free, and nothing has to remember to ask.
+     Pills are handled where they are placed and lifted, because those are two
+     different sounds and only the handler knows which just happened. */
+  document.addEventListener('pointerdown', ev => {
+    const t = ev.target.closest && ev.target.closest('.btn, .w, .intro-panel');
+    if (!t || t.disabled) return;
+    if (t.id === 'btn-say') return;            // submit has its own
+    SFX.play('tap');
+  }, true);
 
   /* The on-screen character's mouth moves for exactly as long as the line
      plays — server voice or browser fallback, both resolve through the same

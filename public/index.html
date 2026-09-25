@@ -135,6 +135,49 @@
   </div>
 
   <!-- title -->
+  <!-- ---------- intro: title, Axel, the taxi ----------
+       Three panels on one night-street backdrop, so the scene does not
+       reload between taps. The art is CSS: there is no street asset yet, and
+       a gradient with some silhouettes reads as "outside, late" well enough
+       to test the flow. Drop the designer's background in as .intro-art. -->
+  <div class="intro hidden" id="intro">
+    <div class="intro-art" aria-hidden="true">
+      <div class="intro-sky"></div>
+      <div class="intro-moon"></div>
+      <div class="intro-city"></div>
+      <div class="intro-road"></div>
+    </div>
+
+    <section class="intro-panel" id="intro-title">
+      <div class="intro-copy">
+        <h1 id="intro-title-text">GOING TO A GIG</h1>
+        <p id="intro-sub"></p>
+      </div>
+      <span class="intro-tap" id="intro-tap-1"></span>
+    </section>
+
+    <section class="intro-panel hidden" id="intro-coach">
+      <div class="intro-bubble" id="intro-bubble"></div>
+      <div class="intro-axel" id="intro-axel"></div>
+      <span class="intro-tap" id="intro-tap-2"></span>
+    </section>
+
+    <section class="intro-panel hidden" id="intro-loading">
+      <div class="intro-load">
+        <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 17h14"></path>
+          <path d="M3 17v-3.2a2 2 0 0 1 .5-1.3L6 9.2A2 2 0 0 1 7.6 8.5h8.8a2 2 0 0 1 1.6.7l2.5 3.3a2 2 0 0 1 .5 1.3V17"></path>
+          <path d="M9 8.5V6.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.9"></path>
+          <circle cx="7.5" cy="17.5" r="1.8"></circle>
+          <circle cx="16.5" cy="17.5" r="1.8"></circle>
+        </svg>
+        <span id="intro-load-text"></span>
+        <div class="intro-bar"><i id="intro-bar-fill"></i></div>
+      </div>
+    </section>
+  </div>
+
   <div class="sheet hidden" id="title">
     <div class="body" id="title-body">
       <span class="eyebrow">Novakid · NovaPals</span>
@@ -206,6 +249,7 @@
 
 <script src="vendor/lottie_light.min.js"></script>
 <script src="fragments.js"></script>
+<script src="audio.js"></script>
 <script src="content.js"></script>
 <script src="voice.js"></script>
 <script src="engine.js"></script>

@@ -475,3 +475,132 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
 /* where it would land */
 #slot .recv-hot{box-shadow:0 0 0 2px var(--accent);border-radius:var(--r-pill);}
 #slot .gap.recv-hot{background:color-mix(in srgb, var(--accent) 18%, transparent);}
+
+/* ---------- the intro ----------
+   Title, Axel, taxi. One backdrop behind three panels so tapping through does
+   not restage the scene. The art is CSS because there is no street asset yet
+   (NJA-3190); everything below .intro-art can be replaced by one image. */
+.intro{position:absolute;inset:0;z-index:45;overflow:hidden;color:#fff;}
+.intro.hidden{display:none;}
+
+.intro-art{position:absolute;inset:0;}
+.intro-sky{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(120% 80% at 50% 8%, #3b2a6b 0%, #241a4a 42%, #140f2c 72%, #0b0a1c 100%);
+}
+/* a couple of stars and a streetlamp glow, cheap enough to be free */
+.intro-sky::after{
+  content:'';position:absolute;inset:0;opacity:.5;
+  background:
+    radial-gradient(1.6px 1.6px at 18% 14%, #fff 50%, transparent 52%),
+    radial-gradient(1.4px 1.4px at 72% 9%,  #fff 50%, transparent 52%),
+    radial-gradient(1.2px 1.2px at 41% 22%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 87% 26%, #fff 50%, transparent 52%),
+    radial-gradient(1.2px 1.2px at 8% 31%,  #fff 50%, transparent 52%);
+}
+.intro-moon{
+  position:absolute;top:7%;right:14%;width:54px;height:54px;border-radius:50%;
+  background:radial-gradient(circle at 36% 34%, #fff6d8, #ffd98a 60%, #f6c463 100%);
+  box-shadow:0 0 44px 16px rgba(255,214,130,.20);
+}
+/* a skyline, drawn as one repeating step so it reads as buildings not stripes */
+.intro-city{
+  position:absolute;left:-2%;right:-2%;bottom:22%;height:38%;
+  background:
+    linear-gradient(#1b1440 0 0) 2% 100%/13% 74% no-repeat,
+    linear-gradient(#150f36 0 0) 16% 100%/10% 58% no-repeat,
+    linear-gradient(#211856 0 0) 27% 100%/16% 88% no-repeat,
+    linear-gradient(#150f36 0 0) 44% 100%/11% 64% no-repeat,
+    linear-gradient(#1b1440 0 0) 56% 100%/14% 80% no-repeat,
+    linear-gradient(#211856 0 0) 71% 100%/12% 54% no-repeat,
+    linear-gradient(#150f36 0 0) 84% 100%/15% 72% no-repeat;
+}
+/* lit windows */
+.intro-city::after{
+  content:'';position:absolute;inset:0;opacity:.85;
+  background:
+    radial-gradient(2.6px 3.4px at 5% 62%,  #ffcf6b 50%, transparent 52%),
+    radial-gradient(2.6px 3.4px at 31% 40%, #ffcf6b 50%, transparent 52%),
+    radial-gradient(2.6px 3.4px at 35% 66%, #ffd98a 50%, transparent 52%),
+    radial-gradient(2.6px 3.4px at 60% 48%, #ffcf6b 50%, transparent 52%),
+    radial-gradient(2.6px 3.4px at 89% 58%, #ffd98a 50%, transparent 52%);
+}
+.intro-road{
+  position:absolute;left:0;right:0;bottom:0;height:22%;
+  background:linear-gradient(#0d0a20, #08061a);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+}
+.intro-art::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg, rgba(8,6,26,0) 34%, rgba(8,6,26,.55) 72%, rgba(8,6,26,.86) 100%);
+}
+.intro-road::after{
+  content:'';position:absolute;left:0;right:0;top:44%;height:3px;opacity:.35;
+  background:repeating-linear-gradient(90deg,#fff 0 22px,transparent 22px 46px);
+}
+
+/* the panels themselves */
+.intro-panel{
+  position:absolute;inset:0;z-index:2;
+  display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  padding:0 24px calc(26px + env(safe-area-inset-bottom,0px));
+  text-align:center;animation:intro-in .34s ease both;
+}
+.intro-panel.hidden{display:none;}
+/* A dark foot to the panel so the tap hint reads over whoever is standing in
+   front of it. Above Axel, below the text. */
+.intro-panel::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:22%;z-index:3;
+  pointer-events:none;
+  background:linear-gradient(180deg, rgba(8,6,26,0), rgba(8,6,26,.8) 62%, rgba(8,6,26,.95));
+}
+@keyframes intro-in{from{opacity:0}to{opacity:1}}
+
+.intro-copy{margin-bottom:auto;margin-top:auto;}
+.intro-copy h1{
+  margin:0 0 10px;font-size:40px;line-height:1.02;font-weight:800;
+  letter-spacing:.005em;text-transform:uppercase;
+  text-shadow:0 3px 14px rgba(0,0,0,.45);
+}
+.intro-copy p{margin:0;font-size:14.5px;line-height:1.45;color:rgba(255,255,255,.82);max-width:19em;}
+
+.intro-tap{
+  position:relative;z-index:4;   /* above Axel, who is cropped past the edge */
+  font-size:13.5px;font-weight:600;color:rgba(255,255,255,.9);
+  text-shadow:0 2px 10px rgba(8,6,26,.9);
+  padding:10px 4px;animation:intro-pulse 1.9s ease-in-out infinite;
+}
+@keyframes intro-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+
+/* Axel, mounted as the same lottie rig the game uses */
+.intro-axel{
+  /* Big, and cropped at the bottom by the panel — the design has him from
+     about the waist up, filling the frame. `slice` fills the box and lets the
+     overflow go, anchored bottom-centre, which is the same crop the scene
+     uses on the bartender. */
+  position:absolute;left:50%;bottom:-6%;transform:translateX(-50%);
+  width:104%;height:72%;pointer-events:none;z-index:2;
+}
+.intro-axel .rig{width:100%;height:100%;}
+.intro-bubble{
+  align-self:flex-start;margin:11vh 0 auto;max-width:19em;
+  background:#fff;color:var(--ink);border-radius:14px;padding:11px 13px;
+  font-size:13.5px;line-height:1.42;text-align:left;
+  box-shadow:0 10px 26px rgba(0,0,0,.34);position:relative;z-index:3;
+}
+.intro-bubble::after{
+  content:'';position:absolute;left:26px;bottom:-9px;width:0;height:0;
+  border:10px solid transparent;border-top-color:#fff;border-bottom:0;
+}
+
+/* the taxi */
+.intro-load{
+  margin:auto;display:flex;flex-direction:column;align-items:center;gap:14px;
+  color:#fff;
+}
+.intro-load span{font-size:14.5px;font-weight:600;letter-spacing:.01em;}
+.intro-load svg{animation:taxi-bob 1.5s ease-in-out infinite;}
+@keyframes taxi-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.intro-bar{width:168px;height:4px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden;}
+.intro-bar i{display:block;height:100%;width:0;border-radius:2px;background:#fff;}
