@@ -1426,7 +1426,11 @@
     $('btn-say').disabled = true;
 
     const said = builtSentence();
-    if (mode === 'chips') V.now(said, { speaker: 'learner', lang: accentOf('learner') });
+    /* The child's own sentence is not read back to them. It is a fresh line
+       every time, so it is never cached — a Gemini TTS call, a download and a
+       clip to sit through, all to hear words they just chose themselves, and
+       all of it in front of the verdict they are actually waiting for. Tapping
+       a pill still plays that word, which is the part that teaches. */
 
     /* The judgement. Per pill for the pane, and the same booleans collapse to
        the verdict for the engine — one source, so the banner and the mastery
