@@ -42,7 +42,11 @@ const VOICES = {
    voice without SSML. One per speaker, so Axel coaches and the bouncer
    does not. */
 const STYLES = {
-  axel:      process.env.STYLE_AXEL      || 'Say in a cheeky British rockstar voice — quick, cocky, full of attitude, like an older kid who has played a hundred gigs and is showing you the ropes. Keep the same English accent on any Spanish words, and stay clear enough to copy:',
+  /* Axel's delivery, restored to what it was before the personality pass. That
+     pass belonged in the CONTENT prompt — how he WRITES — and rewriting this
+     one alongside it changed how he SOUNDS, which nobody asked for. The two
+     are different knobs: content decides his words, this decides his voice. */
+  axel:      process.env.STYLE_AXEL      || 'Say in a warm, cocky, laddish teenage-punk voice, like a big brother coaching a kid through it — encouraging, never babyish, and clear enough to copy:',
   bouncer:   process.env.STYLE_BOUNCER   || 'Say with a Spanish accent, in a deep, gruff, slightly bored doorman voice, unhurried and a little intimidating but not unkind. Keep the Spanish accent even on the English words:',
   /* The accent is pinned to the PERSON, not to the sentence. Without saying so
      the model reads an English line in English and a Spanish line in Spanish,

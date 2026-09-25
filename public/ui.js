@@ -232,16 +232,45 @@
     const root = document.createElement('div');
     root.className = 'rig';
     host.appendChild(root);
+    /* Both clips, the way the scene builds a character: his mouth has to move
+       while he talks, and one idle loop cannot do that. They sit on top of
+       each other and only one is ever shown. */
+    const clips = {};
     try {
-      introRig = window.lottie.loadAnimation({
-        container: root, renderer: 'svg', loop: true, autoplay: true,
-        path: ANIM.axel.idle,
-        rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
-      });
+      for (const key of ['idle', 'speak']) {
+        const box = document.createElement('div');
+        box.className = 'clip';
+        root.appendChild(box);
+        clips[key] = window.lottie.loadAnimation({
+          container: box, renderer: 'svg', loop: true, autoplay: false,
+          path: ANIM.axel[key],
+          rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
+        });
+        clips[key].el = box;
+      }
+      introRig = { root, clips };
+      introMouth(false);
     } catch { introRig = null; }
   }
+
+  /* Swap the clip. Settling back to idle is lazy for the same reason it is in
+     the scene: two lines back to back stop and start in the same tick, and
+     dropping to idle for one frame between them reads as a twitch. */
+  let introMouthTimer = null;
+  function introMouth(speaking) {
+    if (!introRig) return;
+    const want = speaking ? 'speak' : 'idle';
+    for (const key of ['idle', 'speak']) {
+      const c = introRig.clips[key];
+      if (!c) continue;
+      c.el.hidden = key !== want;
+      if (key === want) c.play(); else c.pause();
+    }
+  }
+
   function dropIntroAxel() {
-    try { if (introRig) introRig.destroy(); } catch {}
+    clearTimeout(introMouthTimer);
+    try { for (const k of ['idle', 'speak']) introRig && introRig.clips[k] && introRig.clips[k].destroy(); } catch {}
     introRig = null;
     $('intro-axel').innerHTML = '';
   }
@@ -277,30 +306,49 @@
     el.classList.remove('hidden');
     showPanel('intro-title');
 
+    /* The street bed starts with the title card, not after the tap. Autoplay
+       rules may refuse it before any gesture — SFX.unlock() below retries every
+       bed on the first pointerdown — but where the browser allows it the music
+       is already there when the title appears, which is the point of a title
+       card. */
+    SFX.bed('street', 'audio/title.mp3', { volume: 0.55, fade: 1400 });
+
+    /* The probe starts NOW, under the title card, not on the taxi ride. Until
+       it answers, VOICE has not been told the server is there and falls back
+       to the browser's own synthesis — so Axel's first line, the one that
+       introduces him, came out in a stock system voice instead of his. The
+       title screen is a second or two of human time; that is where this
+       belongs. */
+    const probe = probeServer();
+
     /* The gesture that starts the audio is the same tap that opens the title,
        so the bed is asked for after it rather than before — a bed requested
        before any gesture is a paused element and a silent first screen. */
     await tapAnywhere(el);
     V.unlock(); SFX.unlock();
-    SFX.bed('street', 'audio/title.mp3', { volume: 0.55, fade: 1400 });
 
     showPanel('intro-coach');
+    /* The room tone begins its climb here, under Axel, rather than waiting for
+       the taxi. By the time the ride starts it is already present, so the
+       cross on the loading screen finishes a fade rather than starting one —
+       the club is somewhere you are arriving at, not somewhere that switches
+       on when you get there. */
+    SFX.bed('room', 'audio/loading.mp3', { volume: 0.30, fade: 6000 });
     introAxel();
-    /* Axel says his piece out loud, but nothing waits for it: the child can
-       tap straight through, and V.stop() below cuts him off mid-sentence the
-       way a real person gets cut off. */
-    V.say(copy.coach || '', { speaker: 'axel', lang: accentOf('axel') });
+    /* ...and his line waits for the probe, so it is his voice that says it.
+       Nothing else waits: the child can tap straight through, and V.stop()
+       below cuts him off mid-sentence the way a real person gets cut off. */
+    probe.then(() => V.say(copy.coach || '', { speaker: 'axel', lang: accentOf('axel') }));
     await tapAnywhere(el);
     V.stop();
 
     showPanel('intro-loading');
-    const probe = probeServer();          // the real work behind the fake wait
 
-    /* The cross: the street fades away over the whole ride, the room fades up
-       over the same five seconds, so there is no moment of silence between
-       them and no moment where both are loud. */
+    /* The cross: the street fades away over the whole ride while the room,
+       already up from Axel's screen, comes the rest of the way. No moment of
+       silence between them, and no moment where both are loud. */
     SFX.level('street', 0, LOAD_MS);
-    SFX.bed('room', 'audio/loading.mp3', { volume: 0.5, fade: LOAD_MS });
+    SFX.level('room', 0.5, LOAD_MS);
 
     const fill = $('intro-bar-fill');
     fill.style.transition = 'width ' + LOAD_MS + 'ms linear';
@@ -1830,6 +1878,16 @@
      learner echo moves nobody. No attempt to match visemes to words: the ask
      was a talking loop, not lip sync. */
   let mouthTimer = null;
+  /* Axel on the intro moves his mouth for exactly as long as his line plays —
+     the same signal the scene uses for the bartender, read before the `current`
+     guard below, because during the intro there is no turn in progress. */
+  V.onSpeaking((speaker, on) => {
+    if (speaker !== 'axel' || !introRig) return;
+    clearTimeout(introMouthTimer);
+    if (on) introMouth(true);
+    else introMouthTimer = setTimeout(() => introMouth(false), 160);
+  });
+
   V.onSpeaking((speaker, on) => {
     if (!current) return;
     const who = ACTOR;
