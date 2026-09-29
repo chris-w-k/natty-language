@@ -302,6 +302,18 @@ Return JSON only.`,
       pt: 'Mestria: {0}%',
       tr: 'Ustalık: %{0}',
     },
+    /* The end of a go. The pass mark is a number the child should be told, so
+       the two headline strings carry it: which one shows says whether they
+       cleared it, and the difference is the point of NJA-3196 Q2. */
+    'end-passed-title': 'You made it.',
+    'end-short-title':  "That's the night.",
+    'end-passed-sub':   'Cleared the {0}% mark.',
+    'end-short-sub':    'Short of the {0}% mark — another go at what is left will get you there.',
+    'end-stuck-label':  'Stuck',
+    'end-shaky-label':  'Shaky',
+    'end-missed-label': 'Not yet',
+    'end-replay-some':  'PRACTISE WHAT IS LEFT',
+    'end-replay-all':   'PLAY AGAIN',
     /* The coach's line after a wrong answer. Written, not generated: it is the
        same sentence every time by design, it must never be wrong, and it is
        the one beat in the loop where a child is waiting to try again. */
@@ -315,6 +327,17 @@ Return JSON only.`,
        backstop so a child who cannot get one item right still reaches an
        ending — without it, "repeat until they get it right" has no exit. */
     turnCap: 40,
+    /* NJA-3196 Q2: "a total session mastery > threshold i.e. 85% - so the
+       minimum they will get is always 85%." The go does not end when the list
+       runs out; it ends when the score clears this, and short of it the
+       weakest step comes round again. The turn cap above is what stops that
+       being endless — Q1 ("is there any need to measure that they got it
+       wrong more than 5 times?") is still open, and the cap is the placeholder
+       until it is answered. */
+    passMark: 0.85,
+    /* What counts as stuck, and so as carried into a replay rather than
+       drilled again. A clean answer: a hinted one is worth another go. */
+    keepMark: 1,
     masteryBar: 0.8,       // correct / (correct + incorrect) to count as produced
     minExposures: 2,       // ...but not before this many tries, or 1/1 = mastered
     mercyAfterFailedTurns: 4,

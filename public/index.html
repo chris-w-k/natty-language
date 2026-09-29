@@ -249,10 +249,17 @@
   <!-- end card -->
   <div class="sheet hidden" id="end">
     <div class="head"><div><span class="eyebrow">Session over</span><h2 id="end-msg"></h2></div></div>
-    <div class="body" style="display:flex;flex-direction:column;gap:8px;padding-top:28px">
-      <span class="big" id="end-score"></span>
-      <span id="end-sub" style="color:var(--ink-2)"></span>
-      <button class="btn wide primary" id="btn-restart" style="margin-top:20px"><span>PLAY AGAIN</span></button>
+    <div class="body">
+      <div class="end-top">
+        <span class="big" id="end-score"></span>
+        <span id="end-sub"></span>
+      </div>
+      <div class="end-bar"><i id="end-fill"></i><b id="end-mark"></b></div>
+      <div id="end-list" class="end-list"></div>
+      <div class="end-acts">
+        <button class="btn wide primary" id="btn-again"><span></span></button>
+        <button class="btn wide" id="btn-restart"><span></span></button>
+      </div>
     </div>
   </div>
 

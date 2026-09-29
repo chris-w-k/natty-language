@@ -1002,7 +1002,12 @@
           : 'no slot') +
         (plan.introducing ? ' · NEW ' + plan.introducing : '')
       : '—';
+    /* Which half of the go we are in matters once a step can come round again:
+       "turn 24" says nothing about whether this is the syllabus or the climb
+       to the pass mark. */
     $('t-turn').textContent = state.turn + '/' + Q.session.turnCap +
+      ' · ' + (state.makeup ? 'makeup' : 'step ' + (state.at + 1) + '/' + state.plan.length) +
+      (state.go > 1 ? ' · go ' + state.go : '') +
       (attempts ? '  attempt ' + (attempts + 1) : '');
   }
 
@@ -1523,10 +1528,10 @@
   /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
-    if (E.sessionComplete(state, Q)) return finish('You got everything.');
-    if (state.turn >= Q.session.turnCap) return finish('Time to head home.');
+    if (E.sessionComplete(state, Q)) return finish('complete');
+    if (state.turn >= Q.session.turnCap) return finish('turn-cap');
     const pair = E.pickNext(state, Q);
-    if (!pair) return finish('You got everything.');
+    if (!pair) return finish('no-pair');
     current = pair;
     renderTurn();
   }
@@ -1707,17 +1712,64 @@
     busy = false;
   }
 
-  function finish(msg) {
+  /* The end of a go (NJA-3196 Q2). Two things the old screen did not say: did
+     they clear the pass mark, and which phrases actually stuck. A single
+     percentage answers neither — and "you got everything" was printed even for
+     a child who had got nothing, because reaching the end of the list was the
+     only thing it measured. */
+  function finish(reason) {
     state.finished = true;
-    E.track(state, 'session_end', { turns: state.turn, overall: E.overall(state, Q) });
-    const pats = Object.values(state.patterns).filter(E.mastered).length;
-    const its  = Object.values(state.items).filter(E.mastered).length;
-    $('end-msg').textContent = msg;
-    $('end-score').textContent = pct(E.overall(state, Q));
-    $('end-sub').textContent = pats + ' of ' + Object.keys(state.patterns).length +
-      ' phrases and ' + its + ' of ' + Object.keys(state.items).length +
-      ' words · ' + state.coins + ' coins';
+    const score = E.overall(state, Q);
+    const mark = E.passMark(Q);
+    const ok = score >= mark;
+    const rows = E.report(state, Q);
+    const left = rows.filter(r => r.verdict !== 'stuck');
+
+    E.track(state, 'session_end', {
+      turns: state.turn, overall: score, passed: ok, go: state.go, reason,
+    });
+
+    $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
+    $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
+    $('end-sub').textContent = t(ok ? 'end-passed-sub' : 'end-short-sub', Math.round(mark * 100));
+
+    /* The bar exists so the number has somewhere to be: the tick is the pass
+       mark, and whether the fill reaches it is the result. */
+    $('end-fill').style.width = Math.round(score * 100) + '%';
+    $('end-fill').classList.toggle('pass', ok);
+    $('end-mark').style.left = 'calc(' + Math.round(mark * 100) + '% - 1px)';
+
+    const label = { stuck: 'end-stuck-label', shaky: 'end-shaky-label', missed: 'end-missed-label' };
+    $('end-list').innerHTML = rows.map(r =>
+      '<div class="end-row ' + r.verdict + '">' +
+        '<span class="ph">' + esc(r.target) + '<small>' + esc(r.native) + '</small></span>' +
+        '<span class="vd">' + esc(t(label[r.verdict])) + '</span>' +
+      '</div>').join('');
+
+    /* Two ways back in, and they are not the same offer: one redrills only
+       what did not stick, the other starts the night over. */
+    const some = $('btn-again'), all = $('btn-restart');
+    some.querySelector('span').textContent = t('end-replay-some');
+    all.querySelector('span').textContent = t('end-replay-all');
+    some.classList.toggle('hidden', left.length === 0);
     $('end').classList.remove('hidden');
+  }
+
+  /* A second go at the material that did not land. The engine carries the
+     steps that stuck at their score, so this cannot cost the child mastery. */
+  function replayLeftovers() {
+    const next = E.replay(state, Q);
+    $('end').classList.add('hidden');
+    state = next;
+    state.finished = false;
+    E.track(state, 'session_start', { activity: Q.activity.id, replay: true, go: state.go });
+    chatLog.length = 0;
+    $('chat').innerHTML = '';
+    buildRail();
+    hideGloss();
+    $('chat-full').classList.add('hidden');
+    renderHud();
+    step();
   }
 
   /* ---------- mic ---------- */
@@ -1866,6 +1918,7 @@
   $('coach-close').addEventListener('click', () => $('coach-sheet').classList.add('hidden'));
   $('prog-close').addEventListener('click', () => $('prog-sheet').classList.add('hidden'));
   $('btn-restart').addEventListener('click', () => { $('end').classList.add('hidden'); boot(); });
+  $('btn-again').addEventListener('click', replayLeftovers);
 
   $('gloss-close').addEventListener('click', hideGloss);
   $('gloss-say').addEventListener('click', () => V.now(glossWord, { speaker: 'axel', lang: TL() }));
@@ -1943,6 +1996,11 @@
     accent: who => accentOf(who),
     placed: () => Array.from({ length: slotCount() }, (_, i) => placed[i]),
     banner: () => { const b = document.getElementById('banner'); return b.className === 'hidden' ? null : { kind: b.className, text: b.textContent.trim() }; },
+    /* the end of a go, so a test can read the result rather than the pixels */
+    report: () => E.report(state, Q),
+    overall: () => E.overall(state, Q),
+    finish: reason => finish(reason || 'debug'),
+    replay: () => replayLeftovers(),
   };
 
   boot();

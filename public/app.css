@@ -362,6 +362,26 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .sheet .body{flex:1;overflow-y:auto;padding:16px 20px 24px;}
 .sheet .big{font-size:40px;font-weight:600;letter-spacing:-.02em;}
 
+/* the end of a go (NJA-3196) */
+.end-top{display:flex;flex-direction:column;gap:4px;padding-top:20px;}
+#end-sub{color:var(--ink-2);font-size:14px;line-height:1.45;}
+/* where the score landed against the pass mark, which is the whole point of
+   the screen: a number alone does not say whether it was enough. */
+.end-bar{position:relative;height:8px;border-radius:4px;background:var(--fill);margin:18px 0 4px;overflow:visible;}
+.end-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--ink);display:block;}
+.end-bar i.pass{background:var(--good);}
+.end-bar b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink-3);border-radius:1px;}
+.end-list{margin-top:22px;display:flex;flex-direction:column;gap:2px;}
+.end-row{display:flex;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft);}
+.end-row .ph{flex:1;min-width:0;font-size:14px;}
+.end-row .ph small{display:block;color:var(--ink-3);font-size:12px;margin-top:1px;}
+.end-row .vd{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+             padding:3px 8px;border-radius:var(--r-pill);background:var(--fill);color:var(--ink-3);}
+.end-row.stuck  .vd{background:rgba(44,154,91,.14);color:var(--good);}
+.end-row.shaky  .vd{background:rgba(194,91,43,.14);color:var(--warn);}
+.end-acts{margin-top:24px;display:flex;flex-direction:column;gap:10px;}
+.end-acts .btn.hidden{display:none;}
+
 .pause-row{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--line-soft);}
 .pause-row .btn{height:44px;padding:0 18px;border-radius:var(--r-pill);background:var(--fill);font-size:13px;font-weight:600;letter-spacing:.04em;display:flex;align-items:center;}
 .coins{display:flex;align-items:center;gap:7px;font-weight:600;}

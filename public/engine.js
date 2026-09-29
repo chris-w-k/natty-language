@@ -150,19 +150,48 @@ window.ENGINE = (function () {
       for (const key of g.slotKeys)
         for (const id of g.slots[key]) items[id] = items[id] || blank();
     }
+    const plan = allSteps(quest).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
     return {
       patterns, items,
       turn: 0, coins: 0, finished: false,
       attempts: 0,          // tries at the CURRENT pair, for the retry loop
-      stage: 0,             // which pattern of the syllabus we are on
-      step: 0,              // 0 = the word, 1 = the whole construction
-      earned: 0,            // quality banked so far, one point per step at best
+      stage: plan.length ? plan[0].stage : 0,   // which pattern of the syllabus we are on
+      step: plan.length ? plan[0].step : 0,     // 0 = the first word, last = the whole construction
+      /* The steps this go will drill, in order, and where we are in them. A
+         first go holds every step; a replay holds only what did not stick. */
+      plan, at: 0, go: 1,
+      /* The BEST each step has been answered, 0..1, keyed stage:step. Mastery
+         is the sum of these over every step the syllabus has — so redrilling
+         a step can raise the score but never lower it, which is what makes
+         NJA-3196's "the minimum they will get is always 85%" reachable. */
+      best: {},
+      drills: {},           // how many times each step has come round
+      makeup: false,        // past the syllabus, drilling to reach the pass mark
+      done: false,
       /* kept so applying an outcome can move the syllabus on without every
          caller having to remember to pass the quest back in */
       quest,
       log: [], events: [],
     };
   }
+
+  /* ---------- the steps of a go ----------
+     A step is one turn's worth of ladder: (which stage, which rung). Written
+     out flat because everything about finishing a go — the score, what to
+     redrill, what a replay carries — is per step rather than per pattern. */
+  const stepKey = (stage, step) => stage + ':' + step;
+  function allSteps(quest) {
+    const out = [];
+    stages(quest).forEach((pair, stage) => {
+      for (let step = 0; step < stepsIn(pair); step++)
+        out.push({ stage, step, pair, key: stepKey(stage, step) });
+    });
+    return out;
+  }
+  const bank = (state, score) => {
+    const k = stepKey(state.stage, state.step);
+    state.best[k] = Math.max(state.best[k] || 0, score);
+  };
 
   const recOf = (state, pair) => ({
     pattern: state.patterns[pair.patternId],
@@ -215,11 +244,30 @@ window.ENGINE = (function () {
      pass about a sixth however well the child did, which is a number that
      tells them nothing. */
   function overall(state, quest) {
-    const list = stages(quest);
-    if (!list.length) return 0;
-    const total = list.reduce((n, p) => n + stepsIn(p), 0);
-    return total ? Math.min(1, state.earned / total) : 0;
+    const all = allSteps(quest);
+    if (!all.length) return 0;
+    let sum = 0;
+    for (const s of all) sum += state.best[s.key] || 0;
+    return Math.min(1, sum / all.length);
   }
+
+  /* NJA-3196 Q2: the go ends on a total mastery over a threshold, not on
+     reaching the end of the list. Anything short of it sends the weakest step
+     round again, so the score a child leaves with is the pass mark or better
+     — unless the turn cap stops them first, which is the backstop for Q1's
+     "would take them ages" case and is reported honestly rather than papered
+     over. */
+  const passMark = quest => {
+    const v = quest.session && quest.session.passMark;
+    return typeof v === 'number' ? v : 0.85;
+  };
+  /* What counts as stuck, and so as carried into a replay rather than drilled
+     again. A clean answer by default: anything less is worth another go. */
+  const keepMark = quest => {
+    const v = quest.session && quest.session.keepMark;
+    return typeof v === 'number' ? v : 1;
+  };
+  const passed = (state, quest) => overall(state, quest) >= passMark(quest);
 
   /* What a finished step is worth. Distance through the syllabus is not
      mastery: measured that way a child who was shown every single line after
@@ -227,9 +275,10 @@ window.ENGINE = (function () {
      Getting there is not the same as having learnt it. */
   const STEP_SCORE = { clean: 1, hinted: 0.6, mercy: 0 };
 
-  /* Done when the syllabus runs out. */
+  /* Done when the pass mark is reached, or when nothing is left that could
+     raise it. Not "when the list runs out" — that was distance, not mastery. */
   function sessionComplete(state, quest) {
-    return state.stage >= stages(quest).length;
+    return !!state.done || state.stage >= stages(quest).length;
   }
 
   /* ---------- 3. pick the next pair ----------
@@ -250,10 +299,77 @@ window.ENGINE = (function () {
      only advances on success has no exit for a child who cannot get one word
      out, which is the failure the retry loop already had. */
   function advance(state, quest) {
-    const pair = pickNext(state, quest);
-    if (!pair) return;
-    state.step += 1;
-    if (state.step >= stepsIn(pair)) { state.step = 0; state.stage += 1; }
+    state.drills[stepKey(state.stage, state.step)] =
+      (state.drills[stepKey(state.stage, state.step)] || 0) + 1;
+    if (state.makeup) return retarget(state, quest);
+    state.at += 1;
+    const next = state.plan[state.at];
+    if (next) { state.stage = next.stage; state.step = next.step; return; }
+    retarget(state, quest);
+  }
+
+  /* The planned steps are behind us. Either the pass mark is in hand and the
+     night is over, or the weakest step comes round again. */
+  function retarget(state, quest) {
+    if (passed(state, quest)) { state.makeup = false; state.done = true; return; }
+    const w = weakest(state, quest);
+    if (!w) { state.makeup = false; state.done = true; return; }
+    state.makeup = true;
+    state.stage = w.stage;
+    state.step = w.step;
+  }
+
+  /* The step with the most to gain. Ties go to whichever has come round least
+     — otherwise a child who cannot get one line out would meet that same line
+     for the rest of the night instead of the several they are weakest at. */
+  function weakest(state, quest) {
+    const open = allSteps(quest).filter(s => (state.best[s.key] || 0) < 1);
+    if (!open.length) return null;
+    const rank = s => [state.best[s.key] || 0, state.drills[s.key] || 0, s.stage, s.step];
+    return open.reduce((a, b) => {
+      const ra = rank(a), rb = rank(b);
+      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] < rb[i] ? a : b;
+      return a;
+    });
+  }
+
+  /* ---------- a second go ----------
+     "They can replay to try to get a higher mastery" (NJA-3196 Q2). The steps
+     that stuck are carried at their score and not drilled again, so a replay
+     is the material that did not land — and mastery can only go up. */
+  function replay(state, quest) {
+    const next = createState(quest);
+    const bar = keepMark(quest);
+    for (const s of allSteps(quest))
+      if ((state.best[s.key] || 0) >= bar) next.best[s.key] = state.best[s.key];
+    next.plan = allSteps(quest)
+      .filter(s => (next.best[s.key] || 0) < bar)
+      .map(s => ({ stage: s.stage, step: s.step, key: s.key }));
+    next.go = (state.go || 1) + 1;
+    next.coins = state.coins;
+    /* Everything already met stays met: a replay must not re-introduce a word
+       the child has already been given. */
+    for (const k of Object.keys(next.patterns))
+      if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
+    for (const k of Object.keys(next.items))
+      if (state.items[k]) next.items[k].introduced = state.items[k].introduced;
+    if (next.plan.length) { next.stage = next.plan[0].stage; next.step = next.plan[0].step; }
+    else retarget(next, quest);
+    return next;
+  }
+
+  /* How each pattern of the syllabus came out, for the results screen: the
+     mean of its steps' best scores. */
+  function report(state, quest) {
+    return stages(quest).map((pair, stage) => {
+      const mine = allSteps(quest).filter(s => s.stage === stage);
+      const score = mine.reduce((n, s) => n + (state.best[s.key] || 0), 0) / (mine.length || 1);
+      return {
+        stage, pair, score,
+        verdict: score >= 1 ? 'stuck' : score > 0 ? 'shaky' : 'missed',
+        native: pair.allNative, target: pair.allTarget,
+      };
+    });
   }
 
   /* ---------- 4. which half flips to the target language ----------
@@ -541,7 +657,7 @@ window.ENGINE = (function () {
       if (hinted) r.timesPrompted += 1; else r.timesUnprompted += 1;
     }
     state.coins += hinted ? 5 : 10;
-    state.earned += hinted ? STEP_SCORE.hinted : STEP_SCORE.clean;
+    bank(state, hinted ? STEP_SCORE.hinted : STEP_SCORE.clean);
     state.turn += 1;
     state.attempts = 0;
     if (state.quest) advance(state, state.quest);
@@ -576,7 +692,7 @@ window.ENGINE = (function () {
     for (const r of [pattern, item]) { if (r) r.lastTurn = state.turn; }
     state.turn += 1;
     state.attempts = 0;
-    state.earned += STEP_SCORE.mercy;
+    bank(state, STEP_SCORE.mercy);
     if (state.quest) advance(state, state.quest);
     track(state, 'mercy', { pair: plan.pair.id, stage: state.stage, step: state.step });
   }
@@ -594,6 +710,7 @@ window.ENGINE = (function () {
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
+    passMark, keepMark, passed, replay, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,
   };
 })();
