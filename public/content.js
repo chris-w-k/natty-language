@@ -101,6 +101,13 @@ window.QUEST = (function () {
     'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
     'do-you-like':  { speaker: 'either',  en: 'Do you like {likeable:definite}?',     es: '¿Te gusta {likeable:definite}?' },
     'i-like':       { speaker: 'either',  en: 'I like {likeable:definite}.',          es: 'Me gusta {likeable:definite}.' },
+    /* Two slots. NJA-3160's third unit test is a pattern of exactly this
+       shape, and the engine used to refuse them outright — one slot per
+       pattern, or it threw. The #1 / #2 numbering is what keeps the two
+       apart; both draw on the same tag. */
+    'i-like-two':   { speaker: 'either',
+                      en: 'I like {likeable#1:definite} and {likeable#2:definite}.',
+                      es: 'Me gustan {likeable#1:definite} y {likeable#2:definite}.' },
     'thank-you':    { speaker: 'learner', en: 'Thank you.',       es: 'Gracias.' },
   };
 
@@ -137,7 +144,8 @@ window.QUEST = (function () {
     },
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
     patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
-               'i-dont-want', 'there-is-no', 'do-you-like', 'i-like', 'thank-you'],
+               'i-dont-want', 'there-is-no', 'do-you-like', 'i-like', 'i-like-two',
+               'thank-you'],
     items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
   };
 
@@ -320,16 +328,51 @@ Return JSON only.`,
   /* ---------- expansion ----------
      NJA-3136, Engine step 1: build the pattern x item pairs and validate them
      by slot tag. Step 2: keep them in the order the lists declare. */
+  /* ---------- chunking (NJA-3197) ----------
+     A pattern is parsed ONCE, into the shape the real session stores:
+
+       nativeFrames: [{type:'text', text:'I like '}, {type:'slot', key:'likeable#1'},
+                      {type:'text', text:' and '},  {type:'slot', key:'likeable#2'}]
+
+     rather than a template re-scanned with a regex on every render. The slot
+     KEY carries its number, so a pattern can mention the same tag twice and
+     the two stay distinguishable — which is the whole reason the number is in
+     the syntax and the whole reason the old single-slot version could not
+     handle "I like X and Y". */
   const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z|]+)\}/gi;
 
-  function slotsOf(template) {
+  function chunk(template) {
     const out = [];
-    let m;
+    let at = 0, m;
     SLOT.lastIndex = 0;
     while ((m = SLOT.exec(template)) !== null) {
-      out.push({ raw: m[0], tag: m[1], n: m[2] ? Number(m[2]) : 1, forms: m[3].split('|') });
+      if (m.index > at) out.push({ type: 'text', text: template.slice(at, m.index) });
+      out.push({
+        type: 'slot',
+        key: m[1] + '#' + (m[2] || '1'),
+        tag: m[1],
+        // "a|b" means either article is acceptable; the first is what we render
+        forms: m[3].split('|'),
+      });
+      at = m.index + m[0].length;
     }
+    if (at < template.length) out.push({ type: 'text', text: template.slice(at) });
     return out;
+  }
+
+  const slotsOf = frames => frames.filter(f => f.type === 'slot');
+
+  /* Render a chunked pattern, choosing the language of each slot separately
+     from the language of the frame. `fill` maps slot key to item id; `inTarget`
+     is the set of slot keys whose word has crossed over. */
+  function render(frames, frameLang, fill, inTarget) {
+    return frames.map(f => {
+      if (f.type === 'text') return f.text;
+      const id = fill[f.key];
+      if (!id) return '___';
+      const lang = (inTarget && inTarget.has(f.key)) ? LANGS.target : LANGS.native;
+      return vocabItems[id][lang][f.forms[0]];
+    }).join('');
   }
 
   function expand() {
@@ -337,10 +380,11 @@ Return JSON only.`,
       id: activity.id, title: activity.title, activity,
       nativeLang: LANGS.native, targetLang: LANGS.target,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
-      glossary: {}, chipGloss: {},
+      groups: [], glossary: {}, chipGloss: {},
     };
 
-    const pairs = [];
+    /* NJA-3197's patternVocabGroups: the pattern, both chunkings, and which
+       items are valid in each of its slots. */
     for (const pid of activity.patterns) {
       const pat = vocabPatterns[pid];
       if (!pat) throw new Error('unknown pattern: ' + pid);
@@ -348,23 +392,39 @@ Return JSON only.`,
          defined so the writing can lean on it, but the child is never asked
          to produce it. */
       if (pat.speaker === 'actor') continue;
-      const slots = slotsOf(pat[LANGS.native]);
 
-      if (!slots.length) {                       // said whole: one pair, no item
-        pairs.push(makePair(q, pid, pat, [], []));
-        continue;
+      const nativeFrames = chunk(pat[LANGS.native]);
+      const targetFrames = chunk(pat[LANGS.target]);
+      const nk = slotsOf(nativeFrames).map(s => s.key).join(',');
+      const tk = slotsOf(targetFrames).map(s => s.key).join(',');
+      if (nk !== tk) {
+        throw new Error('pattern slots differ between languages: ' + pid + ' (' + nk + ' vs ' + tk + ')');
       }
-      if (slots.length > 1) throw new Error('one slot per pattern for now: ' + pid);
 
-      const slot = slots[0];
-      const usable = activity.items.filter(id => (vocabItems[id].tags || []).includes(slot.tag));
-      if (!usable.length) throw new Error('pattern has no valid vocab items: ' + pid);
-      // the article the slot asks for; "a|b" means either is acceptable, first wins
-      const form = slot.forms[0];
-      for (const iid of usable) pairs.push(makePair(q, pid, pat, [slot], [{ id: iid, form }]));
+      const slots = {};
+      for (const sl of slotsOf(nativeFrames)) {
+        const usable = activity.items.filter(id => (vocabItems[id].tags || []).includes(sl.tag));
+        if (!usable.length) throw new Error('slot has no valid vocab items: ' + pid + ' / ' + sl.key);
+        slots[sl.key] = usable;
+      }
+
+      q.groups.push({
+        id: pid, pattern: pat, opensOnly: !!pat.opensOnly,
+        nativeFrames, targetFrames,
+        slotKeys: slotsOf(nativeFrames).map(s => s.key),
+        slots,
+      });
     }
 
-    q.pairs = pairs;
+    q.pairs = q.groups.map(g => makePair(g));
+
+    /* The engine builds its own pairs when it wants a particular word in a
+       particular slot — the syllabus walks the vocabulary, so which noun a
+       stage gets is its decision, not the content's. */
+    q.pairFor = (groupId, fill) => {
+      const g = q.groups.find(x => x.id === groupId);
+      return g ? makePair(g, Object.assign({}, fill)) : null;
+    };
 
     /* Every word the child can see, and what it means. Built from the content
        rather than hand-written, so a new item is glossed the moment it is
@@ -376,54 +436,88 @@ Return JSON only.`,
         for (const tok of t.split(/\s+/)) q.glossary[bare(tok)] = q.glossary[bare(tok)] || n;
       }
     }
-    for (const p of pairs) {
-      for (const seg of p.frame.target.split(/\s+/)) {
+    for (const g of q.groups) {
+      const blankT = render(g.targetFrames, LANGS.target, {}, null).trim();
+      const blankN = render(g.nativeFrames, LANGS.native, {}, null).trim();
+      for (const seg of blankT.split(/\s+/)) {
         const k = bare(seg);
-        if (k && !q.glossary[k]) q.glossary[k] = '(part of "' + p.frame.native.trim() + '")';
+        if (k && k !== '___' && !q.glossary[k]) q.glossary[k] = '(part of "' + blankN + '")';
       }
-      q.chipGloss[p.frame.target.trim().toLowerCase()] = p.frame.native.trim();
+      q.chipGloss[blankT.toLowerCase()] = blankN;
     }
     return q;
   }
 
   const bare = w => String(w).toLowerCase().replace(/[¿?¡!.,;:"“”]/g, '').trim();
 
-  /* One playable pair. The FRAME is the pattern with its slot removed — the
-     part the child learns as a construction — and the ITEM is what drops into
-     it. They are tracked separately because the engine flips one or the other
-     into the target language (NJA-3136, Engine step 4). */
-  function makePair(q, pid, pat, slots, fills) {
-    const render = (lang, itemLang) => {
-      let s = pat[lang];
-      for (let i = 0; i < slots.length; i++) {
-        const f = fills[i];
-        s = s.replace(slots[i].raw, vocabItems[f.id][itemLang || lang][f.form]);
-      }
-      return s;
-    };
-    const fill = fills[0] || null;
+  /* One playable pair: a group plus one item per slot. `fill` starts as the
+     first valid item for each slot; the engine swaps it as the syllabus walks
+     the vocabulary.
+
+     The FRAME is the pattern with its slots blanked — the part the child learns
+     as a construction — and each slot's ITEM drops into it. They are tracked
+     separately because the engine crosses one of them at a time into the target
+     language (NJA-3136, Engine step 4), and with two slots that is now three
+     things to cross rather than two. */
+  function makePair(group, fill) {
+    const use = fill || {};
+    /* Distinct by default. Two slots drawing on the same tag both take the
+       first valid item unless you stop them, and "I like the ticket and the
+       ticket" is not a sentence anyone wanted. */
+    const taken = new Set(Object.values(use));
+    for (const key of group.slotKeys) {
+      if (use[key]) continue;
+      use[key] = group.slots[key].find(id => !taken.has(id)) || group.slots[key][0];
+      taken.add(use[key]);
+    }
+
+    const all = new Set(group.slotKeys);
+    const none = new Set();
+    const asTarget = keys => new Set(keys);
+
     return {
-      id: pid + (fill ? '-' + fill.id : ''),
-      patternId: pid,
-      itemId: fill ? fill.id : null,
-      form: fill ? fill.form : null,
-      opensOnly: !!pat.opensOnly,
-      hasSlot: slots.length > 0,
-      // the frame with the slot blanked, for showing the construction alone
+      id: group.id + (group.slotKeys.length
+        ? '-' + group.slotKeys.map(k => use[k]).join('-') : ''),
+      patternId: group.id,
+      group,
+      fill: use,
+      slotKeys: group.slotKeys,
+      // kept for everything that still thinks in terms of one word
+      itemId: group.slotKeys.length ? use[group.slotKeys[0]] : null,
+      opensOnly: group.opensOnly,
+      hasSlot: group.slotKeys.length > 0,
+      slotCount: group.slotKeys.length,
+
+      // the frame with every slot blanked, for showing the construction alone
       frame: {
-        native: slots.length ? pat[LANGS.native].replace(slots[0].raw, '___') : pat[LANGS.native],
-        target: slots.length ? pat[LANGS.target].replace(slots[0].raw, '___') : pat[LANGS.target],
+        native: render(group.nativeFrames, LANGS.native, {}, null),
+        target: render(group.targetFrames, LANGS.target, {}, null),
       },
-      item: fill ? {
-        native: vocabItems[fill.id][LANGS.native][fill.form],
-        target: vocabItems[fill.id][LANGS.target][fill.form],
-      } : null,
-      // the four renderings the engine chooses between
-      allNative:   render(LANGS.native),
-      allTarget:   render(LANGS.target),
-      itemTarget:  render(LANGS.native, LANGS.target),   // native frame, target word
-      frameTarget: render(LANGS.target, LANGS.native),   // target frame, native word
+      // what sits in each slot, in both languages
+      items: group.slotKeys.map(key => ({
+        key, id: use[key],
+        native: vocabItems[use[key]][LANGS.native][slotForm(group, key)],
+        target: vocabItems[use[key]][LANGS.target][slotForm(group, key)],
+      })),
+      get item() { return this.items[0] || null; },
+
+      allNative: render(group.nativeFrames, LANGS.native, use, none),
+      allTarget: render(group.targetFrames, LANGS.target, use, all),
+      /* Any mix: the frame in one language, a named set of slots in the other.
+         This is what replaces the old four fixed renderings — with two slots
+         there are six combinations, not four, and with three there are
+         sixteen, so they are computed rather than enumerated. */
+      say(frameTarget, targetSlots) {
+        const frames = frameTarget ? group.targetFrames : group.nativeFrames;
+        return render(frames, frameTarget ? LANGS.target : LANGS.native,
+                      use, asTarget(targetSlots || []));
+      },
     };
+  }
+
+  function slotForm(group, key) {
+    const sl = slotsOf(group.nativeFrames).find(s => s.key === key);
+    return sl ? sl.forms[0] : 'bare';
   }
 
   return expand();

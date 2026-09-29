@@ -89,40 +89,66 @@ window.ENGINE = (function () {
      55 pairs in play at once, so a child met nine constructions and nine nouns
      interleaved and finished none of them. A syllabus is a line, not a pool. */
   function syllabus(quest) {
-    const byPattern = new Map();
-    for (const p of quest.pairs) {
-      if (!byPattern.has(p.patternId)) byPattern.set(p.patternId, []);
-      byPattern.get(p.patternId).push(p);
-    }
-
-    /* Which item each pattern takes. "First matching" read literally gives
-       every stage the same noun — `ticket` is valid for all of them — and a
+    /* Which noun each slot of each stage gets. "First matching" read literally
+       gives every stage the same one — `ticket` is valid everywhere — and a
        night of nine constructions all about a ticket teaches one word and
        makes the word-step of every stage after the first a turn with nothing
-       new in it. So by default the list is WALKED: each stage takes the first
+       new in it. So by default the list is WALKED: each slot takes the first
        valid item nobody has had yet, and falls back to the first valid one
        when the nouns run out. Set session.stageItems to 'first' in content for
        the literal reading. */
     const walk = (quest.session && quest.session.stageItems) !== 'first';
-    const used = new Set(), out = [];
-    for (const [, list] of byPattern) {
-      let pick = list[0];
-      if (walk) pick = list.find(p => p.itemId && !used.has(p.itemId)) || list[0];
-      if (pick.itemId) used.add(pick.itemId);
-      out.push(pick);
+    const used = new Set();
+    const out = [];
+
+    for (const g of quest.groups) {
+      const fill = {};
+      for (const key of g.slotKeys) {
+        const valid = g.slots[key];
+        let pick = valid[0];
+        if (walk) pick = valid.find(id => !used.has(id) && !Object.values(fill).includes(id))
+                      || valid.find(id => !Object.values(fill).includes(id))
+                      || valid[0];
+        fill[key] = pick;
+        used.add(pick);
+      }
+      out.push(quest.pairFor ? quest.pairFor(g.id, fill) : quest.pairs.find(p => p.patternId === g.id));
     }
     return out;
   }
 
-  /* A no-slot pattern ("Perdona.") has no word to teach first, so it is one
-     step rather than two. */
-  const stepsIn = pair => (pair && pair.hasSlot ? 2 : 1);
+  /* The syllabus is rebuilt on every call and pairs are fresh objects, so a
+     plan cannot be compared by identity across calls. Cached per quest, which
+     is also what stops pickNext churning through nine pair constructions on
+     every render. */
+  const syllabusCache = new WeakMap();
+  function stages(quest) {
+    if (!syllabusCache.has(quest)) syllabusCache.set(quest, syllabus(quest));
+    return syllabusCache.get(quest);
+  }
+
+  /* How many turns a stage takes. NJA-3166: a pattern with more than one word
+     in it hands them over one at a time — "return the next target vocab item
+     INSTEAD of translating the current pattern" — and only when every slot has
+     crossed does the frame itself cross. So a two-slot pattern is three turns,
+     not two, and a pattern with no slot at all ("Perdona.") is one. */
+  const stepsIn = pair => (pair ? (pair.slotCount || 0) + 1 : 1);
+
+  /* Which slots are in the target language at a given step. Step 0 crosses the
+     first, step 1 the first two, and the last step crosses the frame with all
+     of them already across. */
+  function slotsAtStep(pair, step) {
+    const keys = pair.slotKeys || [];
+    return keys.slice(0, Math.min(step + 1, keys.length));
+  }
+  const frameAtStep = (pair, step) => step >= (pair.slotKeys || []).length;
 
   function createState(quest) {
     const patterns = {}, items = {};
-    for (const p of quest.pairs) {
-      patterns[p.patternId] = patterns[p.patternId] || blank();
-      if (p.itemId) items[p.itemId] = items[p.itemId] || blank();
+    for (const g of quest.groups || []) {
+      patterns[g.id] = patterns[g.id] || blank();
+      for (const key of g.slotKeys)
+        for (const id of g.slots[key]) items[id] = items[id] || blank();
     }
     return {
       patterns, items,
@@ -141,6 +167,8 @@ window.ENGINE = (function () {
   const recOf = (state, pair) => ({
     pattern: state.patterns[pair.patternId],
     item: pair.itemId ? state.items[pair.itemId] : null,
+    /* every slot's record, for a pattern that holds more than one word */
+    slotItems: (pair.items || []).map(i => state.items[i.id]).filter(Boolean),
   });
 
   /* ---------- mastery ----------
@@ -187,9 +215,9 @@ window.ENGINE = (function () {
      pass about a sixth however well the child did, which is a number that
      tells them nothing. */
   function overall(state, quest) {
-    const stages = syllabus(quest);
-    if (!stages.length) return 0;
-    const total = stages.reduce((n, p) => n + stepsIn(p), 0);
+    const list = stages(quest);
+    if (!list.length) return 0;
+    const total = list.reduce((n, p) => n + stepsIn(p), 0);
     return total ? Math.min(1, state.earned / total) : 0;
   }
 
@@ -201,7 +229,7 @@ window.ENGINE = (function () {
 
   /* Done when the syllabus runs out. */
   function sessionComplete(state, quest) {
-    return state.stage >= syllabus(quest).length;
+    return state.stage >= stages(quest).length;
   }
 
   /* ---------- 3. pick the next pair ----------
@@ -209,14 +237,12 @@ window.ENGINE = (function () {
      the order is the order the content declares, and nothing jumps it. */
   function pickNext(state, quest) {
     if (state.finished) return null;
-    const stages = syllabus(quest);
-    return stages[state.stage] || null;
+    return stages(quest)[state.stage] || null;
   }
 
   /* Both steps of this stage are behind us. */
   function stageDone(state, quest) {
-    const stages = syllabus(quest);
-    return state.stage >= stages.length;
+    return state.stage >= stages(quest).length;
   }
 
   /* Move on: the next step, or the next pattern when the stage is finished.
@@ -241,68 +267,90 @@ window.ENGINE = (function () {
      the target language for the rest of the session — so the crossing is a
      ratchet, never a flicker. */
   function planTurn(state, pair) {
-    const { pattern, item } = recOf(state, pair);
+    const { pattern } = recOf(state, pair);
+    const keys = pair.slotKeys || [];
 
-    /* The step decides it now, not the mastery reading. Step 0 puts the word
-       in the target language inside a frame the child already understands;
-       step 1 crosses the frame over too. A pattern with no slot has only the
-       second kind of turn. */
-    const twoStep = stepsIn(pair) === 2;
-    const frameTarget = twoStep ? state.step === 1 : true;
-    const itemTarget  = item ? true : false;
+    /* The step decides it, not a mastery reading: each step puts one more word
+       in the target language, and the last one crosses the frame too. */
+    const frameTarget = pair.hasSlot ? frameAtStep(pair, state.step) : true;
+    const targetSlots = slotsAtStep(pair, state.step);
 
-    /* And one new thing per exchange, which falls out of the same two steps:
-       the word arrives with the word turn, the construction with the
-       construction turn. The character hands over vocabulary, the coach hands
-       over constructions (NJA-3136). */
+    /* One new thing per exchange, which falls out of the same ladder: the word
+       that has just crossed on a word step, the construction on the frame
+       step. The character hands over vocabulary, the coach hands over
+       constructions (NJA-3136). */
     let introducing = null;
-    if (item && !item.introduced && (!twoStep || state.step === 0)) introducing = 'item';
-    else if (!pattern.introduced && frameTarget) introducing = 'pattern';
+    let introKey = null;
+    if (pair.hasSlot && !frameTarget) {
+      introKey = keys[Math.min(state.step, keys.length - 1)];
+      const it = pair.items.find(i => i.key === introKey);
+      const rec = it ? state.items[it.id] : null;
+      if (rec && !rec.introduced) introducing = 'item';
+    } else if (!pattern.introduced) {
+      introducing = 'pattern';
+    }
 
     return {
-      pair, introducing, stage: state.stage, step: state.step,
+      pair, introducing, introKey, stage: state.stage, step: state.step,
       // who says it first: vocab comes from the character, patterns from the coach
       introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null,
-      frameTarget, itemTarget,
-      expected: expected(pair, frameTarget, itemTarget),
-      ...gaps(pair, frameTarget, itemTarget),
+      frameTarget, targetSlots,
+      // kept for everything that still thinks in terms of one word
+      itemTarget: targetSlots.length > 0,
+      expected: expected(pair, frameTarget, targetSlots),
+      ...gaps(pair, frameTarget, targetSlots),
     };
   }
 
-  /* ---------- 5. the expected answer ----------
-     "Evaluate expected answer (with native + target mix) - e.g. Quiero un
-     coffee". One string, built here, never by the model. */
-  function expected(pair, frameTarget, itemTarget) {
-    if (!pair.hasSlot) return frameTarget ? pair.allTarget : pair.allNative;
-    if (frameTarget && itemTarget) return pair.allTarget;
-    if (frameTarget) return pair.frameTarget;
-    if (itemTarget) return pair.itemTarget;
-    return pair.allNative;
+  function expected(pair, frameTarget, targetSlots) {
+    return pair.say(frameTarget, targetSlots || []);
   }
 
   /* Which words of that sentence the child has to supply. Anything already in
      the target language is theirs to produce; anything still in their own
-     language is scene-setting and stays on the page. On the turn everything
-     has crossed, they build the whole sentence. */
-  function gaps(pair, frameTarget, itemTarget) {
-    const sentence = words(expected(pair, frameTarget, itemTarget));
-    const mark = cells => {
-      const answer = cells.filter(c => c.gap).map(c => c.w);
-      return { answer, cells, expectedAnswerPills: makePills(answer) };
-    };
+     language is scene-setting and stays on the page.
 
-    if (!pair.hasSlot) {
-      return mark(sentence.map(w => ({ w, gap: frameTarget })));
+     With more than one slot this can no longer be done by finding the item's
+     words in the finished sentence and marking the run — two slots can hold
+     the same word, and "the first match" is then the wrong one half the time.
+     The sentence is built chunk by chunk instead, and each chunk knows whether
+     it came from the frame or from a slot, so a gap is a fact rather than a
+     search result. */
+  function gaps(pair, frameTarget, targetSlots) {
+    const want = new Set(targetSlots || []);
+    const frames = frameTarget ? pair.group.targetFrames : pair.group.nativeFrames;
+    const cells = [];
+
+    for (const f of frames) {
+      if (f.type === 'text') {
+        for (const w of words(f.text)) cells.push({ w, gap: frameTarget, from: 'frame' });
+        continue;
+      }
+      const inTarget = want.has(f.key);
+      const item = pair.items.find(i => i.key === f.key);
+      const text = item ? (inTarget ? item.target : item.native) : '___';
+      for (const w of words(text)) cells.push({ w, gap: inTarget, from: f.key });
     }
-    /* The item's words are matched on their bare form, because the sentence
-       may have punctuation hanging off the last of them ("una entrada?") while
-       the item itself does not. */
-    const itemWords = words(itemTarget ? pair.item.target : pair.item.native).map(x => split(x).word);
-    const at = indexOfRun(sentence.map(x => split(x).word), itemWords);
-    return mark(sentence.map((w, i) => {
-      const inItem = at >= 0 && i >= at && i < at + itemWords.length;
-      return { w, gap: inItem ? itemTarget : frameTarget };
-    }));
+
+    /* Punctuation that follows a slot belongs to the pill, per NJA-3151's
+       tokenisation — "entrada?" is one token. Rebuilding from chunks splits
+       it off, because the "?" lives in the next text chunk, so it is glued
+       back on here. */
+    const joined = words(expected(pair, frameTarget, targetSlots));
+    const merged = [];
+    let ci = 0;
+    for (const token of joined) {
+      const cell = cells[ci];
+      if (!cell) { merged.push({ w: token, gap: frameTarget, from: 'frame' }); continue; }
+      merged.push({ w: token, gap: cell.gap, from: cell.from });
+      // a token can span several cells when a chunk boundary falls mid-word
+      let acc = cell.w;
+      ci += 1;
+      while (acc.length < token.length && cells[ci]) { acc += cells[ci].w; ci += 1; }
+    }
+
+    const answer = merged.filter(c => c.gap).map(c => c.w);
+    return { answer, cells: merged, expectedAnswerPills: makePills(answer) };
   }
 
   function indexOfRun(hay, needle) {
@@ -323,8 +371,8 @@ window.ENGINE = (function () {
      same form and language as the real answer, so the choice is about meaning
      rather than about spotting the odd shape out. */
   function pills(quest, state, plan, count = 3) {
-    const plan_ = plan;
-    const answer = plan_.answer.slice();
+    const pair = plan.pair;
+    const answer = plan.answer.slice();
     if (!answer.length) return [];
 
     const taken = new Set(answer.map(norm));
@@ -339,22 +387,15 @@ window.ENGINE = (function () {
       const { lead, tail } = split(a);
       return w => lead + w + tail;
     };
-    /* Decoys in the same language as the answer. A phrase said whole — no slot
-       — is answered in whichever language the frame is in, so its wrong
-       answers have to be too: offering "ticket" and "water" against "Perdona"
-       is not a choice, it is a spot-the-odd-one-out. */
-    const lang = plan_.pair.hasSlot
-      ? (plan_.itemTarget ? quest.targetLang : quest.nativeLang)
-      : (plan_.frameTarget ? quest.targetLang : quest.nativeLang);
-    const form = plan_.pair.form || 'indefinite';
-    const slotTag = tagOfPattern(quest, plan_.pair.patternId);
 
-    /* And a whole phrase competes with other whole phrases. */
-    if (!plan_.pair.hasSlot) {
+    /* And a whole phrase competes with other whole phrases: offering "ticket"
+       and "water" against "Perdona" is not a choice, it is a spot-the-odd-one
+       -out. */
+    if (!pair.hasSlot) {
       const solos = [];
       for (const p of quest.pairs) {
-        if (p.hasSlot || p.id === plan_.pair.id) continue;
-        for (const raw of words(plan_.frameTarget ? p.allTarget : p.allNative)) {
+        if (p.hasSlot || p.id === pair.id) continue;
+        for (const raw of words(plan.frameTarget ? p.allTarget : p.allNative)) {
           const w = split(raw).word;
           if (w && !taken.has(norm(w)) && !solos.some(x => norm(x) === norm(w))) solos.push(w);
         }
@@ -363,35 +404,50 @@ window.ENGINE = (function () {
       return makePills(shuffle([...answer, ...dressed], state));
     }
 
+    /* Decoys are drawn PER SLOT now. With two slots the wrong answers have to
+       be wrong for a particular slot — a word that is invalid for the first
+       slot may be perfectly valid for the second, and offering it as a decoy
+       for both is offering a right answer as a wrong one.
+
+       Within a slot the order is the epic's: items whose tags make them
+       invalid there first (a band is a wrong answer to "Can I have ___" in a
+       way a beer is not), then valid ones, then frame words. */
+    const want = new Set(plan.targetSlots || []);
     const invalid = [], valid = [], frames = [];
-    for (const [iid, item] of Object.entries(quest.vocabItems)) {
-      if (iid === plan_.pair.itemId) continue;
-      /* Word by word, like the answer: "un refresco" offers "un" and
-         "refresco". The article half is not padding — "un" against "una" is
-         the gender distinction, which is exactly the kind of wrong answer
-         worth being able to make. */
-      const bucket = slotTag && !(item.tags || []).includes(slotTag) ? invalid : valid;
-      for (const raw of words(item[lang][form])) {
-        const w = split(raw).word;
-        if (!w || taken.has(norm(w)) || bucket.some(x => norm(x) === norm(w))) continue;
-        bucket.push(w);
+    const seen = new Set();
+    const add = (bucket, w) => {
+      if (!w || taken.has(norm(w)) || seen.has(norm(w))) return;
+      seen.add(norm(w));
+      bucket.push(w);
+    };
+
+    for (const key of pair.slotKeys) {
+      const sl = pair.group.nativeFrames.find(f => f.type === 'slot' && f.key === key);
+      if (!sl) continue;
+      const lang = want.has(key) ? quest.targetLang : quest.nativeLang;
+      const form = sl.forms[0];
+      const mine = pair.fill[key];
+      for (const [iid, item] of Object.entries(quest.vocabItems)) {
+        if (iid === mine) continue;
+        const bucket = (item.tags || []).includes(sl.tag) ? valid : invalid;
+        /* Word by word, like the answer: "un refresco" offers "un" and
+           "refresco". The article half is not padding — "un" against "una" is
+           the gender distinction, which is exactly the kind of wrong answer
+           worth being able to make. */
+        for (const raw of words(item[lang][form])) add(bucket, split(raw).word);
       }
     }
+
     for (const p of quest.pairs) {
-      if (p.patternId === plan_.pair.patternId || !p.hasSlot) continue;
-      for (const raw of words(plan_.frameTarget ? p.frame.target : p.frame.native)) {
+      if (p.patternId === pair.patternId || !p.hasSlot) continue;
+      for (const raw of words(plan.frameTarget ? p.frame.target : p.frame.native)) {
         const w = split(raw).word;
-        if (!w || w === '___' || taken.has(norm(w))) continue;
-        if (!frames.includes(w)) frames.push(w);
+        if (w !== '___') add(frames, w);
       }
     }
 
     const pool = [...invalid, ...valid, ...(answer.length > 1 ? frames : [])];
-    const decoys = [];
-    for (const w of pool) {
-      if (decoys.length >= count) break;
-      if (!decoys.some(d => norm(d) === norm(w))) decoys.push(w);
-    }
+    const decoys = pool.slice(0, count);
 
     const dressed = decoys.map((w, i) => dress(i + answer.length)(w));
     return makePills(shuffle([...answer, ...dressed], state));
@@ -455,8 +511,17 @@ window.ENGINE = (function () {
      Exposure is counted once per turn, on the first attempt, so retrying does
      not inflate it. timesPrompted is a correct answer given with the pills in
      front of them; timesUnprompted is one given without a hint being taken. */
+  /* The record for the word this step is about — not always the first slot's,
+     once a pattern holds two. */
+  function stepItem(state, plan) {
+    if (!plan.introKey) return null;
+    const it = (plan.pair.items || []).find(i => i.key === plan.introKey);
+    return it ? state.items[it.id] : null;
+  }
+
   function seen(state, plan) {
-    const { pattern, item } = recOf(state, plan.pair);
+    const { pattern } = recOf(state, plan.pair);
+    const item = stepItem(state, plan) || recOf(state, plan.pair).item;
     if (state.attempts === 0) {
       pattern.exposures += 1;
       if (item) item.exposures += 1;
@@ -467,7 +532,8 @@ window.ENGINE = (function () {
   }
 
   function applyCorrect(state, plan, { hinted }) {
-    const { pattern, item } = recOf(state, plan.pair);
+    const { pattern } = recOf(state, plan.pair);
+    const item = stepItem(state, plan) || recOf(state, plan.pair).item;
     for (const r of [pattern, item]) {
       if (!r) continue;
       r.correct += 1;
@@ -525,7 +591,7 @@ window.ENGINE = (function () {
 
   return {
     createState, pickNext, planTurn, pills, check, validate, makePills, slug,
-    syllabus, stepsIn, advance, stageDone,
+    syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     expected, gaps, tagOfPattern, norm, words,

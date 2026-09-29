@@ -47,10 +47,12 @@
     <h2>Turn</h2>
     <label for="pair">Pattern × vocab pair</label>
     <select id="pair"></select>
-    <label for="frame">Construction</label>
-    <select id="frame"><option value="native">support language</option><option value="target">target language</option></select>
-    <label for="item">Vocab item</label>
-    <select id="item"><option value="native">support language</option><option value="target">target language</option></select>
+    <label for="step">Step of the ladder</label>
+    <select id="step"></select>
+    <p style="font-size:12px;color:var(--ink3);margin:6px 0 0">
+      One step per slot, then one for the frame (NJA-3166). The step decides
+      which words are in the target language, so there is nothing to set by hand.
+    </p>
     <label for="intro">Introducing this exchange</label>
     <select id="intro">
       <option value="">nothing</option>
@@ -97,15 +99,41 @@
 
   function pairById(id) { return Q.pairs.find(p => p.id === id); }
 
+  /* The step selector is rebuilt per pair: a two-slot pattern has three steps,
+     a slotless one has a single step. */
+  function fillSteps() {
+    const pair = pairById($('pair').value);
+    const n = E.stepsIn(pair);
+    const keep = Math.min(Number($('step').value) || 0, n - 1);
+    $('step').innerHTML = '';
+    for (let i = 0; i < n; i++) {
+      const o = document.createElement('option');
+      o.value = String(i);
+      const slots = E.slotsAtStep(pair, i);
+      o.textContent = E.frameAtStep(pair, i)
+        ? `${i} — the whole sentence`
+        : `${i} — ${slots[slots.length - 1]} crosses`;
+      $('step').appendChild(o);
+    }
+    $('step').value = String(keep);
+  }
+
+  /* Ask the engine, rather than reassembling its decision here: everything the
+     game shows comes out of planTurn, and a sandbox that computed its own
+     would be testing the sandbox. */
   function plan() {
     const pair = pairById($('pair').value);
-    const frameTarget = $('frame').value === 'target';
-    const itemTarget = pair.hasSlot && $('item').value === 'target';
-    const introducing = $('intro').value || null;
-    const g = E.gaps(pair, frameTarget, itemTarget);
-    return { pair, frameTarget, itemTarget, introducing,
-             introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null,
-             expected: E.expected(pair, frameTarget, itemTarget), ...g };
+    state.step = Number($('step').value) || 0;
+    const pl = E.planTurn(state, pair);
+    const introducing = $('intro').value || pl.introducing;
+    return Object.assign({}, pl, { introducing,
+      introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null });
+  }
+
+  /* The word this step is teaching, which with several slots is no longer
+     simply the pair's first one. */
+  function introItem(pl) {
+    return pl.pair.items.find(i => i.key === pl.introKey) || pl.pair.items[0] || null;
   }
 
   function draw() {
@@ -114,7 +142,9 @@
       `<span class="k">pair         </span>${pl.pair.id}\n` +
       `<span class="k">construction </span>${pl.pair.frame.native.trim()}  →  ${pl.pair.frame.target.trim()}\n` +
       (pl.pair.hasSlot
-        ? `<span class="k">vocab        </span>${pl.pair.item.native}  →  ${pl.pair.item.target}  <span class="k">(${pl.pair.form})</span>\n`
+        ? pl.pair.items.map(it =>
+            `<span class="k">${(it.key + '            ').slice(0, 13)}</span>${it.native}  →  ${it.target}` +
+            `  <span class="k">${pl.targetSlots.includes(it.key) ? '(across)' : '(still ' + Q.nativeLang + ')'}</span>\n`).join('')
         : `<span class="k">vocab        </span>— no slot —\n`) +
       `<span class="k">expected     </span><b>${pl.expected}</b>\n` +
       `<span class="k">to produce   </span>${pl.answer.join(' · ') || '(nothing)'}\n` +
@@ -134,8 +164,8 @@
     $('out').innerHTML = '<p style="color:var(--ink3);margin:0">Calling…</p>';
     const intro = pl.introducing ? {
       kind: pl.introducing, by: pl.introducedBy,
-      target: pl.introducing === 'item' ? pl.pair.item.target : pl.pair.frame.target.trim(),
-      means:  pl.introducing === 'item' ? pl.pair.item.native : pl.pair.frame.native.trim(),
+      target: pl.introducing === 'item' ? introItem(pl).target : pl.pair.frame.target.trim(),
+      means:  pl.introducing === 'item' ? introItem(pl).native : pl.pair.frame.native.trim(),
     } : null;
 
     const body = {
@@ -220,7 +250,7 @@
       ['not yet introduced', over.join(', ') || 'none', over.length === 0],
     ];
     if (pl.introducing === 'item') {
-      const stem = pl.pair.item.target.split(/\s+/).pop().toLowerCase().replace(/e?s$/, '');
+      const stem = introItem(pl).target.split(/\s+/).pop().toLowerCase().replace(/e?s$/, '');
       const has = toks.some(t => t.startsWith(stem));
       rows.push(['carries the new word', has ? 'yes' : 'NO — game would reject', has]);
     }
@@ -232,17 +262,22 @@
     const out = [];
     const push = s => { for (const w of String(s).split(/\s+/)) { const k = w.toLowerCase().replace(/[¿?¡!.,;:]/g, ''); if (k) out.push(k); } };
     if (pl.frameTarget) push(pl.pair.frame.target.replace('___', ' '));
-    if (pl.itemTarget) push(pl.pair.item.target);
-    if (pl.introducing === 'item' && pl.pair.hasSlot) push(pl.pair.item.target);
+    for (const key of pl.targetSlots || []) {
+      const it = pl.pair.items.find(i => i.key === key);
+      if (it) push(it.target);
+    }
+    if (pl.introducing === 'item' && pl.pair.hasSlot && introItem(pl)) push(introItem(pl).target);
     if (pl.introducing === 'pattern') push(pl.pair.frame.target.replace('___', ' '));
     return [...new Set(out)];
   }
 
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  for (const id of ['pair', 'frame', 'item', 'intro']) $(id).addEventListener('change', draw);
+  $('pair').addEventListener('change', () => { fillSteps(); draw(); });
+  for (const id of ['step', 'intro']) $(id).addEventListener('change', draw);
   $('run').addEventListener('click', run);
-  $('reset').addEventListener('click', () => { state = E.createState(Q); draw(); });
+  $('reset').addEventListener('click', () => { state = E.createState(Q); fillSteps(); draw(); });
+  fillSteps();
   draw();
 })();
 </script>

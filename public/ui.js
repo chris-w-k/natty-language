@@ -516,9 +516,12 @@
   function newThing(plan) {
     if (!plan.introducing) return null;
     if (plan.introducing === 'item') {
-      const it = Q.vocabItems[plan.pair.itemId];
-      return { kind: 'item', by: 'actor',
-               target: it[TL()][plan.pair.form], means: it[NL()][plan.pair.form] };
+      /* The word for THIS step's slot, which with two slots is not always the
+         first one — the plan names the key it is teaching. */
+      const it = (plan.pair.items || []).find(i => i.key === plan.introKey)
+              || (plan.pair.items || [])[0];
+      if (!it) return null;
+      return { kind: 'item', by: 'actor', target: it.target, means: it.native };
     }
     const pat = Q.vocabPatterns[plan.pair.patternId];
     return { kind: 'pattern', by: 'coach',
@@ -994,7 +997,9 @@
     $('t-obj').textContent = plan ? plan.pair.id : '—';
     $('t-scaf').textContent = plan
       ? (plan.frameTarget ? 'frame:target' : 'frame:native') +
-        ' · ' + (plan.pair.hasSlot ? (plan.itemTarget ? 'word:target' : 'word:native') : 'no slot') +
+        ' · ' + (plan.pair.hasSlot
+          ? 'slots:' + (plan.targetSlots || []).length + '/' + plan.pair.slotCount
+          : 'no slot') +
         (plan.introducing ? ' · NEW ' + plan.introducing : '')
       : '—';
     $('t-turn').textContent = state.turn + '/' + Q.session.turnCap +
@@ -1013,7 +1018,7 @@
        competes with the line the child is waiting to hear. */
     const seen = new Set(), queue = [];
     for (const p of Q.pairs) {
-      for (const t of [p.allTarget, p.itemTarget]) {
+      for (const t of [p.allTarget, p.say(false, p.slotKeys)]) {
         if (t && !seen.has(t)) { seen.add(t); queue.push(t); }
       }
     }
@@ -1762,7 +1767,9 @@
       ['RIGHT NOW', '<b>' + esc(plan.expected) + '</b>'],
       ['ALL IN ' + TL().toUpperCase(), esc(p.allTarget)],
     ];
-    if (p.hasSlot) rows.push(['THE WORD', esc(p.item.target) + ' &middot; ' + esc(p.item.native)]);
+    for (const it of (p.items || []))
+      rows.push([p.slotCount > 1 ? 'WORD ' + (p.items.indexOf(it) + 1) : 'THE WORD',
+                 esc(it.target) + ' &middot; ' + esc(it.native)]);
     $('coach-rungs').innerHTML = rows
       .map(([k, v]) => `<div class="rung"><span class="k">${k}</span><span class="v">${v}</span></div>`)
       .join('');
