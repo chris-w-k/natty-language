@@ -107,15 +107,15 @@ window.QUEST = (function () {
 
      `speaker` is ours, and NJA-3152's pattern collection has no field for it —
      which is a gap worth closing there, because without it the conversation
-     goes wrong in a way that is hard to trace. The engine tells the character
+     goes wrong in a way that is hard to trace. The engine tells the actor
      which target-language words the child has met so he can use them; a
      construction the CHILD is learning to say to HIM then ends up in his
      mouth, and he opens with "Alright, perdona, what can I do for ya?" —
      saying the customer's own line back at them. "Excuse me", "Can I have"
      and "Thank you" belong to the person at the counter, not behind it.
 
-       learner  only the child says this; the character must never say it back
-       actor    only the character says it, so the child is never DRILLED on
+       learner  only the child says this; the actor must never say it back
+       actor    only the actor says it, so the child is never DRILLED on
                 it. "There is no sandwich" is the person behind the counter
                 telling you they are out; a child declining an offer with it
                 is being taught to say the wrong thing. These are dropped from
@@ -183,8 +183,16 @@ window.QUEST = (function () {
       accent: 'native',
       prompt: 'You are Axel — a cheeky rockstar, and the child\'s own pal. You have played a hundred gigs and you are showing them the ropes. You talk with attitude: quick, a bit cocky, never impressed by much, and funny about the world rather than about them. You are always on their side, you never talk down to them, and you are the only one here who explains anything.',
     },
-    /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent". */
-    prompt: 'You are the one person behind the counter at a music venue — you sell the tickets, the drinks and the merch. A kid has come up to you. You are patient by nature and you have seen it all, but a queue is building and you are easily annoyed when you cannot make out what someone is asking for — you sigh, you lean in, you ask again. You are never annoyed AT the child, only at the hold-up, and you soften the moment they get it right.',
+    /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent" —
+       and NJA-3145 says to keep it to WHO they are, not what they should do:
+       the behaviour is the dev side's, in actorRules below.
+
+       The role matters more than it looks. Without "you have all of it and you
+       sell it", the actor answers "¿Tienes una entrada?" with "No, I don't" —
+       which is a perfectly good line and a dead end, because the child has
+       just been taught to ask for a thing and been told it does not exist.
+       He is a seller. He has stock. */
+    prompt: 'You are the one person behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
     /* The three screens before the game. Copy lives here rather than in the
        markup so it travels with the scenario — a different night out brings
        its own title, its own pep talk and its own way of getting there. */
@@ -196,8 +204,12 @@ window.QUEST = (function () {
       tap: 'Tap to continue',
     },
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
+    /* `there-is-no` is deliberately NOT here. It is the actor's way of saying
+       he is out of something, and he is never out of anything — leaving it in
+       the scenario is handing him the one line the rules above forbid. The
+       pattern stays defined for a scenario where running out is the point. */
     patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
-               'i-dont-want', 'there-is-no', 'do-you-like', 'i-like', 'i-like-two',
+               'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
                'thank-you'],
     items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
   };
@@ -224,7 +236,7 @@ window.QUEST = (function () {
      design frame has the bouncer say "Are you already drunk?" to a 7-10 year
      old whose Spanish came out in the wrong order, which is a different thing
      from a bouncer being gruff. */
-  const reactRules = `You write ONE very short line for a character in a
+  const reactRules = `You write ONE very short line for the ACTOR in a
 language game played by a 7-10 year old. The child has just spoken to you.
 Write their reply and nothing else.
 
@@ -259,10 +271,11 @@ never yours to say back: {{learner_only}}
 No stage directions, no emoji. Return JSON only.`;
 
   const prompts = {
-    actorRules: `You write ONE short line of dialogue for a character in a
-language game played by a 7-10 year old. You do not decide what is taught, how
-much of it is in which language, or what the right answer is. All of that is
-given to you. Write the line and nothing else.
+    actorRules: `You write ONE short line of dialogue for the ACTOR in a
+language game played by a 7-10 year old. The actor is the person the child is
+talking to. You do not decide what is taught, how much of it is in which
+language, or what the right answer is. All of that is given to you. Write the
+line and nothing else.
 
 {{scenario_prompt}}
 
@@ -283,6 +296,13 @@ use, never say "say X" or "try saying". Somebody else does that; when you do it
 too, two voices are giving instructions and neither is worth listening to. You
 serve, you answer, you move on.
 
+YOU HAVE WHAT YOU SELL
+You are never out of anything. When the child asks whether you have something,
+you have it; when they ask for something, they get it. "No, I don't" ends the
+exchange and teaches a child who has just learnt to ask for a thing that the
+thing does not exist. Refusing is not a kind of grumpiness that is available
+to you — be short with them, be unimpressed, and serve them anyway.
+
 Never ask a question the child cannot answer with what they know. They have one
 short list of words. "Which one would you like?", "what size?", "how many?" each
 demand vocabulary they have not got, and the exchange dies there. If you ask
@@ -299,7 +319,7 @@ it teaches vocabulary nobody chose.
 WHOSE LINE IS WHOSE
 These are the CHILD'S words, said by a customer to you. Never say them back to
 them, in either language, not even as filler: {{learner_only}}
-You are the one behind the counter. A server who greets a customer with the
+You are the actor behind the counter. A server who greets a customer with the
 customer's own opening line is not having a conversation with them.
 
 Do not say the child's expected answer, or the substance of it, before they
@@ -315,7 +335,7 @@ wording. Return JSON only.`,
 
     reactRules,
     coachRules: `You are the child's coach in a language game played by a 7-10
-year old. You speak only to them, never to the character. Write ONE short line.
+year old. You speak only to them, never to the actor. Write ONE short line.
 
 {{coach_prompt}}
 
@@ -488,7 +508,7 @@ Return JSON only.`,
     for (const pid of activity.patterns) {
       const pat = vocabPatterns[pid];
       if (!pat) throw new Error('unknown pattern: ' + pid);
-      /* A pattern only the character says is scenery, not curriculum: it is
+      /* A pattern only the actor says is scenery, not curriculum: it is
          defined so the writing can lean on it, but the child is never asked
          to produce it. */
       if (pat.speaker === 'actor') continue;
