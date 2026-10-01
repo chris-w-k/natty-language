@@ -159,7 +159,26 @@
       <div class="intro-road"></div>
     </div>
 
-    <section class="intro-panel" id="intro-title">
+    <!-- NJA-3204: the pair is chosen before the session starts, both ways
+         round. Languages the content cannot teach yet are shown and disabled
+         rather than hidden, so it is obvious what a content drop would add. -->
+    <section class="intro-panel" id="intro-langs">
+      <div class="lang-card">
+        <h2 id="lang-title">Pick your languages</h2>
+        <div class="lang-group">
+          <span class="lang-lab" id="lang-lab-native"></span>
+          <div class="lang-row" id="lang-native"></div>
+        </div>
+        <div class="lang-group">
+          <span class="lang-lab" id="lang-lab-target"></span>
+          <div class="lang-row" id="lang-target"></div>
+        </div>
+        <p class="lang-note" id="lang-note"></p>
+        <button class="btn wide primary" id="lang-go"><span>START</span></button>
+      </div>
+    </section>
+
+    <section class="intro-panel hidden" id="intro-title">
       <div class="intro-copy">
         <h1 id="intro-title-text">GOING TO A GIG</h1>
         <p id="intro-sub"></p>

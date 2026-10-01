@@ -3,7 +3,17 @@
    Three stacked layers so the reskin is assets + tokens. */
 
 (function () {
-  const Q = window.QUEST;
+  /* The language pair is chosen on the first screen (NJA-3204: it is a
+     session input, not a constant), so the whole content object is rebuilt
+     when it changes. Everything below reads Q at call time rather than
+     capturing bits of it. */
+  let Q = window.QUEST;
+  const C = window.CONTENT;
+  function setPair(nativeCode, targetCode) {
+    Q = C.build(nativeCode, targetCode);
+    window.QUEST = Q;
+    return Q;
+  }
   const E = window.ENGINE;
   const V = window.VOICE;
   const $ = id => document.getElementById(id);
@@ -19,7 +29,7 @@
      not also read as a tap (NJA-3161 AC 1.3, NJA-3178 AC 1.4) */
   let dragMoved = false;
   const ACTOR = Q.activity.actor.id;
-  const COACH = Q.activity.coach.name;
+  const COACH = Q.activity.coach.name;   // the activity itself does not change with the pair
   let inputLocked = false;
   let turnLine = '', turnAsk = '', turnCoachHtml = '', turnCoachFrags = null;   // this turn's words, for history and the repeat
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
@@ -284,6 +294,99 @@
     $(id).classList.remove('hidden');
   }
 
+  /* ---------- picking the pair (NJA-3204) ----------
+     startSession takes nativeLanguage and targetLanguage, so the direction is
+     a choice rather than a build-time constant. The screen offers every
+     language the content names, with the ones it has no words for disabled —
+     a language going live is a content edit and nothing here changes.
+
+     ?native= / ?target= set it without the screen, which is how the headless
+     tests run both directions. */
+  function paramPair() {
+    const q = new URLSearchParams(location.search);
+    const n = q.get('native'), t = q.get('target');
+    if (!n && !t) return null;
+    return { native: n || Q.nativeLang, target: t || Q.targetLang };
+  }
+
+  /* The pair the screen opens on: whatever the URL says, else whatever is
+     already loaded, else the first two the content covers. */
+  function startingPair() {
+    const p = paramPair();
+    if (p && C.covered.includes(p.native) && C.covered.includes(p.target) && p.native !== p.target)
+      return p;
+    return { native: Q.nativeLang, target: Q.targetLang };
+  }
+
+  function pickLanguages() {
+    let chosen = startingPair();
+
+    /* With a pair already in the URL there is nothing to ask: apply it and
+       let the title card come up. */
+    if (paramPair()) { apply(chosen); return Promise.resolve(); }
+
+    $('lang-title').textContent = t('lang-pick-title') || 'Pick your languages';
+    $('lang-lab-native').textContent = t('lang-pick-native') || 'I SPEAK';
+    $('lang-lab-target').textContent = t('lang-pick-target') || "I'M LEARNING";
+    $('lang-go').querySelector('span').textContent = t('lang-pick-go') || 'START';
+
+    return new Promise(resolve => {
+      draw();
+      $('lang-go').addEventListener('click', () => {
+        if (!valid(chosen)) return;
+        apply(chosen);
+        /* This click is the gesture the browser wants before any audio. */
+        V.unlock(); SFX.unlock();
+        resolve();
+      });
+
+      function draw() {
+        for (const side of ['native', 'target']) {
+          const row = $('lang-' + side);
+          row.innerHTML = '';
+          for (const lang of C.languages) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'lang-chip';
+            b.textContent = lang.name;
+            b.dataset.code = lang.code;
+            const known = C.covered.includes(lang.code);
+            /* Picking the language the OTHER side holds swaps the pair rather
+               than being refused. Refusing it is a dead end: with two
+               languages covered, both cross-choices are the other side's, so
+               there would be no way to turn the session round at all. */
+            const taken = chosen[side === 'native' ? 'target' : 'native'] === lang.code;
+            b.disabled = !known;
+            b.setAttribute('aria-pressed', String(chosen[side] === lang.code));
+            if (known) b.addEventListener('click', () => {
+              chosen = taken
+                ? { native: chosen.target, target: chosen.native }
+                : Object.assign({}, chosen, { [side]: lang.code });
+              draw();
+            });
+            row.appendChild(b);
+          }
+        }
+        const missing = C.languages.filter(l => !C.covered.includes(l.code));
+        $('lang-note').textContent = missing.length
+          ? (t('lang-pick-missing') || 'No words yet for {0}.')
+              .split('{0}').join(missing.map(l => l.name).join(', '))
+          : '';
+        $('lang-go').disabled = !valid(chosen);
+      }
+
+      function valid(p) {
+        return p.native !== p.target &&
+               C.covered.includes(p.native) && C.covered.includes(p.target);
+      }
+    });
+
+    function apply(p) {
+      setPair(p.native, p.target);
+      $('t-mode').textContent = p.native + ' \u2192 ' + p.target + ' \u00b7 ' + Q.pairs.length + ' pairs';
+    }
+  }
+
   /* Returns whatever probeServer() resolved to, because boot needs it and the
      taxi ride is the natural place to have found out. */
   async function intro() {
@@ -296,10 +399,18 @@
        tone still starts, because that is part of the game rather than part of
        the intro. */
     if (/[?&]intro=0/.test(location.search)) {
+      /* No screen, but ?native=/?target= still decide the direction — that is
+         how the headless tests play the night both ways round. */
+      const p = paramPair();
+      if (p && p.native !== p.target &&
+          C.covered.includes(p.native) && C.covered.includes(p.target)) {
+        setPair(p.native, p.target);
+      }
       const ok = await probeServer();
       SFX.bed('room', 'audio/loading.mp3', { volume: 0.12, fade: 1200 });
       return ok;
     }
+
     $('intro-title-text').textContent = copy.title || Q.title || '';
     $('intro-sub').textContent = copy.sub || '';
     $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
@@ -308,6 +419,13 @@
     $('intro-bubble').textContent = copy.coach || '';
 
     el.classList.remove('hidden');
+
+    /* First screen: which way round is this session? The whole content object
+       is rebuilt from the answer (NJA-3204), so it comes before the title
+       card and before anything that reads a pattern. */
+    showPanel('intro-langs');
+    await pickLanguages();
+
     showPanel('intro-title');
 
     /* The street bed starts with the title card, not after the tap. Autoplay
@@ -773,12 +891,15 @@
   /* ---------- tappable Spanish ----------
      Every Spanish word on screen can be tapped for its meaning and its sound.
      This is the main way a child reads the bouncer without being taught him. */
-  const GLOSS = Q.glossary || {};
+  /* Rebuilt with the pair: the glossary is target-language words and their
+     native meanings, so reversing the direction reverses every entry. */
+  const GLOSS = () => Q.glossary || {};
   const bare = w => w.toLowerCase().replace(/[¿?¡!.,;:"“”]/g, '').trim();
 
   function gloss(word) {
     const k = bare(word);
-    return GLOSS[k] || GLOSS[k.replace(/[^a-zñáéíóúü ]/g, '')] || null;
+    const g = GLOSS();
+    return g[k] || g[k.replace(/[^a-zñáéíóúü ]/g, '')] || null;
   }
 
   /* Feature 8.3: a target-language word is highlighted and clickable once it
@@ -1137,10 +1258,16 @@
 
      The accent lives on the character in content, so a scenario set somewhere
      else brings its own. */
+  /* 'target' and 'native' resolve against the pair chosen for this session,
+     so reversing the direction swaps the two voices rather than leaving the
+     bartender with a Spanish accent in a session that teaches English. A
+     literal language code still wins, for a character who is from somewhere
+     specific whichever way round the session runs. */
   function accentOf(who) {
-    if (who === Q.activity.actor.id) return Q.activity.actor.accent || TL();
-    if (who === 'axel') return Q.activity.coach.accent || NL();
-    if (who === 'learner' || who === 'me') return Q.activity.coach.accent || NL();
+    const pin = v => v === 'target' ? TL() : v === 'native' ? NL() : v;
+    if (who === Q.activity.actor.id) return pin(Q.activity.actor.accent) || TL();
+    if (who === 'axel') return pin(Q.activity.coach.accent) || NL();
+    if (who === 'learner' || who === 'me') return pin(Q.activity.coach.accent) || NL();
     return NL();
   }
 
@@ -1885,21 +2012,27 @@
   let dragWired = false;
 
   async function boot() {
-    state = E.createState(Q);
     preloaded = false;
     if (!dragWired) { wireDrag(); dragWired = true; }
-    E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
     chatLog.length = 0;
     $('chat').innerHTML = '';
-    buildRail();
     hideGloss();
     $('chat-full').classList.add('hidden');
-    $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     preloadRigs();                    // loads behind the intro
-    if (!(await intro())) {         // locked: ask for the code, then re-probe
+
+    /* The intro picks the language pair, which rebuilds Q — so nothing that
+       reads a pattern may happen before it. The session state and the
+       progress rail are both built FROM the syllabus, so they wait. */
+    const unlocked = await intro();
+    if (!unlocked) {                // locked: ask for the code, then re-probe
       await unlockGate();
       await probeServer();
     }
+
+    state = E.createState(Q);
+    E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
+    buildRail();
+    $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     $('btn-mic').style.opacity = micAvailable() ? '' : '.4';
     step();
   }

@@ -18,50 +18,88 @@
 
 window.QUEST = (function () {
 
-  /* Which language the child already has, and which they are here to learn.
-     Reversible by design (NJA-3136, multi-language): nothing below assumes
-     English is either one. The MVP runs en -> es so Chris can play it; the
-     real product runs es/pt/... -> en with the same content. */
-  const LANGS = { native: 'en', target: 'es' };
+  /* ---------- languages ----------
+     NJA-3145 writes every pattern and every vocab item with a slot per
+     language: en, es, pt, tr, pl, ro. Which two are in play is a SESSION
+     input (NJA-3204: startSession takes nativeLanguage and targetLanguage),
+     not a constant — the same content teaches English to a Spanish speaker
+     and Spanish to an English one.
 
-  const slotTags = ['item', 'likeable'];
+     The four with no words yet are listed here anyway, because the picker
+     shows what the content could support and greys out what it does not:
+     filling them in is a content edit and nothing else. */
+  const LANGUAGES = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Español' },
+    { code: 'pt', name: 'Português' },
+    { code: 'tr', name: 'Türkçe' },
+    { code: 'pl', name: 'Polski' },
+    { code: 'ro', name: 'Română' },
+  ];
 
-  /* bare / definite / indefinite, per language — the three forms a slot can
-     ask for. English fills all three even where two are identical, because
-     the pattern picks the form and the pattern does not know the language. */
+  const slotTags = ['ticket', 'item', 'like'];
+
+  /* NJA-3152's five forms, per language. `bare` is the spelling the schema
+     ticket uses — NJA-3204's fixtures write `base` for the same field, and
+     the schema wins.
+
+     The plural pair is required by the schema and authored per item, not
+     derived: a mass noun has no plural, so `water` and `beer` carry the mass
+     form in the plural slots. That is what a content editor fills in, and it
+     is why these are strings rather than something the code works out. */
   const vocabItems = {
-    ticket:   { tags: ['item', 'likeable'],
-                en: { bare: 'ticket',   definite: 'the ticket',   indefinite: 'a ticket' },
-                es: { bare: 'entrada',  definite: 'la entrada',   indefinite: 'una entrada' } },
-    water:    { tags: ['item', 'likeable'],
-                en: { bare: 'water',    definite: 'water',        indefinite: 'water' },
-                es: { bare: 'agua',     definite: 'el agua',      indefinite: 'agua' } },
-    soda:     { tags: ['item', 'likeable'],
-                en: { bare: 'soda',     definite: 'the soda',     indefinite: 'a soda' },
-                es: { bare: 'refresco', definite: 'el refresco',  indefinite: 'un refresco' } },
-    beer:     { tags: ['item', 'likeable'],
-                en: { bare: 'beer',     definite: 'the beer',     indefinite: 'a beer' },
-                es: { bare: 'cerveza',  definite: 'la cerveza',   indefinite: 'una cerveza' } },
-    sandwich: { tags: ['item', 'likeable'],
-                en: { bare: 'sandwich', definite: 'the sandwich', indefinite: 'a sandwich' },
-                es: { bare: 'bocadillo', definite: 'el bocadillo', indefinite: 'un bocadillo' } },
-    record:   { tags: ['item', 'likeable'],
-                en: { bare: 'record',   definite: 'the record',   indefinite: 'a record' },
-                es: { bare: 'disco',    definite: 'el disco',     indefinite: 'un disco' } },
-    tshirt:   { tags: ['item', 'likeable'],
-                en: { bare: 't-shirt',  definite: 'the t-shirt',  indefinite: 'a t-shirt' },
-                es: { bare: 'camiseta', definite: 'la camiseta',  indefinite: 'una camiseta' } },
+    ticket:   { tags: ['ticket', 'item', 'like'],
+                en: { bare: 'ticket',   definite: 'the ticket',   indefinite: 'a ticket',
+                      plural_bare: 'tickets',   plural_definite: 'the tickets' },
+                es: { bare: 'entrada',  definite: 'la entrada',   indefinite: 'una entrada',
+                      plural_bare: 'entradas',  plural_definite: 'las entradas' } },
+    water:    { tags: ['item', 'like'],
+                en: { bare: 'water',    definite: 'water',        indefinite: 'water',
+                      plural_bare: 'water',     plural_definite: 'the water' },
+                es: { bare: 'agua',     definite: 'el agua',      indefinite: 'agua',
+                      plural_bare: 'agua',      plural_definite: 'el agua' } },
+    soda:     { tags: ['item', 'like'],
+                en: { bare: 'soda',     definite: 'the soda',     indefinite: 'a soda',
+                      plural_bare: 'sodas',     plural_definite: 'the sodas' },
+                es: { bare: 'refresco', definite: 'el refresco',  indefinite: 'un refresco',
+                      plural_bare: 'refrescos', plural_definite: 'los refrescos' } },
+    beer:     { tags: ['item', 'like'],
+                en: { bare: 'beer',     definite: 'the beer',     indefinite: 'a beer',
+                      plural_bare: 'beer',      plural_definite: 'the beer' },
+                es: { bare: 'cerveza',  definite: 'la cerveza',   indefinite: 'una cerveza',
+                      plural_bare: 'cerveza',   plural_definite: 'la cerveza' } },
+    sandwich: { tags: ['item', 'like'],
+                en: { bare: 'sandwich', definite: 'the sandwich', indefinite: 'a sandwich',
+                      plural_bare: 'sandwiches', plural_definite: 'the sandwiches' },
+                es: { bare: 'bocadillo', definite: 'el bocadillo', indefinite: 'un bocadillo',
+                      plural_bare: 'bocadillos', plural_definite: 'los bocadillos' } },
+    record:   { tags: ['item', 'like'],
+                en: { bare: 'record',   definite: 'the record',   indefinite: 'a record',
+                      plural_bare: 'records',   plural_definite: 'the records' },
+                es: { bare: 'disco',    definite: 'el disco',     indefinite: 'un disco',
+                      plural_bare: 'discos',    plural_definite: 'los discos' } },
+    tshirt:   { tags: ['item', 'like'],
+                en: { bare: 't-shirt',  definite: 'the t-shirt',  indefinite: 'a t-shirt',
+                      plural_bare: 't-shirts',  plural_definite: 'the t-shirts' },
+                es: { bare: 'camiseta', definite: 'la camiseta',  indefinite: 'una camiseta',
+                      plural_bare: 'camisetas', plural_definite: 'las camisetas' } },
     /* A band is not something you can be handed across a counter, so it
-       carries `likeable` only and the engine will never pair it with
-       "Can I have ___". That tag check is the whole point of NJA-3152's
-       slot_tags: adding a noun is a tag, not an edit to seven patterns. */
-    band:     { tags: ['likeable'],
-                en: { bare: 'band',     definite: 'the band',     indefinite: 'a band' },
-                es: { bare: 'grupo',    definite: 'el grupo',     indefinite: 'un grupo' } },
-    singer:   { tags: ['likeable'],
-                en: { bare: 'singer',   definite: 'the singer',   indefinite: 'a singer' },
-                es: { bare: 'cantante', definite: 'el cantante',  indefinite: 'un cantante' } },
+       carries `like` only and the engine will never pair it with "Can I have
+       ___". That tag check is the whole point of NJA-3152's slot_tags: adding
+       a noun is a tag, not an edit to seven patterns. */
+    band:     { tags: ['like'],
+                en: { bare: 'band',     definite: 'the band',     indefinite: 'a band',
+                      plural_bare: 'bands',     plural_definite: 'the bands' },
+                es: { bare: 'grupo',    definite: 'el grupo',     indefinite: 'un grupo',
+                      plural_bare: 'grupos',    plural_definite: 'los grupos' } },
+    singer:   { tags: ['like'],
+                en: { bare: 'singer',   definite: 'the singer',   indefinite: 'a singer',
+                      plural_bare: 'singers',   plural_definite: 'the singers' },
+                es: { bare: 'cantante', definite: 'el cantante',  indefinite: 'un cantante',
+                      plural_bare: 'cantantes', plural_definite: 'los cantantes' } },
   };
+
+  const FORMS = ['bare', 'definite', 'indefinite', 'plural_bare', 'plural_definite'];
 
   /* Slot syntax is NJA-3152's: {tag#number:article}. The number distinguishes
      two slots drawing on the same tag; the article names which form to fill
@@ -90,7 +128,13 @@ window.QUEST = (function () {
      frame, which is what carries the pragmatic role. */
   const vocabPatterns = {
     'excuse-me':    { speaker: 'learner', en: 'Excuse me.',       es: 'Perdona.',                  opensOnly: true },
-    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
+    /* The form differs between the languages, and that is the point of
+       NJA-3145's grammar context rather than an oversight: English wants the
+       article here and Spanish drops it — "¿Tienes entrada?" is what someone
+       on the door actually says. Each word is rendered in ITS OWN language's
+       form, so the English noun keeps its article when it crosses into the
+       Spanish frame and the Spanish one does not pick up a stray "una". */
+    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:bare}?' },
     'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
     'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
@@ -99,15 +143,15 @@ window.QUEST = (function () {
        for was the barman's own "there is no ___". */
     'i-dont-want':  { speaker: 'learner', en: "I don't want {item:indefinite}.",       es: 'No quiero {item:indefinite}.' },
     'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
-    'do-you-like':  { speaker: 'either',  en: 'Do you like {likeable:definite}?',     es: '¿Te gusta {likeable:definite}?' },
-    'i-like':       { speaker: 'either',  en: 'I like {likeable:definite}.',          es: 'Me gusta {likeable:definite}.' },
+    'do-you-like':  { speaker: 'either',  en: 'Do you like {like:definite}?',     es: '¿Te gusta {like:definite}?' },
+    'i-like':       { speaker: 'either',  en: 'I like {like:definite}.',          es: 'Me gusta {like:definite}.' },
     /* Two slots. NJA-3160's third unit test is a pattern of exactly this
        shape, and the engine used to refuse them outright — one slot per
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
        apart; both draw on the same tag. */
     'i-like-two':   { speaker: 'either',
-                      en: 'I like {likeable#1:definite} and {likeable#2:definite}.',
-                      es: 'Me gustan {likeable#1:definite} y {likeable#2:definite}.' },
+                      en: 'I like {like#1:definite} and {like#2:definite}.',
+                      es: 'Me gustan {like#1:definite} y {like#2:definite}.' },
     'thank-you':    { speaker: 'learner', en: 'Thank you.',       es: 'Gracias.' },
   };
 
@@ -118,7 +162,11 @@ window.QUEST = (function () {
     id: 'dev_nlt_activity_gig',
     title: 'Axel goes to a gig',
     background: 'venue-bar',
-    actor: { id: 'bartender', name: 'Bartender', speaks: 'target', accent: 'es' },
+    /* accent: 'target' / 'native' rather than a language code, because the
+       pair is chosen per session. The person behind the counter speaks the
+       language you are here to learn; your pal speaks yours. Reverse the pair
+       and the two accents swap with it. */
+    actor: { id: 'bartender', name: 'Bartender', speaks: 'target', accent: 'target' },
     /* NJA-3153 adds `prompt` to nlt_coach: "describes the personality of the
        coach, and role (i.e. to provide hints to the user of what to say in
        response to the actor's questions)". */
@@ -127,7 +175,7 @@ window.QUEST = (function () {
       /* accent: the voice this character always speaks with, whichever language
          the line happens to be in. Without it Axel drifts into a Spanish
          accent the moment his line carries a Spanish word. */
-      accent: 'en',
+      accent: 'native',
       prompt: 'You are Axel — a cheeky rockstar, and the child\'s own pal. You have played a hundred gigs and you are showing them the ropes. You talk with attitude: quick, a bit cocky, never impressed by much, and funny about the world rather than about them. You are always on their side, you never talk down to them, and you are the only one here who explains anything.',
     },
     /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent". */
@@ -289,7 +337,7 @@ Return JSON only.`,
      the model, so it is identical every time and translatable as a unit. */
   const uiStrings = {
     'answer-pane-correct-text':   'Nice Job!',
-    'answer-pane-incorrect-text': 'Not quite!',
+    'answer-pane-incorrect-text': 'Not quite, try again',
     'pause-menu-skip': 'Skip',
     'pause-menu-exit': 'Exit',
     /* NJA-3168. {0} is the number, and the marker is INSIDE the string on
@@ -318,6 +366,14 @@ Return JSON only.`,
        same sentence every time by design, it must never be wrong, and it is
        the one beat in the loop where a child is waiting to try again. */
     'coach-retry': "Let's try that again.",
+    /* The language picker. The prototype only has these in English because
+       the screen is shown before a language is chosen — in the real build it
+       follows the device locale. */
+    'lang-pick-title':   'Pick your languages',
+    'lang-pick-native':  'I SPEAK',
+    'lang-pick-target':  "I'M LEARNING",
+    'lang-pick-go':      'START',
+    'lang-pick-missing': 'No words yet for {0}.',
   };
 
 
@@ -354,8 +410,8 @@ Return JSON only.`,
   /* ---------- chunking (NJA-3197) ----------
      A pattern is parsed ONCE, into the shape the real session stores:
 
-       nativeFrames: [{type:'text', text:'I like '}, {type:'slot', key:'likeable#1'},
-                      {type:'text', text:' and '},  {type:'slot', key:'likeable#2'}]
+       nativeFrames: [{type:'text', text:'I like '}, {type:'slot', key:'like#1'},
+                      {type:'text', text:' and '},  {type:'slot', key:'like#2'}]
 
      rather than a template re-scanned with a regex on every render. The slot
      KEY carries its number, so a pattern can mention the same tag twice and
@@ -388,20 +444,36 @@ Return JSON only.`,
   /* Render a chunked pattern, choosing the language of each slot separately
      from the language of the frame. `fill` maps slot key to item id; `inTarget`
      is the set of slot keys whose word has crossed over. */
-  function render(frames, frameLang, fill, inTarget) {
+  /* A slot's FORM is a property of the language, not of the pattern. NJA-3145
+     has `i-like-x` as {like:bare} in English and {like:definite} in Spanish,
+     and NJA-3204's two-slot fixture does the same — so a Spanish word standing
+     in an English frame still takes the Spanish form. Reading the form off
+     whichever frame list is being rendered gets this wrong in exactly that
+     case ("I like disco" for "I like el disco"), so `forms` is looked up per
+     (slot key, language) from that language's own chunked pattern. */
+  function render(frames, lang, fill, inTarget, forms) {
     return frames.map(f => {
       if (f.type === 'text') return f.text;
       const id = fill[f.key];
       if (!id) return '___';
-      const lang = (inTarget && inTarget.has(f.key)) ? LANGS.target : LANGS.native;
-      return vocabItems[id][lang][f.forms[0]];
+      const wordLang = (inTarget && inTarget.has(f.key)) ? lang.target : lang.native;
+      return vocabItems[id][wordLang][formOf(forms, f, wordLang)];
     }).join('');
   }
+  /* The form this language asks for in this slot, falling back to the form
+     written in the frame we are rendering when the other language has nothing
+     to say about that slot. */
+  function formOf(forms, f, wordLang) {
+    const byLang = forms && forms[f.key];
+    return (byLang && byLang[wordLang]) || f.forms[0];
+  }
 
-  function expand() {
+  function expand(nativeCode, targetCode) {
+    const LANGS = { native: nativeCode, target: targetCode };
     const q = {
       id: activity.id, title: activity.title, activity,
       nativeLang: LANGS.native, targetLang: LANGS.target,
+      languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
       groups: [], glossary: {}, chipGloss: {},
     };
@@ -416,6 +488,7 @@ Return JSON only.`,
          to produce it. */
       if (pat.speaker === 'actor') continue;
 
+      if (!pat[LANGS.native] || !pat[LANGS.target]) continue;
       const nativeFrames = chunk(pat[LANGS.native]);
       const targetFrames = chunk(pat[LANGS.target]);
       const nk = slotsOf(nativeFrames).map(s => s.key).join(',');
@@ -431,9 +504,19 @@ Return JSON only.`,
         slots[sl.key] = usable;
       }
 
+      /* {slot key: {language: form}} — every language this pattern is written
+         in, so a word can be rendered in its own language's form wherever it
+         stands. */
+      const forms = {};
+      for (const code of LANGUAGES.map(l => l.code)) {
+        if (!pat[code]) continue;
+        for (const sl of slotsOf(chunk(pat[code])))
+          (forms[sl.key] = forms[sl.key] || {})[code] = sl.forms[0];
+      }
+
       q.groups.push({
         id: pid, pattern: pat, opensOnly: !!pat.opensOnly,
-        nativeFrames, targetFrames,
+        nativeFrames, targetFrames, forms, langs: LANGS,
         slotKeys: slotsOf(nativeFrames).map(s => s.key),
         slots,
       });
@@ -453,15 +536,17 @@ Return JSON only.`,
        rather than hand-written, so a new item is glossed the moment it is
        added — the whitelist and the tap-to-translate modal both read this. */
     for (const [iid, item] of Object.entries(vocabItems)) {
-      for (const form of ['bare', 'definite', 'indefinite']) {
+      if (!item[LANGS.target] || !item[LANGS.native]) continue;
+      for (const form of FORMS) {
         const t = item[LANGS.target][form], n = item[LANGS.native][form];
+        if (!t || !n) continue;
         q.chipGloss[t.toLowerCase()] = n;
         for (const tok of t.split(/\s+/)) q.glossary[bare(tok)] = q.glossary[bare(tok)] || n;
       }
     }
     for (const g of q.groups) {
-      const blankT = render(g.targetFrames, LANGS.target, {}, null).trim();
-      const blankN = render(g.nativeFrames, LANGS.native, {}, null).trim();
+      const blankT = render(g.targetFrames, LANGS, {}, null, g.forms).trim();
+      const blankN = render(g.nativeFrames, LANGS, {}, null, g.forms).trim();
       for (const seg of blankT.split(/\s+/)) {
         const k = bare(seg);
         if (k && k !== '___' && !q.glossary[k]) q.glossary[k] = '(part of "' + blankN + '")';
@@ -483,6 +568,7 @@ Return JSON only.`,
      language (NJA-3136, Engine step 4), and with two slots that is now three
      things to cross rather than two. */
   function makePair(group, fill) {
+    const L = group.langs;
     const use = fill || {};
     /* Distinct by default. Two slots drawing on the same tag both take the
        first valid item unless you stop them, and "I like the ticket and the
@@ -513,35 +599,76 @@ Return JSON only.`,
 
       // the frame with every slot blanked, for showing the construction alone
       frame: {
-        native: render(group.nativeFrames, LANGS.native, {}, null),
-        target: render(group.targetFrames, LANGS.target, {}, null),
+        native: render(group.nativeFrames, L, {}, null, group.forms),
+        target: render(group.targetFrames, L, {}, null, group.forms),
       },
-      // what sits in each slot, in both languages
+      /* What sits in each slot, in both languages — each in ITS OWN
+         language's form, which is the whole of NJA-3145's grammar context. */
       items: group.slotKeys.map(key => ({
         key, id: use[key],
-        native: vocabItems[use[key]][LANGS.native][slotForm(group, key)],
-        target: vocabItems[use[key]][LANGS.target][slotForm(group, key)],
+        native: vocabItems[use[key]][L.native][slotForm(group, key, L.native)],
+        target: vocabItems[use[key]][L.target][slotForm(group, key, L.target)],
       })),
       get item() { return this.items[0] || null; },
 
-      allNative: render(group.nativeFrames, LANGS.native, use, none),
-      allTarget: render(group.targetFrames, LANGS.target, use, all),
+      allNative: render(group.nativeFrames, L, use, none, group.forms),
+      allTarget: render(group.targetFrames, L, use, all, group.forms),
       /* Any mix: the frame in one language, a named set of slots in the other.
          This is what replaces the old four fixed renderings — with two slots
          there are six combinations, not four, and with three there are
          sixteen, so they are computed rather than enumerated. */
       say(frameTarget, targetSlots) {
         const frames = frameTarget ? group.targetFrames : group.nativeFrames;
-        return render(frames, frameTarget ? LANGS.target : LANGS.native,
-                      use, asTarget(targetSlots || []));
+        return render(frames, L, use, asTarget(targetSlots || []), group.forms);
       },
     };
   }
 
-  function slotForm(group, key) {
+  function slotForm(group, key, lang) {
+    const byLang = group.forms && group.forms[key];
+    if (byLang && byLang[lang]) return byLang[lang];
     const sl = slotsOf(group.nativeFrames).find(s => s.key === key);
     return sl ? sl.forms[0] : 'bare';
   }
 
-  return expand();
+  /* ---------- which pairs this content can actually teach ----------
+     A language is usable when every pattern this scenario draws on, and every
+     vocab item it uses, is written in it. NJA-3204 wants the unusable case to
+     fail loudly rather than quietly produce half a session, so the picker
+     greys them out and build() refuses them with the ticket's own message. */
+  function covered() {
+    return LANGUAGES.filter(l =>
+      activity.patterns.every(pid => {
+        const pat = vocabPatterns[pid];
+        return pat && (pat.speaker === 'actor' || !!pat[l.code]);
+      }) &&
+      activity.items.every(id => {
+        const it = vocabItems[id];
+        return it && it[l.code] && FORMS.every(f => !!it[l.code][f]);
+      })
+    ).map(l => l.code);
+  }
+
+  const CONTENT = {
+    languages: LANGUAGES,
+    covered: covered(),
+    name: code => (LANGUAGES.find(l => l.code === code) || {}).name || code,
+    /* NJA-3204: the pair is an input, and a pair this content does not hold
+       is an error with the languages it DOES hold named in it. */
+    build(nativeCode, targetCode) {
+      const have = CONTENT.covered;
+      if (nativeCode === targetCode)
+        throw new Error('Native and target language must differ');
+      for (const code of [nativeCode, targetCode])
+        if (!have.includes(code))
+          throw new Error('This scenario only supports ' +
+            have.map(CONTENT.name).join(' and '));
+      return expand(nativeCode, targetCode);
+    },
+  };
+
+  window.CONTENT = CONTENT;
+  /* The default pair, so anything that reads window.QUEST at load still has
+     one. The session replaces it the moment a pair is chosen. */
+  return CONTENT.build(CONTENT.covered[0] || 'en', CONTENT.covered[1] || 'es');
 })();
