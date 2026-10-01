@@ -128,13 +128,7 @@ window.QUEST = (function () {
      frame, which is what carries the pragmatic role. */
   const vocabPatterns = {
     'excuse-me':    { speaker: 'learner', en: 'Excuse me.',       es: 'Perdona.',                  opensOnly: true },
-    /* The form differs between the languages, and that is the point of
-       NJA-3145's grammar context rather than an oversight: English wants the
-       article here and Spanish drops it — "¿Tienes entrada?" is what someone
-       on the door actually says. Each word is rendered in ITS OWN language's
-       form, so the English noun keeps its article when it crosses into the
-       Spanish frame and the Spanish one does not pick up a stray "una". */
-    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:bare}?' },
+    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
     'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
     'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
@@ -144,7 +138,18 @@ window.QUEST = (function () {
     'i-dont-want':  { speaker: 'learner', en: "I don't want {item:indefinite}.",       es: 'No quiero {item:indefinite}.' },
     'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
     'do-you-like':  { speaker: 'either',  en: 'Do you like {like:definite}?',     es: '¿Te gusta {like:definite}?' },
-    'i-like':       { speaker: 'either',  en: 'I like {like:definite}.',          es: 'Me gusta {like:definite}.' },
+    /* The form differs between the languages, which is the point of NJA-3145's
+       grammar context rather than an oversight: the ticket writes i-like-x as
+       {like:bare} in English and {like:definite} in Spanish, because that is
+       how the two languages say a generic liking. Bare singular is wrong in
+       English for a countable noun ("I like ticket"), so the English takes the
+       plural — which for a mass noun is authored as the mass form, so "I like
+       water" and "I like beer" come out right too.
+
+       Each word is rendered in ITS OWN language's form, so the Spanish noun
+       keeps its article when it crosses into the English frame rather than
+       arriving bare. */
+    'i-like':       { speaker: 'either',  en: 'I like {like:plural_bare}.',       es: 'Me gusta {like:definite}.' },
     /* Two slots. NJA-3160's third unit test is a pattern of exactly this
        shape, and the engine used to refuse them outright — one slot per
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
@@ -418,7 +423,7 @@ Return JSON only.`,
      the two stay distinguishable — which is the whole reason the number is in
      the syntax and the whole reason the old single-slot version could not
      handle "I like X and Y". */
-  const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z|]+)\}/gi;
+  const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z_|]+)\}/gi;
 
   function chunk(template) {
     const out = [];

@@ -209,6 +209,7 @@
       $('t-mode').textContent = serverUp
         ? 'evaluator: ' + j.model + ' · voice: ' + (j.tts || 'browser')
         : 'evaluator: local · voice: browser';
+      voiceWatch();
       return true;
     } catch { serverUp = false; return true; }
   }
@@ -619,7 +620,31 @@
     for (const [id, rec] of Object.entries(state.patterns))
       if (rec.introduced && Q.vocabPatterns[id].speaker === 'learner')
         add(Q.vocabPatterns[id][TL()].replace(/\{[^}]+\}/g, ' '));
+    /* ...and whatever the child is being asked to produce RIGHT NOW. A
+       construction marked `either` is fair game for the character on any other
+       turn, but not on the turn the child has to say it: the bartender asking
+       "¿Tienes una entrada?" has just said the answer out loud, and the child
+       is left repeating him rather than producing anything. He sets the
+       exchange up and stops; the coach supplies the hint.
+
+       The ITEM is not covered, deliberately. Vocabulary comes from the
+       character (NJA-3136) — "una entrada" is his to hand over. It is the
+       FRAME that is the child's to produce this turn. */
+    for (const w of thisTurnsFrame()) out.add(w);
     for (const w of itemWords()) out.delete(w);
+    return out;
+  }
+
+  /* The target-language words of the construction this turn is asking for,
+     empty on a turn that is only asking for a word. */
+  function thisTurnsFrame() {
+    const out = new Set();
+    if (!plan || !plan.frameTarget || !plan.pair) return out;
+    const frame = String((plan.pair.frame && plan.pair.frame.target) || '');
+    for (const w of frame.replace(/___/g, ' ').split(/\s+/)) {
+      const k = bare(w);
+      if (k) out.add(k);
+    }
     return out;
   }
 
@@ -674,6 +699,59 @@
     if (/[¿¡]/.test(text) || /[áéíóúñü]/i.test(text)) return true;
     const v = glossable();
     return String(text).split(/\s+/).filter(t => countsAsTarget(t, v)).length >= limit;
+  }
+
+  /* ---------- are the target-language words put together correctly? ----------
+     Auditing word by word is not enough. "un" and "una" are both on the
+     allowed list the moment two items have been met, and "refresco" is too —
+     so "una refresco" passes a per-word check and is still wrong, and a child
+     is being taught a gender agreement that does not exist.
+
+     The content holds every phrase it can teach. So a run of target-language
+     words in a character's line has to decompose into phrases the content
+     actually contains: "¿Tienes una entrada?" is the frame part plus the item,
+     both real; "una refresco" is neither, and no segmentation of it exists.
+
+     This is the deterministic invariant applied one level up. The model writes
+     the dialogue; it does not get to assemble the target language. */
+  const phraseKeyOf = t => String(t || '').toLowerCase()
+    .replace(/[¿?¡!.,;:"“”]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  function badPhrases(text) {
+    const table = Q.phrases || {};
+    const toks = String(text).split(/\s+/).filter(Boolean);
+    const vocab = glossable();
+    const bad = [];
+    let run = [];
+    const flush = () => {
+      if (run.length && !segments(run, table)) bad.push(run.join(' '));
+      run = [];
+    };
+    for (const tok of toks) {
+      if (countsAsTarget(tok, vocab)) run.push(tok);
+      else flush();
+    }
+    flush();
+    return bad;
+  }
+
+  /* Can this run be read as one known phrase after another? Longest match
+     first, falling back to shorter ones, so "¿Tienes una entrada" finds
+     "¿Tienes" + "una entrada" rather than stopping at a greedy dead end. */
+  function segments(toks, table) {
+    const n = toks.length;
+    const seen = new Array(n + 1).fill(null);
+    const walk = i => {
+      if (i === n) return true;
+      if (seen[i] !== null) return seen[i];
+      seen[i] = false;
+      for (let j = n; j > i; j--) {
+        if (!table[phraseKeyOf(toks.slice(i, j).join(' '))]) continue;
+        if (walk(j)) { seen[i] = true; return true; }
+      }
+      return seen[i];
+    };
+    return walk(0);
   }
 
   /* The guard on a generated character line. The engine has already decided
@@ -778,6 +856,8 @@
     const a = auditLine(j.actorText, allowed);
     if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
     if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
+    const wrong = badPhrases(j.actorText);
+    if (wrong.length) { lastGenWhy = 'target language put together wrong: ' + wrong.join(' / '); return null; }
 
     /* And the line must not be the CHILD'S line said back at them. Asking the
        prompt nicely is not enough here: "perdona" is on the introduced list,
@@ -1667,6 +1747,25 @@
     });
   }
 
+  /* ---------- is the model actually doing the voices? ----------
+     A TTS failure used to be invisible: the line came out in the browser's
+     synthesiser and nothing anywhere said why. It no longer falls back, so a
+     failure is silence — which needs to be legible, or it reads as the sound
+     being broken. The strip carries the reason. */
+  let voiceTimer = null;
+  function voiceWatch() {
+    if (voiceTimer) return;
+    voiceTimer = setInterval(() => {
+      const err = V.lastVoiceError && V.lastVoiceError();
+      const el = $('t-voice');
+      if (!el) return;
+      el.textContent = !serverUp ? 'voice: browser (no server)'
+                     : err ? 'VOICE FAILED: ' + err
+                     : 'voice: model';
+      el.className = err && serverUp ? 'bad' : '';
+    }, 1000);
+  }
+
   /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
@@ -1728,6 +1827,7 @@
     const allowed = introducedWords();
     if (auditLine(j.actorText, allowed).over > 0) return null;
     if (stolenWords(j.actorText).length) return null;
+    if (badPhrases(j.actorText).length) return null;
     /* And it must not hand over the answer, which is the one thing a reaction
        to a wrong answer is most tempted to do. */
     if (E.norm(j.actorText).includes(E.norm(plan.expected))) return null;

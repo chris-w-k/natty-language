@@ -362,6 +362,10 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .sheet .body{flex:1;overflow-y:auto;padding:16px 20px 24px;}
 .sheet .big{font-size:40px;font-weight:600;letter-spacing:-.02em;}
 
+/* the voice readout in the test strip: a failed voice must be loud, because
+   it is now silence rather than a wrong voice */
+#t-voice.bad{color:var(--warn);font-weight:600;}
+
 /* picking the pair (NJA-3204) */
 /* The other panels sit their copy at the foot of the screen, over the art.
    This one is a card in the middle, because it is a form rather than a title.

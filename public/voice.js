@@ -114,21 +114,34 @@ window.VOICE = (function () {
      cast consistent. The browser is still there underneath if both fail. */
   async function requestClip(text, speaker) {
     let lastErr;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 12000);
       try {
         const r = await fetch('/api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, speaker })
+          body: JSON.stringify({ text, speaker }),
+          signal: ctl.signal,
         });
         if (!r.ok) throw new Error('tts ' + r.status);
-        const { audio } = await r.json();
-        if (!audio) throw new Error('no audio');
-        return toObjectURL(audio);
-      } catch (e) { lastErr = e; }
+        const j = await r.json();
+        /* The endpoint answers 200 with a null body when the model declines,
+           and puts the reason in `error`. Throwing that away is what made this
+           undiagnosable: every failure looked identical from the outside — a
+           character read by a stranger, and nothing anywhere saying why. */
+        if (!j.audio) throw new Error(j.error || (j.mock ? 'server in mock mode' : 'no audio'));
+        return toObjectURL(j.audio);
+      } catch (e) {
+        lastErr = e && e.name === 'AbortError' ? new Error('tts timed out') : e;
+      } finally { clearTimeout(timer); }
     }
     throw lastErr;
   }
+
+  /* Why the last clip did not arrive, for the debug strip. */
+  let lastError = null;
+  const lastVoiceError = () => lastError;
 
   function fetchClip(text, speaker) {
     const key = speaker + '|' + text;
@@ -191,9 +204,18 @@ window.VOICE = (function () {
             // flight. Without this second check a cancelled line still
             // reaches play() and starts over the top of its replacement.
             if (mine !== gen) return;
+            lastError = null;
             if (await play(url, () => emit(speaker, true))) return;
             if (mine !== gen) return;
-          } catch { /* fall through to the browser */ }
+            lastError = 'clip would not play';
+          } catch (e) { lastError = String((e && e.message) || e); }
+          /* And STOP. A character has one voice: handing the line to the
+             browser's synthesiser when the model declines means a child hears
+             a stranger read Axel, which is worse than hearing nothing and
+             looks like the feature working. The browser is the voice of a
+             session with no server at all, not a patch over a bad clip. */
+          if (mine !== gen) return;
+          return;
         }
         if (mine !== gen) return;
         emit(speaker, true);          // synthesis starts as good as instantly
@@ -214,5 +236,6 @@ window.VOICE = (function () {
 
   const isSpeaking = () => talking !== null;
 
-  return { say, now, prefetch, stop, unlock, onSpeaking, isSpeaking, setServer, setEnabled, isEnabled };
+  return { say, now, prefetch, stop, unlock, onSpeaking, isSpeaking, setServer, setEnabled, isEnabled,
+           lastVoiceError };
 })();
