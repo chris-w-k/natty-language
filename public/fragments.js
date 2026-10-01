@@ -41,32 +41,81 @@
   function isTarget(tok, allowed) {
     const w = bare(tok);
     if (!w) return false;
+    /* A token with no letters in it is not a word in any language: the gap
+       marker "___" in a coach's hint is a hole in the sentence, not a piece of
+       Spanish, and highlighting it offered a child a translation of a blank. */
+    if (!/\p{L}/u.test(w)) return false;
     if (!allowed.has(w)) return false;
     // "no" inside an English sentence is English, however Spanish it also is
     return looksForeign(tok) || !AMBIGUOUS.has(w);
   }
 
-  /* Split a line into fragments, merging neighbours of the same type so a
-     multi-word phrase ("una entrada") is one highlighted run rather than two,
-     which is what NJA-3149 AC 3.3 means by rendering as a single block. */
-  function fragments(text, allowedWords) {
+  /* How a phrase is looked up in the table: the same normalisation content
+     uses when it builds it. */
+  const phraseKey = s => String(s || '').toLowerCase()
+    .replace(/[¿?¡!.,;:"“”]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  /* Split a line into fragments.
+
+     A multi-word phrase ("una entrada") is ONE highlighted run rather than
+     two, which is what NJA-3149 AC 3.3 means by rendering as a single block.
+     Two phrases standing next to each other are NOT merged, though — the
+     ticket's own fixture has "Tengo" and "una entrada" as neighbouring target
+     fragments, because they are two runs with two different meanings, and a
+     merged run could only carry one `translation`.
+
+     So the scan is longest-phrase-first against the content's phrase table,
+     falling back to single tokens where nothing matches. `phrases` is
+     optional: without it this behaves as before, merging neighbours, which is
+     what the fallback lines built in the client did before the table existed. */
+  function fragments(text, allowedWords, phrases) {
     const allowed = allowedWords instanceof Set
       ? allowedWords
       : new Set((allowedWords || []).map(bare));
+    const table = phrases || null;
     const out = [];
-    const push = (type, text) => {
+    const push = (type, text, translation) => {
       const last = out[out.length - 1];
-      if (last && last.type === type) last.text += text;
-      else out.push({ type, text });
+      /* Only plain text merges freely. A target run that already carries a
+         meaning is closed: whatever follows starts its own fragment. */
+      if (last && last.type === type && type === 'text') last.text += text;
+      else if (last && last.type === type && !last.translation && !translation) last.text += text;
+      else out.push(translation ? { type, text, translation } : { type, text });
     };
-    for (const tok of String(text).split(/(\s+)/)) {
-      if (!tok) continue;
-      if (!tok.trim()) { push(out.length ? out[out.length - 1].type : 'text', tok); continue; }
-      push(isTarget(tok, allowed) ? 'target' : 'text', tok);
+
+    const toks = String(text).split(/(\s+)/).filter(t => t !== '');
+    for (let i = 0; i < toks.length; i++) {
+      const tok = toks[i];
+      /* Whitespace rides on whatever came before it, whether or not that
+         fragment carries a meaning — otherwise two neighbouring runs lose the
+         space between them and plain() no longer rebuilds the line. */
+      if (!tok.trim()) {
+        if (out.length) out[out.length - 1].text += tok;
+        else out.push({ type: 'text', text: tok });
+        continue;
+      }
+      if (!isTarget(tok, allowed)) { push('text', tok); continue; }
+
+      /* The longest run starting here that the content can translate, and
+         whose every word has been introduced. */
+      let best = null;
+      if (table) {
+        let run = '';
+        for (let j = i; j < toks.length; j++) {
+          const t = toks[j];
+          run += t;
+          if (!t.trim()) continue;
+          if (!isTarget(t, allowed)) break;
+          const hit = table[phraseKey(run)];
+          if (hit) best = { upto: j, text: run, translation: hit };
+        }
+      }
+      if (best) { push('target', best.text, best.translation); i = best.upto; continue; }
+      push('target', tok, table ? (table[phraseKey(tok)] || undefined) : undefined);
     }
     /* Trailing/leading whitespace inside a fragment is harmless, but a
        fragment that is only whitespace is noise in the fixtures. */
-    return out.map(f => ({ type: f.type, text: f.text })).filter(f => f.text.trim() || out.length === 1);
+    return out.filter(f => f.text.trim() || out.length === 1);
   }
 
   /* The inverse: fragments back to the plain line, for TTS and for anything

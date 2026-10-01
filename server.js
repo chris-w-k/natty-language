@@ -365,7 +365,7 @@ async function generateActor(b) {
   });
   return {
     actorText: out.actor_line,
-    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || []) }],
+    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || [], b.phrases) }],
   };
 }
 
@@ -395,7 +395,7 @@ async function generateReaction(b) {
   });
   return {
     actorText: out.actor_line,
-    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || []) }],
+    chatHistory: [{ role: 'actor', messageFragments: fragments(out.actor_line, b.introduced || [], b.phrases) }],
   };
 }
 
@@ -424,7 +424,7 @@ async function generateCoach(b) {
     : (b.introduced || []);
   return {
     coachText: out.coach_line,
-    chatHistory: [{ role: 'coach', messageFragments: fragments(out.coach_line, allowed) }],
+    chatHistory: [{ role: 'coach', messageFragments: fragments(out.coach_line, allowed, b.phrases) }],
   };
 }
 /* ---------- text to speech ----------

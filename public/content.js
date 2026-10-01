@@ -475,7 +475,7 @@ Return JSON only.`,
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
-      groups: [], glossary: {}, chipGloss: {},
+      groups: [], glossary: {}, chipGloss: {}, phrases: {},
     };
 
     /* NJA-3197's patternVocabGroups: the pattern, both chunkings, and which
@@ -524,6 +524,54 @@ Return JSON only.`,
 
     q.pairs = q.groups.map(g => makePair(g));
 
+    /* ---------- what a highlighted run means (NJA-3149) ----------
+       The ticket's fixtures carry a `translation` on every target fragment:
+       {type:'target', text:'una entrada', translation:'an entry ticket'}. So
+       the content has to be able to say what a RUN of target-language words
+       means, not just a single word — and the two fixtures with neighbouring
+       targets ("Tengo" then "una entrada") show that two runs stay separate
+       fragments because they mean two different things.
+
+       The table is built from the content three ways:
+
+         - every vocab item, in every form
+         - every pattern's blanked frame whole
+         - and the text either side of a frame's slots, aligned index by index
+           against the other language's. That alignment is real rather than a
+           guess: both languages are chunked from the same slot list, so when
+           the two chunk sequences have the same shape, text chunk i in one is
+           text chunk i in the other. "Tengo ___." against "I have ___." gives
+           "Tengo" -> "I have"; "¿Me das ___, por favor?" against "Can I have
+           ___, please?" gives both halves. Where the shapes differ, nothing is
+           claimed. */
+    /* The native side is tidied at its edges: a frame chunk carries whatever
+       punctuation sat around the slot, and ", please?" is not what ", por
+       favor?" means — "please" is. Punctuation inside the phrase stays. */
+    const tidy = s => String(s).replace(/^[\s,.;:¿¡?!]+|[\s,.;:?!]+$/g, '').trim();
+    const addPhrase = (target, native) => {
+      const k = phraseKey(target);
+      const v = tidy(native || '');
+      if (k && v && !q.phrases[k]) q.phrases[k] = v;
+    };
+
+    for (const [, item] of Object.entries(vocabItems)) {
+      if (!item[LANGS.target] || !item[LANGS.native]) continue;
+      for (const form of FORMS) addPhrase(item[LANGS.target][form], item[LANGS.native][form]);
+    }
+
+    for (const g of q.groups) {
+      const T = g.targetFrames, N = g.nativeFrames;
+      const sameShape = T.length === N.length && T.every((f, i) => f.type === N[i].type);
+      if (sameShape) {
+        for (let i = 0; i < T.length; i++) {
+          if (T[i].type !== 'text') continue;
+          addPhrase(T[i].text, N[i].text);
+        }
+      }
+      addPhrase(render(T, LANGS, {}, null, g.forms).replace(/___/g, ' '),
+                render(N, LANGS, {}, null, g.forms).replace(/___/g, ' '));
+    }
+
     /* The engine builds its own pairs when it wants a particular word in a
        particular slot — the syllabus walks the vocabulary, so which noun a
        stage gets is its decision, not the content's. */
@@ -557,6 +605,10 @@ Return JSON only.`,
   }
 
   const bare = w => String(w).toLowerCase().replace(/[¿?¡!.,;:"“”]/g, '').trim();
+  /* How a phrase is looked up: case, surrounding punctuation and runs of
+     whitespace are noise, but the words and their order are not. */
+  const phraseKey = s => String(s || '').toLowerCase()
+    .replace(/[¿?¡!.,;:"“”]/g, ' ').replace(/\s+/g, ' ').trim();
 
   /* One playable pair: a group plus one item per slot. `fill` starts as the
      first valid item for each slot; the engine swaps it as the syllabus walks

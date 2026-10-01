@@ -728,6 +728,10 @@
       expectedNative: plan.pair.allNative,
       // what has crossed over — for highlighting, and for the coach
       introduced: [...introducedWords()],
+      /* ...and what each run of it MEANS, so the fragments the server returns
+         carry NJA-3149's `translation`. The table is the content's, and the
+         server has no content of its own. */
+      phrases: Q.phrases,
       // ...and the same list split by whose line it is, for the character
       actorMayUse: [...actorAllowed()],
       learnerOnly: [...learnerOnlyWords()],
@@ -821,7 +825,7 @@
   function toFragments(text, extraAllowed) {
     const allowed = introducedWords();
     for (const w of extraAllowed || []) for (const t of String(w).split(/\s+/)) allowed.add(bare(t));
-    return F.fragments(text, allowed);
+    return F.fragments(text, allowed, Q.phrases);
   }
 
   /* Render fragments to HTML. A `target` fragment is blue, bold, underlined
@@ -831,6 +835,16 @@
   function fragmentsHTML(frags) {
     return (frags || []).map(f => {
       if (f.type !== 'target') return esc(f.text);
+      /* A run that knows what it means is tapped as a RUN: "una entrada" is
+         one thing with one meaning, and splitting it into two buttons offered
+         a child the meaning of "una". A run with no translation still falls
+         back to per-word buttons, because a single word is the most the
+         glossary can answer for. */
+      if (f.translation) {
+        const body = f.text.replace(/\s+$/, ''), tail = f.text.slice(body.length);
+        return '<button type="button" class="w" data-w="' + esc(body) +
+               '" data-t="' + esc(f.translation) + '">' + esc(body) + '</button>' + tail;
+      }
       return String(f.text).split(/(\s+)/).map(tok =>
         tok.trim()
           ? '<button type="button" class="w" data-w="' + esc(tok) + '">' + esc(tok) + '</button>'
@@ -1012,13 +1026,14 @@
   /* ---------- word gloss ----------
      A blue word opens the card: what it means, and a button to hear it. */
   let glossWord = '';
-  function showGloss(word, speak) {
+  function showGloss(word, speak, meaning) {
     glossWord = word;
     $('gloss-word').textContent = String(word).replace(/^[¿¡"“]+|[?!.,;:"”]+$/g, '') || word;
-    /* chipMeaning before gloss: the glossary is keyed on single words, so
+    /* The fragment's own `translation` first (NJA-3149), then chipMeaning,
+       then the single-word glossary: the glossary is keyed on single words, so
        "una entrada" was a blank card even though the content has known it
        meant "a ticket" all along. */
-    $('gloss-mean').textContent = chipMeaning(word) || '—';
+    $('gloss-mean').textContent = meaning || chipMeaning(word) || '—';
     if (state) E.track(state, 'translation_clicked', { word: String(word) });
     $('gloss').classList.remove('hidden');
     if (speak) V.now(word, { speaker: 'axel', lang: TL() });
@@ -1031,7 +1046,7 @@
      button always works, because tapping it is asking for the interruption. */
   document.addEventListener('click', ev => {
     const w = ev.target.closest && ev.target.closest('.w');
-    if (w) { showGloss(w.dataset.w, !inputLocked); return; }
+    if (w) { showGloss(w.dataset.w, !inputLocked, w.dataset.t); return; }
     // a chip tap is answering, not reading: it leaves an open card alone
     if (ev.target.closest && ev.target.closest('.chip')) return;
     // anywhere else dismisses it, except inside the card itself
