@@ -129,7 +129,12 @@ window.QUEST = (function () {
   const vocabPatterns = {
     'excuse-me':    { speaker: 'learner', en: 'Excuse me.',       es: 'Perdona.',                  opensOnly: true },
     'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
-    'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
+    /* Asking, and then asking politely, are two things to learn and so two
+       stages. Taught as one, the child's first go at asking for anything is a
+       five-word sentence with the courtesy welded on, and getting "por favor"
+       wrong costs them the ask as well. */
+    'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}?',          es: '¿Me das {item:indefinite}?' },
+    'can-i-have-please': { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
     'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
     /* What you say to turn down what you have just been offered. The set had
@@ -208,7 +213,15 @@ window.QUEST = (function () {
        he is out of something, and he is never out of anything — leaving it in
        the scenario is handing him the one line the rules above forbid. The
        pattern stays defined for a scenario where running out is the point. */
-    patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'i-have', 'i-dont-have',
+    /* `i-have` and `i-dont-have` are NOT here. They were written for the door
+       — "Tengo una entrada" to the person asking whether you have a ticket —
+       and this scenario is the counter, where the actor sells and the child
+       buys. At a bar "I have a soda" is a sentence nobody says, so the actor
+       has to invent a reason to ask for it, and the exchange reads as the game
+       needing a turn rather than two people talking. Both stay defined: they
+       are the backbone of a door scenario, which is what NJA-3207's second
+       scenario would be. */
+    patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
                'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
                'thank-you'],
     items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],

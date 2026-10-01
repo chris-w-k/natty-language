@@ -2189,7 +2189,10 @@
   syncSound();
 
   // diagnostics are not part of the game; ?debug=1 brings them back
-  if (/[?&]debug=1/.test(location.search)) $('test-strip').classList.remove('hidden');
+  if (/[?&]debug=1/.test(location.search)) {
+    $('test-strip').classList.remove('hidden');
+    document.body.classList.add('debug');
+  }
 
   // iOS will not play audio until a gesture; the first touch anywhere opens it
   document.addEventListener('pointerdown', () => { V.unlock(); SFX.unlock(); }, { once: true });

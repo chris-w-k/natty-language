@@ -101,13 +101,19 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);ou
   position:absolute;inset:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
 }
-#character:not(.rigged){
-  border:1.5px dashed rgba(255,255,255,.45);
-  margin:12% 18% 26%;
-}
-#character .ch-name{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:#fff;}
-#character .ch-state{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.7);}
-#character.rigged .ch-name,#character.rigged .ch-state{display:none;}
+/* Nothing stands in for the character while the rig loads. The dashed box and
+   the name under it were the stub activity's placeholder, from before there
+   was a rig at all — a hole cut in the scene for the first second of every
+   session, which reads as the art failing to arrive rather than as loading.
+   An empty stage for that second is quieter and says less that is untrue.
+
+   The labels stay in the markup: they are what mountCharacter writes into, and
+   ?debug=1 brings them back so there is still a way to see which clip is up. */
+#character .ch-name,#character .ch-state{display:none;}
+body.debug #character:not(.rigged) .ch-name{
+  display:block;font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:#fff;}
+body.debug #character:not(.rigged) .ch-state{
+  display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.7);}
 #character .rig{position:absolute;inset:0;}
 #character .rig[hidden]{display:none;}
 #character .clip{position:absolute;inset:0;}
