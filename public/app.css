@@ -369,6 +369,19 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .newword i{font-style:normal;color:var(--ink-3);}
 
 /* ---------- sheets ---------- */
+/* A card over the night, not a screen of its own: the mic is an alternative
+   to tapping, so asking about it must not look like the game has stopped. */
+.modal{position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(12,10,24,.55);}
+.modal.hidden{display:none;}
+.modal-card{width:100%;max-width:330px;background:var(--paper);border-radius:var(--r-md);
+  padding:22px 20px 18px;box-shadow:0 18px 50px rgba(0,0,0,.35);}
+.modal-card h2{margin:0 0 10px;font-size:19px;font-weight:600;letter-spacing:-.01em;}
+.modal-card p{margin:0 0 10px;font-size:14.5px;line-height:1.45;color:var(--ink-2);}
+.modal-card p.fine{font-size:12.5px;color:var(--ink-3);margin-bottom:16px;}
+.modal-card .btn{margin-top:8px;}
+.modal-card .btn.hidden{display:none;}
+
 .sheet{position:absolute;inset:0;background:var(--paper);z-index:40;display:flex;flex-direction:column;}
 .sheet.hidden{display:none;}
 .sheet .head{flex:none;display:flex;align-items:flex-start;justify-content:space-between;padding:20px 20px 12px;border-bottom:1px solid var(--line-soft);}

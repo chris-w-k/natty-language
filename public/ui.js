@@ -2259,15 +2259,61 @@
     if (micStream) { for (const tr of micStream.getTracks()) { try { tr.stop(); } catch {} } micStream = null; }
   }
 
-  function toggleMic() {
+  async function toggleMic() {
     if (micSending) return;                       // already on its way
     if (micOn) { finishRecording(); return; }
     if (!micAvailable()) { $('verdict').textContent = t('mic-unavailable'); return; }
     V.stop();
     $('mic-heard').textContent = '';
-    if (canRecord() && serverUp) { startRecording(); return; }
-    startListening();
+    if (!(canRecord() && serverUp)) { startListening(); return; }
+    /* The reason before the prompt. Only the first time, and not at all if the
+       permission is already there. */
+    if (await micAgreed()) { startRecording(); return; }
+    askForMic();
   }
+
+  /* ---------- asking for the microphone ----------
+     The browser's own prompt is a box with no reason in it, fired the instant
+     a child taps a button they may have tapped by accident — and on iOS a "no"
+     is sticky and can only be undone in Settings, so a cold prompt spends the
+     one chance there is. The reason goes first, in the child's own language,
+     and the button inside the card is what fires the real prompt. The tap on
+     that button is also the gesture iOS requires, so nothing is lost by
+     waiting.
+
+     This is the camera prototype's primer, shrunk to a card: speaking is an
+     alternative here rather than the whole game, so asking about it must not
+     look like the night has stopped. */
+  let micOkThisSession = false;
+
+  async function micAgreed() {
+    if (micOkThisSession) return true;
+    /* Chrome and Android answer this; Safari does not implement it for the
+       microphone, which is exactly the platform that matters — hence the
+       remembered flag below as well. */
+    try {
+      const st = await navigator.permissions.query({ name: 'microphone' });
+      if (st && st.state === 'granted') { micOkThisSession = true; return true; }
+      if (st && st.state === 'denied') return false;
+    } catch { /* not supported; fall through */ }
+    try { if (localStorage.getItem('np-mic-ok') === '1') { micOkThisSession = true; return true; } }
+    catch { /* private mode, or storage refused; ask again, which is harmless */ }
+    return false;
+  }
+
+  function askForMic(denied) {
+    const card = $('mic-ask');
+    $('mic-ask-title').textContent = t('mic-ask-title');
+    $('mic-ask-why').textContent = denied ? t('mic-ask-denied') : t('mic-ask-why');
+    $('mic-ask-privacy').textContent = denied ? '' : t('mic-ask-privacy');
+    $('mic-ask-go').classList.toggle('hidden', !!denied);
+    $('mic-ask-go').querySelector('span').textContent = t('mic-ask-go');
+    $('mic-ask-no').querySelector('span').textContent = t(denied ? 'mic-ask-ok' : 'mic-ask-no');
+    card.classList.remove('hidden');
+    AN('NovaPals.Nlt.MicAsked', { denied: !!denied });
+  }
+
+  const closeMicAsk = () => $('mic-ask').classList.add('hidden');
 
   async function startRecording() {
     let stream;
@@ -2278,10 +2324,14 @@
          what a webview does unless the app grants it. Either way the child
          taps instead, and is told why rather than left with a dead button. */
       AN('NovaPals.Activity.Error', { reason: 'mic-denied', detail: (e && e.name) || 'unknown' });
-      $('verdict').textContent = t('mic-blocked');
       $('btn-mic').style.opacity = '.4';
+      askForMic(true);
       return;
     }
+    /* They said yes. Remembered so the card is a once-ever thing rather than a
+       toll on every answer they want to speak. */
+    micOkThisSession = true;
+    try { localStorage.setItem('np-mic-ok', '1'); } catch {}
     micStream = stream;
     micChunks = [];
     const type = micType();
@@ -2523,6 +2573,11 @@
     }, 4000);
   });
   $('btn-mic').addEventListener('click', toggleMic);
+  /* The card's own two buttons. "Turn on the mic" is the gesture that fires the
+     real browser prompt, so the recording starts from inside the handler and
+     iOS counts it as a tap. */
+  $('mic-ask-go').addEventListener('click', () => { closeMicAsk(); startRecording(); });
+  $('mic-ask-no').addEventListener('click', closeMicAsk);
   /* The pause sheet IS the pause: opening it stops the night, closing it
      starts it again, so those are the two events rather than a button that
      does not exist. */

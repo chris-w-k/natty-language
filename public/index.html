@@ -234,6 +234,23 @@
     </div>
   </div>
 
+  <!-- Asking for the microphone. NOT a cold getUserMedia: the browser's own
+       prompt, fired the instant a child taps the mic, is a box with no reason
+       in it, and on iOS a refusal is sticky and can only be undone in
+       Settings. So the reason comes first, in their language, and the button
+       in here is what fires the real prompt. Same primer pattern the camera
+       prototype used, shrunk to a card because speaking is optional here —
+       tapping is the main way to answer and always works. -->
+  <div class="modal hidden" id="mic-ask">
+    <div class="modal-card">
+      <h2 id="mic-ask-title"></h2>
+      <p id="mic-ask-why"></p>
+      <p class="fine" id="mic-ask-privacy"></p>
+      <button class="btn wide primary" id="mic-ask-go"><span></span></button>
+      <button class="btn wide" id="mic-ask-no"><span></span></button>
+    </div>
+  </div>
+
   <!-- coach sheet -->
   <div class="sheet hidden" id="coach-sheet">
     <div class="head">

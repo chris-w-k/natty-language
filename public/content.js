@@ -682,6 +682,54 @@ Return JSON only.`,
       pt: '— {0} di-lo por ti: {1}',      tr: '— {0} senin yerine söylüyor: {1}',
       pl: '— {0} mówi to za ciebie: {1}', ro: '— {0} o spune în locul tău: {1}',
     },
+    /* Asking for the microphone, before the browser does. The privacy line is
+       the one a parent reads over a shoulder, so it says what actually happens
+       and nothing more: the clip goes to the server that works out the words,
+       and the app keeps none of it. */
+    'mic-ask-title': {
+      en: 'Say it out loud?', es: '¿Lo dices en voz alta?', pt: 'Dizê-lo em voz alta?',
+      tr: 'Sesli söyleyelim mi?', pl: 'Powiesz to na głos?', ro: 'Spui cu voce tare?',
+    },
+    'mic-ask-why': {
+      en: 'Turn on the microphone and you can answer by speaking instead of tapping.',
+      es: 'Activa el micrófono y podrás responder hablando en vez de tocando.',
+      pt: 'Liga o microfone e podes responder a falar em vez de tocar.',
+      tr: 'Mikrofonu açarsan dokunmak yerine konuşarak cevap verebilirsin.',
+      pl: 'Włącz mikrofon, a będziesz odpowiadać głosem zamiast stukać.',
+      ro: 'Pornește microfonul și poți răspunde vorbind, nu atingând.',
+    },
+    'mic-ask-privacy': {
+      en: 'What you say is listened to once to work out the words. It is not saved.',
+      es: 'Lo que dices se escucha una vez para saber qué palabras son. No se guarda.',
+      pt: 'O que dizes é ouvido uma vez para perceber as palavras. Não é guardado.',
+      tr: 'Söylediğin, kelimeleri anlamak için bir kez dinlenir. Kaydedilmez.',
+      pl: 'To, co powiesz, jest słuchane raz, żeby rozpoznać słowa. Nie jest zapisywane.',
+      ro: 'Ce spui este ascultat o dată ca să se afle cuvintele. Nu se salvează.',
+    },
+    'mic-ask-go': {
+      en: 'TURN ON THE MIC', es: 'ACTIVAR EL MICRO', pt: 'LIGAR O MICRO',
+      tr: 'MİKROFONU AÇ', pl: 'WŁĄCZ MIKROFON', ro: 'PORNEȘTE MICROFONUL',
+    },
+    'mic-ask-no': {
+      en: "I'LL TAP INSTEAD", es: 'PREFIERO TOCAR', pt: 'PREFIRO TOCAR',
+      tr: 'DOKUNARAK DEVAM', pl: 'WOLĘ STUKAĆ', ro: 'PREFER SĂ ATING',
+    },
+    /* After a refusal. Deliberately does not say WHERE to turn it back on:
+       the place differs by phone and by whether this is the app or a browser,
+       and a wrong instruction to a child is worse than none. The grown-up
+       reading it knows where settings are. */
+    'mic-ask-denied': {
+      en: 'The microphone is switched off for this app. An adult can turn it on in the settings — until then, tapping works just as well.',
+      es: 'El micrófono está desactivado para esta app. Un adulto puede activarlo en los ajustes — mientras tanto, tocar funciona igual de bien.',
+      pt: 'O microfone está desligado para esta app. Um adulto pode ligá-lo nas definições — até lá, tocar funciona igualmente bem.',
+      tr: 'Bu uygulama için mikrofon kapalı. Bir yetişkin ayarlardan açabilir — o zamana kadar dokunmak da aynı işi görür.',
+      pl: 'Mikrofon jest wyłączony dla tej aplikacji. Dorosły może go włączyć w ustawieniach — do tego czasu stukanie działa tak samo dobrze.',
+      ro: 'Microfonul este oprit pentru această aplicație. Un adult îl poate porni din setări — până atunci, atingerea merge la fel de bine.',
+    },
+    'mic-ask-ok': {
+      en: 'GOT IT', es: 'VALE', pt: 'ENTENDIDO',
+      tr: 'TAMAM', pl: 'JASNE', ro: 'AM ÎNȚELES',
+    },
     /* The mic panel. "Words hidden" is the point of the screen: the child is
        speaking, not reading, so the sentence comes off the page while the mic
        is open and they cannot simply read it aloud. */
@@ -697,14 +745,6 @@ Return JSON only.`,
     'mic-thinking': {
       en: 'Listening…', es: 'Escuchando…', pt: 'A ouvir…',
       tr: 'Dinliyorum…', pl: 'Słucham…', ro: 'Ascult…',
-    },
-    'mic-blocked': {
-      en: 'The microphone is not switched on for this app.',
-      es: 'El micrófono no está activado para esta app.',
-      pt: 'O microfone não está ligado para esta app.',
-      tr: 'Bu uygulama için mikrofon açık değil.',
-      pl: 'Mikrofon nie jest włączony dla tej aplikacji.',
-      ro: 'Microfonul nu este pornit pentru această aplicație.',
     },
     'mic-nothing': {
       en: 'Didn’t hear anything — have another go.',
