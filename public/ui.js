@@ -16,6 +16,9 @@
   }
   const E = window.ENGINE;
   const V = window.VOICE;
+  /* The NovaPals app, when there is one on the other side of the webview.
+     Inert in a plain browser, so nothing below has to ask which it is in. */
+  const B = window.BRIDGE;
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const pct = m => Math.round(m * 100) + '%';
@@ -217,6 +220,10 @@
         analyticsStarted = true;
         window.ANALYTICS.init(Object.assign(
           { activityId: Q.activity.id }, (j && j.analytics) || {}));
+        /* Which side of the webview this is. Set once, as a super-property, so
+           every event — the NovaPals.* ones and the $screen ones alike — can be
+           split by it without each call site having to remember. */
+        window.ANALYTICS.register({ in_webview: B.inApp });
       }
       return true;
     } catch { serverUp = false; return true; }
@@ -232,7 +239,6 @@
      the title, carries through Axel, and crosses over to the room tone during
      the taxi ride — which is also, quietly, where the server gets probed, so
      the five seconds is doing something real rather than only counting. */
-  const LOAD_MS = 5000;
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   function tapAnywhere(el) {
@@ -311,9 +317,16 @@
 
      ?native= / ?target= set it without the screen, which is how the headless
      tests run both directions. */
+  /* ?lang= is the app's spelling: the NovaPals webview host knows which
+     language the child speaks, and that is the HINT language here — what the
+     scenario teaches follows from it. ?native=/?target= stay as the explicit
+     pair, for walkthroughs and the headless tests. Neither one skips the
+     picker any more; they decide which chip it opens on. */
   function paramPair() {
     const q = new URLSearchParams(location.search);
-    const n = q.get('native'), t = q.get('target');
+    const lang = (q.get('lang') || '').slice(0, 5).toLowerCase();
+    const n = q.get('native') || (lang && C.covered.includes(lang) ? lang : '');
+    const t = q.get('target') || (n && !q.get('target') && lang === n ? C.learns(n) : '');
     if (!n && !t) return null;
     return { native: n || Q.nativeLang, target: t || Q.targetLang };
   }
@@ -335,7 +348,10 @@
   function pickLanguages() {
     let hint = startingPair().native;
 
-    if (paramPair()) { apply(startingPair()); return Promise.resolve(); }
+    /* Always shown. The app passes a language on the URL, but not every child
+       is in the language their account says they are, and the one screen that
+       lets them put it right costs a single tap. So a URL language preselects
+       its chip (via startingPair above) and nothing more. */
 
     $('lang-title').textContent = t('lang-pick-title') || 'HINT LANGUAGE';
     $('lang-sub').textContent = t('lang-pick-sub') || '';
@@ -388,6 +404,11 @@
      taxi ride is the natural place to have found out. */
   async function intro() {
     const el = $('intro');
+    /* The app's loading overlay is up until this lands, and everything below
+       — the probe, a cold Render instance, the content build — can take long
+       enough that a child would be looking at a spinner with no end. So it
+       goes out first, before anything slow or fallible, and repeats. */
+    B.ready();
     /* Deliberately a function, not a value: the copy belongs to the hint
        language, and the hint language is not known until pickLanguages() has
        run and setPair() has rebuilt Q. Reading it once at the top of intro()
@@ -418,6 +439,7 @@
        is rebuilt from the answer (NJA-3204), so it comes before the title
        card and before anything that reads a pattern. */
     showPanel('intro-langs');
+    SCREEN.at('Hint Language');
     await pickLanguages();
 
     /* Now the hint language is settled, so the screens can be written. */
@@ -426,10 +448,10 @@
     $('intro-sub').textContent = copy.sub || '';
     $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
     $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
-    $('intro-load-text').textContent = copy.loading || '';
     $('intro-bubble').textContent = copy.coach || '';
 
     showPanel('intro-title');
+    SCREEN.at('Title');
 
     /* The street bed starts with the title card, not after the tap. Autoplay
        rules may refuse it before any gesture — SFX.unlock() below retries every
@@ -453,6 +475,7 @@
     V.unlock(); SFX.unlock();
 
     showPanel('intro-coach');
+    SCREEN.at('Coach Intro');
     /* The room tone begins its climb here, under Axel, rather than waiting for
        the taxi. By the time the ride starts it is already present, so the
        cross on the loading screen finishes a fade rather than starting one —
@@ -467,19 +490,21 @@
     await tapAnywhere(el);
     V.stop();
 
-    showPanel('intro-loading');
+    /* No taxi ride. Five seconds of travelling was a nice beat once and a toll
+       on every session after it, and in a quest it is five seconds of a child's
+       attention spent on a progress bar. Axel's screen hands straight over to
+       the night, with the street fading under the room rather than across a
+       screen of its own.
 
-    /* The cross: the street fades away over the whole ride while the room,
-       already up from Axel's screen, comes the rest of the way. No moment of
-       silence between them, and no moment where both are loud. */
-    SFX.level('street', 0, LOAD_MS);
-    SFX.level('room', 0.5, LOAD_MS);
-
-    const fill = $('intro-bar-fill');
-    fill.style.transition = 'width ' + LOAD_MS + 'ms linear';
-    requestAnimationFrame(() => { fill.style.width = '100%'; });
-
-    const [, ok] = await Promise.all([wait(LOAD_MS), probe]);
+       The probe is still waited on here rather than raced: until it answers,
+       VOICE has not been told the server is there and the bartender's first
+       line comes out in a stock system voice. It has had the title card and
+       the whole of Axel's line to resolve, so on a warm instance this is
+       already settled, and on a cold one Axel's screen is a better place to
+       wait than a loading bar. */
+    SFX.level('street', 0, 900);
+    SFX.level('room', 0.5, 900);
+    const ok = await probe;
     SFX.fadeOut('street', 300);
     /* ...and the room tone stays, well under the talking. */
     SFX.level('room', 0.12, 1800);
@@ -497,6 +522,7 @@
       const sheet = $('gate'), input = $('gate-code'), msg = $('gate-msg');
       /* The gate is the error screen this prototype has: the night cannot
          start, and the child is looking at a wall instead of a bar. */
+      SCREEN.at('Access Gate');
       AN('NovaPals.Activity.Error', { reason: 'locked' });
       sheet.classList.remove('hidden');
       input.focus();
@@ -949,7 +975,13 @@
 
     const coachAsks = tList('fb-coach-ask');
     let coach = `${coachAsks[state.turn % coachAsks.length]} “${plan.pair.allNative}”`;
-    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allNative);
+    /* The TARGET phrase, not the native one. "Here's how you say it" promises
+       the language the child is about to produce, and it was being handed the
+       language they already speak — so a Spanish child learning English was
+       told "Así se dice: «Perdona.»", which teaches them nothing and teaches
+       it in the wrong direction. Wrong both ways round; only visible once the
+       pair could be reversed. */
+    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allTarget);
     return { actor_line: actor, coach_line: coach };
   }
 
@@ -1799,6 +1831,12 @@
      question asked again, and counting it twice would make a child who
      struggled look like a child who was asked more. */
   const AN = (name, props) => { try { window.ANALYTICS.event(name, props); } catch {} };
+  /* $screen and the super-properties, both never allowed to throw: losing a
+     turn to a blocked analytics script would be absurd. */
+  const SCREEN = {
+    at: name => { try { window.ANALYTICS.screen(name); } catch {} },
+    register: props => { try { window.ANALYTICS.register(props); } catch {} },
+  };
   /* NovaPals.Activity.Skip has no trigger here. The skip button is NJA-3164's
      and is behind a flag this prototype does not have, and the mercy escape is
      not a skip — the child did not choose it and the engine does not treat it
@@ -2048,6 +2086,20 @@
     some.querySelector('span').textContent = t('end-replay-some');
     all.querySelector('span').textContent = t('end-replay-all');
     some.classList.toggle('hidden', left.length === 0);
+
+    /* In a quest, finishing means completing the quest rather than looping, so
+       FINISH leads and the two replays drop to secondary. Outside the app
+       there is no quest to complete and no button. */
+    const fin = $('btn-finish');
+    fin.querySelector('span').textContent = t('end-finish');
+    fin.classList.toggle('hidden', !B.inApp);
+    fin.disabled = false;
+    $('end-note').classList.add('hidden');
+    some.classList.toggle('primary', !B.inApp);
+    all.classList.toggle('hidden', B.inApp && left.length > 0);
+
+    $('end-eyebrow').textContent = t('end-eyebrow');
+    SCREEN.at(ok ? 'End — Passed' : 'End — Short');
     $('end').classList.remove('hidden');
   }
 
@@ -2121,6 +2173,8 @@
     $('coach-rungs').innerHTML = rows
       .map(([k, v]) => `<div class="rung"><span class="k">${k}</span><span class="v">${v}</span></div>`)
       .join('');
+    $('coach-eyebrow').textContent = t('coach-sheet-eyebrow');
+    $('coach-title').textContent = t('coach-sheet-title');
     $('coach-sheet').classList.remove('hidden');
     E.track(state, 'hint_opened', { pair: p.id });
     V.now(plan.expected, { speaker: 'axel', lang: accentOf('axel') });
@@ -2211,12 +2265,16 @@
     /* Quest then Activity, in that order: the quest is the thing the child
        picked and the activity is this run of it, and the rest of the app
        reports them as a pair. */
+    /* The pair is only settled once the picker has been answered, so the
+       language super-properties are registered here rather than at init. */
+    SCREEN.register({ native_language: NL(), target_language: TL() });
     AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL() });
     AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),
                                     stages: E.syllabus(Q).length, steps: E.allSteps(Q).length });
     buildRail();
     $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     $('btn-mic').style.opacity = micAvailable() ? '' : '.4';
+    SCREEN.at('Night');
     step();
   }
 
@@ -2229,11 +2287,43 @@
     submitted = false;
     renderSlot(); renderTray(); syncSay();
   });
+  /* FINISH — the only thing in the prototype that completes the quest. The app
+     closes the webview when it gets the message, so normally this button's own
+     state is never seen again. If it IS still here four seconds later the
+     message did not land, and saying so beats leaving a dead button: a second
+     tap sends another, which cannot double-pay, because a webview that
+     received the first one would have closed before the child could tap. */
+  $('btn-finish').addEventListener('click', () => {
+    const btn = $('btn-finish');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    V.stop();
+    const score = Math.round(E.overall(state, Q) * 100);
+    AN('NovaPals.Activity.Finished', {
+      mastery: score, passed: score >= Math.round(E.passMark(Q) * 100),
+      turns: state.turn, go: state.go, attempt: B.endSends + 1,
+    });
+    B.finish({
+      mastery: score,
+      passed: score >= Math.round(E.passMark(Q) * 100),
+      turns: state.turn,
+      go: state.go,
+      native: Q.nativeLang,
+      target: Q.targetLang,
+    });
+    setTimeout(() => {
+      btn.disabled = false;
+      const note = $('end-note');
+      note.textContent = t('end-finish-wait');
+      note.classList.remove('hidden');
+    }, 4000);
+  });
   $('btn-mic').addEventListener('click', toggleMic);
   /* The pause sheet IS the pause: opening it stops the night, closing it
      starts it again, so those are the two events rather than a button that
      does not exist. */
   $('btn-pause').addEventListener('click', () => {
+    SCREEN.at('Paused');
     AN('NovaPals.Activity.Paused', { turn: state ? state.turn : 0 });
     openProgress();
   });

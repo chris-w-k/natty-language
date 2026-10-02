@@ -426,6 +426,10 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .end-row.shaky  .vd{background:rgba(194,91,43,.14);color:var(--warn);}
 .end-acts{margin-top:24px;display:flex;flex-direction:column;gap:10px;}
 .end-acts .btn.hidden{display:none;}
+/* Only seen when the End message did not land — see the four-second re-arm in
+   ui.js. A dead button with no explanation is worse than a slow one. */
+.end-note{margin:2px 0 0;font-size:13px;line-height:1.35;text-align:center;opacity:.72;}
+.end-note.hidden{display:none;}
 
 .pause-row{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--line-soft);}
 .pause-row .btn{height:44px;padding:0 18px;border-radius:var(--r-pill);background:var(--fill);font-size:13px;font-weight:600;letter-spacing:.04em;display:flex;align-items:center;}
@@ -667,17 +671,6 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
   content:'';position:absolute;left:26px;bottom:-9px;width:0;height:0;
   border:10px solid transparent;border-top-color:#fff;border-bottom:0;
 }
-
-/* the taxi */
-.intro-load{
-  margin:auto;display:flex;flex-direction:column;align-items:center;gap:14px;
-  color:#fff;
-}
-.intro-load span{font-size:14.5px;font-weight:600;letter-spacing:.01em;}
-.intro-load svg{animation:taxi-bob 1.5s ease-in-out infinite;}
-@keyframes taxi-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-.intro-bar{width:168px;height:4px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden;}
-.intro-bar i{display:block;height:100%;width:0;border-radius:2px;background:#fff;}
 
 /* ---------- the room ----------
    A dingy club behind the bartender, drawn in CSS because there is no painted

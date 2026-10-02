@@ -15,6 +15,15 @@
    Autocapture is off. A prototype that also reported every click and pageview
    would bury nine deliberate events under thousands of incidental ones. */
 window.ANALYTICS = (function () {
+  /* $app_name is autocaptured by the mobile SDKs but not on the web, and it is
+     what makes this prototype selectable as its own app in PostHog rather than
+     a smear of extra events across NovaPals. Registered as a super-property,
+     so it rides on every event including the $screen ones below — the same
+     arrangement the jailbreak-camera prototype used, which is what made its
+     numbers readable. The event NAMES stay NovaPals.<Area>.<Thing> per
+     NJA-3172: the taxonomy is shared on purpose, the app name is what
+     separates us within it. */
+  const APP = 'NattyLanguage';
   let ready = false, enabled = false, base = {};
   const pending = [];
 
@@ -56,6 +65,7 @@ window.ANALYTICS = (function () {
         disable_session_recording: true,
         person_profiles: 'identified_only',
       });
+      window.posthog.register(Object.assign({ $app_name: APP }, base));
       enabled = true;
     } catch { enabled = false; }
     ready = true;
@@ -82,5 +92,21 @@ window.ANALYTICS = (function () {
     send(name, props);
   }
 
-  return { init, event, isOn: () => enabled, isReady: () => ready };
+  /* Super-properties set after init — the webview flag and the language pair,
+     neither of which is known when init runs. */
+  function register(props) {
+    if (!enabled) return;
+    try { window.posthog.register(props || {}); } catch {}
+  }
+
+  /* $screen is PostHog's own screen-view event, the one the mobile SDKs send
+     automatically on every screen change, kept as its literal unprefixed name
+     so it rolls up the way a native screen view does. $app_name is what keeps
+     ours separable. */
+  function screen(name) {
+    if (!ready) { pending.push(['$screen', { $screen_name: name }]); return; }
+    send('$screen', { $screen_name: name });
+  }
+
+  return { init, event, register, screen, isOn: () => enabled, isReady: () => ready };
 })();

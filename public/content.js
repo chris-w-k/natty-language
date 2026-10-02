@@ -361,42 +361,36 @@ window.QUEST = (function () {
         title: 'GOING TO A GIG',
         sub: 'Learn the {0} to get in, get a drink and tell someone you love the song.',
         coach: "Tonight's gonna be unreal — but the band's {0}, the bar's {0}, and the fella on the door doesn't do {1}. Stick with me. I'll tell you what to say, you just say it.",
-        loading: 'Getting a taxi to the club…',
         tap: 'Tap to continue',
       },
       es: {
         title: 'VAMOS A UN CONCIERTO',
         sub: 'Aprende el {0} para entrar, pedir una bebida y decir que te encanta la canción.',
         coach: 'Esta noche va a ser brutal — pero la banda canta en {0}, en la barra hablan {0} y el de la puerta no habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
-        loading: 'Cogiendo un taxi al club…',
         tap: 'Toca para continuar',
       },
       pt: {
         title: 'VAMOS A UM CONCERTO',
         sub: 'Aprende o {0} para entrares, pedires uma bebida e dizeres que adoras a música.',
         coach: 'Esta noite vai ser do caraças — mas a banda canta em {0}, no bar falam {0} e o tipo da porta não fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
-        loading: 'A apanhar um táxi para o clube…',
         tap: 'Toca para continuar',
       },
       tr: {
         title: 'KONSERE GİDİYORUZ',
         sub: 'İçeri girmek, bir şeyler içmek ve şarkıyı sevdiğini söylemek için {0} öğren.',
         coach: 'Bu gece efsane olacak — ama grup {0} söylüyor, barda {0} konuşuyorlar ve kapıdaki adam {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
-        loading: 'Kulübe taksiyle gidiyoruz…',
         tap: 'Devam etmek için dokun',
       },
       pl: {
         title: 'IDZIEMY NA KONCERT',
         sub: 'Poznaj {0} — wejdź do środka, zamów coś do picia i powiedz, że uwielbiasz tę piosenkę.',
         coach: 'Dziś będzie czad — ale zespół, bar i facet przy wejściu mówią w jednym języku, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
-        loading: 'Łapiemy taksówkę do klubu…',
         tap: 'Dotknij, aby kontynuować',
       },
       ro: {
         title: 'MERGEM LA UN CONCERT',
         sub: 'Învață să vorbești {0} ca să intri, să ceri ceva de băut și să spui că îți place melodia.',
         coach: 'Diseară o să fie nebunie — dar trupa cântă în {0}, la bar se vorbește {0}, iar tipul de la ușă nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
-        loading: 'Luăm un taxi până la club…',
         tap: 'Atinge pentru a continua',
       },
     },
@@ -723,6 +717,33 @@ Return JSON only.`,
       en: "Here's how you say it: “{0}”", es: 'Así se dice: “{0}”',
       pt: 'Diz-se assim: “{0}”',          tr: 'Şöyle deniyor: “{0}”',
       pl: 'Mówi się tak: “{0}”',          ro: 'Se spune așa: „{0}”',
+    },
+    'end-eyebrow': {
+      en: 'Session over', es: 'Se acabó', pt: 'Acabou',
+      tr: 'Oturum bitti', pl: 'Koniec sesji', ro: 'Sesiune încheiată',
+    },
+    'coach-sheet-eyebrow': {
+      en: 'Coach', es: 'Entrenador', pt: 'Treinador',
+      tr: 'Koç', pl: 'Trener', ro: 'Antrenor',
+    },
+    'coach-sheet-title': {
+      en: 'Need a hand?', es: '¿Te echo un cable?', pt: 'Precisas de ajuda?',
+      tr: 'Yardım ister misin?', pl: 'Potrzebujesz pomocy?', ro: 'Ai nevoie de ajutor?',
+    },
+    /* The in-app ending. FINISH is the only thing in the prototype that
+       completes the quest, so it says what it does rather than "done". The
+       note appears only if the app did not answer — see bridge.js. */
+    'end-finish': {
+      en: 'FINISH', es: 'TERMINAR', pt: 'TERMINAR',
+      tr: 'BİTİR', pl: 'ZAKOŃCZ', ro: 'TERMINĂ',
+    },
+    'end-finish-wait': {
+      en: 'Still here? Tap FINISH again.',
+      es: '¿Sigues aquí? Toca TERMINAR otra vez.',
+      pt: 'Ainda aqui? Toca em TERMINAR outra vez.',
+      tr: 'Hâlâ burada mısın? BİTİR\u2019e tekrar dokun.',
+      pl: 'Nadal tutaj? Dotknij ZAKOŃCZ jeszcze raz.',
+      ro: 'Tot aici? Atinge TERMINĂ din nou.',
     },
     /* The pause sheet — the night so far, in the epic's PPP terms. Parent-
        facing as much as child-facing, and on screen in the same language as

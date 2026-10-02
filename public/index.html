@@ -186,20 +186,6 @@
       <span class="intro-tap" id="intro-tap-2"></span>
     </section>
 
-    <section class="intro-panel hidden" id="intro-loading">
-      <div class="intro-load">
-        <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor"
-             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M5 17h14"></path>
-          <path d="M3 17v-3.2a2 2 0 0 1 .5-1.3L6 9.2A2 2 0 0 1 7.6 8.5h8.8a2 2 0 0 1 1.6.7l2.5 3.3a2 2 0 0 1 .5 1.3V17"></path>
-          <path d="M9 8.5V6.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.9"></path>
-          <circle cx="7.5" cy="17.5" r="1.8"></circle>
-          <circle cx="16.5" cy="17.5" r="1.8"></circle>
-        </svg>
-        <span id="intro-load-text"></span>
-        <div class="intro-bar"><i id="intro-bar-fill"></i></div>
-      </div>
-    </section>
   </div>
 
   <div class="sheet hidden" id="title">
@@ -251,7 +237,7 @@
   <!-- coach sheet -->
   <div class="sheet hidden" id="coach-sheet">
     <div class="head">
-      <div><span class="eyebrow">Coach</span><h2>Need a hand?</h2></div>
+      <div><span class="eyebrow" id="coach-eyebrow">Coach</span><h2 id="coach-title">Need a hand?</h2></div>
       <button class="sq" id="coach-close" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
       </button>
@@ -261,7 +247,7 @@
 
   <!-- end card -->
   <div class="sheet hidden" id="end">
-    <div class="head"><div><span class="eyebrow">Session over</span><h2 id="end-msg"></h2></div></div>
+    <div class="head"><div><span class="eyebrow" id="end-eyebrow">Session over</span><h2 id="end-msg"></h2></div></div>
     <div class="body">
       <div class="end-top">
         <span class="big" id="end-score"></span>
@@ -270,8 +256,13 @@
       <div class="end-bar"><i id="end-fill"></i><b id="end-mark"></b></div>
       <div id="end-list" class="end-list"></div>
       <div class="end-acts">
+        <!-- In a quest this is the only button that matters: it completes the
+             quest and pays the gems. Hidden outside the app, where there is no
+             quest to complete. -->
+        <button class="btn wide primary hidden" id="btn-finish"><span></span></button>
         <button class="btn wide primary" id="btn-again"><span></span></button>
         <button class="btn wide" id="btn-restart"><span></span></button>
+        <p class="end-note hidden" id="end-note"></p>
       </div>
     </div>
   </div>
@@ -279,6 +270,7 @@
 </div>
 
 <script src="vendor/lottie_light.min.js"></script>
+<script src="bridge.js"></script>
 <script src="analytics.js"></script>
 <script src="fragments.js"></script>
 <script src="audio.js"></script>
