@@ -15,6 +15,12 @@ services:
         value: gemini-2.5-flash
       - key: TTS_MODEL
         value: gemini-2.5-flash-preview-tts
+      # NJA-3172. The project key is publishable (write-only ingest) but is
+      # still set in the dashboard, so no checkout can write to production.
+      - key: POSTHOG_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        value: https://eu.i.posthog.com
       - key: TURNS_PER_IP_PER_HOUR
         value: "400"
       - key: TURNS_PER_DAY

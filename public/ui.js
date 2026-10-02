@@ -210,6 +210,14 @@
         ? 'evaluator: ' + j.model + ' · voice: ' + (j.tts || 'browser')
         : 'evaluator: local · voice: browser';
       voiceWatch();
+      /* NJA-3172. The key comes from the server, so a checkout or a stub run
+         has none and sends nothing — which is the ticket's "fixtures should
+         not fire analytics events" for a prototype with no fixtures. */
+      if (!analyticsStarted) {
+        analyticsStarted = true;
+        window.ANALYTICS.init(Object.assign(
+          { activityId: Q.activity.id }, (j && j.analytics) || {}));
+      }
       return true;
     } catch { serverUp = false; return true; }
   }
@@ -493,6 +501,9 @@
   function unlockGate() {
     return new Promise(resolve => {
       const sheet = $('gate'), input = $('gate-code'), msg = $('gate-msg');
+      /* The gate is the error screen this prototype has: the night cannot
+         start, and the child is looking at a wall instead of a bar. */
+      AN('NovaPals.Activity.Error', { reason: 'locked' });
       sheet.classList.remove('hidden');
       input.focus();
       async function tryCode() {
@@ -1113,8 +1124,10 @@
        then the single-word glossary: the glossary is keyed on single words, so
        "una entrada" was a blank card even though the content has known it
        meant "a ticket" all along. */
-    $('gloss-mean').textContent = meaning || chipMeaning(word) || '—';
+    const means = meaning || chipMeaning(word) || '';
+    $('gloss-mean').textContent = means || '—';
     if (state) E.track(state, 'translation_clicked', { word: String(word) });
+    AN('NovaPals.Nlt.HighlightTapped', { targetText: String(word), nativeText: means });
     $('gloss').classList.remove('hidden');
     if (speak) V.now(word, { speaker: 'axel', lang: TL() });
   }
@@ -1321,6 +1334,10 @@
         ' · ' +
         (cg ? 'coach: gemini ' + lastCoachMs + 'ms' : 'coach: template (' + lastCoachWhy + ')');
       say('axel', coach.html, coach.askText, coach.fragments);
+      /* Fired here rather than at the top of the turn: until the coach has
+         spoken there is no hintText to report, and a QuestionStart without
+         one is a row that cannot be read next to its QuestionEnd. */
+      AN('NovaPals.Nlt.QuestionStart', questionProps(plan));
     };
 
     /* The retry path reposts the coach's bubble, so it must never be empty
@@ -1752,6 +1769,7 @@
      synthesiser and nothing anywhere said why. It no longer falls back, so a
      failure is silence — which needs to be legible, or it reads as the sound
      being broken. The strip carries the reason. */
+  let analyticsStarted = false;
   let voiceTimer = null;
   function voiceWatch() {
     if (voiceTimer) return;
@@ -1766,13 +1784,37 @@
     }, 1000);
   }
 
+  /* ---------- analytics (NJA-3172) ----------
+     Names written out in full rather than assembled, so grepping for
+     "NovaPals.Nlt.QuestionEnd" finds the one place it is sent. The ticket
+     mixes snake_case on the type properties with camelCase on the NLT ones;
+     that is the ticket's spelling and it is followed exactly, because the
+     dashboards are built against it.
+
+     questionIndex is the step of the go, not the turn: a retry is the same
+     question asked again, and counting it twice would make a child who
+     struggled look like a child who was asked more. */
+  const AN = (name, props) => { try { window.ANALYTICS.event(name, props); } catch {} };
+  /* NovaPals.Activity.Skip has no trigger here. The skip button is NJA-3164's
+     and is behind a flag this prototype does not have, and the mercy escape is
+     not a skip — the child did not choose it and the engine does not treat it
+     as one. Wiring it to the nearest thing would put a number in the dashboard
+     that means something else. */
+  const questionProps = pl => ({
+    patternId: pl.pair.patternId,
+    questionText: turnLine || '',
+    hintText: turnAsk || '',
+    questionIndex: state ? state.at : 0,
+  });
+
   /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
     if (E.sessionComplete(state, Q)) return finish('complete');
     if (state.turn >= Q.session.turnCap) return finish('turn-cap');
     const pair = E.pickNext(state, Q);
-    if (!pair) return finish('no-pair');
+    /* Nothing left to ask with the go unfinished is a fault, not an ending. */
+    if (!pair) { AN('NovaPals.Activity.Error', { reason: 'no-pair' }); return finish('no-pair'); }
     current = pair;
     renderTurn();
   }
@@ -1870,6 +1912,9 @@
       marks = new Array(slotCount()).fill(ok);
     }
     renderSlot();
+
+    AN('NovaPals.Nlt.QuestionEnd',
+      Object.assign(questionProps(plan), { answerText: said, isCorrect: !!v.correct }));
 
     if (v.correct) {
       say('me', spanishHTML(said), said, null, 'right');
@@ -1970,6 +2015,11 @@
     E.track(state, 'session_end', {
       turns: state.turn, overall: score, passed: ok, go: state.go, reason,
     });
+    AN('NovaPals.Activity.End', {
+      turns: state.turn, mastery: Math.round(score * 100), passed: ok,
+      go: state.go, reason,
+    });
+    AN('NovaPals.Quest.End', { mastery: Math.round(score * 100), passed: ok });
 
     $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
     $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
@@ -2146,6 +2196,12 @@
 
     state = E.createState(Q);
     E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
+    /* Quest then Activity, in that order: the quest is the thing the child
+       picked and the activity is this run of it, and the rest of the app
+       reports them as a pair. */
+    AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL() });
+    AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),
+                                    stages: E.syllabus(Q).length, steps: E.allSteps(Q).length });
     buildRail();
     $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     $('btn-mic').style.opacity = micAvailable() ? '' : '.4';
@@ -2162,9 +2218,18 @@
     renderSlot(); renderTray(); syncSay();
   });
   $('btn-mic').addEventListener('click', toggleMic);
-  $('btn-pause').addEventListener('click', openProgress);
+  /* The pause sheet IS the pause: opening it stops the night, closing it
+     starts it again, so those are the two events rather than a button that
+     does not exist. */
+  $('btn-pause').addEventListener('click', () => {
+    AN('NovaPals.Activity.Paused', { turn: state ? state.turn : 0 });
+    openProgress();
+  });
   $('coach-close').addEventListener('click', () => $('coach-sheet').classList.add('hidden'));
-  $('prog-close').addEventListener('click', () => $('prog-sheet').classList.add('hidden'));
+  $('prog-close').addEventListener('click', () => {
+    AN('NovaPals.Activity.Resume', { turn: state ? state.turn : 0 });
+    $('prog-sheet').classList.add('hidden');
+  });
   $('btn-restart').addEventListener('click', () => { $('end').classList.add('hidden'); boot(); });
   $('btn-again').addEventListener('click', replayLeftovers);
 

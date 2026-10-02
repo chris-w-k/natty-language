@@ -21,6 +21,12 @@ const API_KEY     = (process.env.GEMINI_API_KEY || '').trim();
 const API_BASE    = 'https://generativelanguage.googleapis.com/v1beta';
 const MODEL       = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const TTS_MODEL   = process.env.TTS_MODEL || 'gemini-2.5-flash-preview-tts';
+/* NJA-3172. A PostHog project key is a publishable, write-only ingest key —
+   it is meant to sit in a browser — but it still comes from the environment
+   rather than the repo, so a checkout cannot write into the production
+   project and a local run sends nothing at all. */
+const POSTHOG_KEY  = (process.env.POSTHOG_KEY || '').trim();
+const POSTHOG_HOST = (process.env.POSTHOG_HOST || 'https://eu.i.posthog.com').trim();
 /* One prebuilt voice per speaker. Swap freely — the names are Gemini's.
    If a name is wrong the call fails and the client falls back to the
    browser's own synthesis, so a bad value is never fatal.
@@ -511,6 +517,7 @@ http.createServer(async (req, res) => {
       ok: true, mock: MOCK, locked: !!ACCESS_CODE, unlocked: authed(req, null),
       model: MOCK ? 'local' : MODEL,
       tts: MOCK ? null : TTS_MODEL,
+      analytics: POSTHOG_KEY ? { key: POSTHOG_KEY, host: POSTHOG_HOST } : null,
     });
   }
 
