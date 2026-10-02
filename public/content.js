@@ -37,6 +37,21 @@ window.QUEST = (function () {
     { code: 'ro', name: 'Română',     flag: '🇷🇴' },
   ];
 
+  /* What each language calls the others. The intro copy names the language
+     being learned and the child's own, and a child reading a Spanish screen
+     should see "inglés", not "English" — so the name travels with the reader,
+     not with the language. The form stored is the one the intro sentences
+     need (Romanian "engleză", not the articulated "engleza"); a screen that
+     needs another form adds its own table rather than bending this one. */
+  const LANG_NAMES = {
+    en: { en: 'English',    es: 'Spanish',     pt: 'Portuguese',  tr: 'Turkish',     pl: 'Polish',      ro: 'Romanian' },
+    es: { en: 'inglés',     es: 'español',     pt: 'portugués',   tr: 'turco',       pl: 'polaco',      ro: 'rumano' },
+    pt: { en: 'inglês',     es: 'espanhol',    pt: 'português',   tr: 'turco',       pl: 'polaco',      ro: 'romeno' },
+    tr: { en: 'İngilizce',  es: 'İspanyolca',  pt: 'Portekizce',  tr: 'Türkçe',      pl: 'Lehçe',       ro: 'Romence' },
+    pl: { en: 'angielski',  es: 'hiszpański',  pt: 'portugalski', tr: 'turecki',     pl: 'polski',      ro: 'rumuński' },
+    ro: { en: 'engleză',    es: 'spaniolă',    pt: 'portugheză',  tr: 'turcă',       pl: 'poloneză',    ro: 'română' },
+  };
+
   const slotTags = ['ticket', 'item', 'like'];
 
   /* NJA-3152's five forms, per language. `bare` is the spelling the schema
@@ -52,37 +67,95 @@ window.QUEST = (function () {
                 en: { bare: 'ticket',   definite: 'the ticket',   indefinite: 'a ticket',
                       plural_bare: 'tickets',   plural_definite: 'the tickets' },
                 es: { bare: 'entrada',  definite: 'la entrada',   indefinite: 'una entrada',
-                      plural_bare: 'entradas',  plural_definite: 'las entradas' } },
+                      plural_bare: 'entradas',  plural_definite: 'las entradas' },
+                pt: { bare: 'bilhete',  definite: 'o bilhete',    indefinite: 'um bilhete',
+                      plural_bare: 'bilhetes',  plural_definite: 'os bilhetes' },
+                tr: { bare: 'bilet',    definite: 'bileti',       indefinite: 'bir bilet',
+                      plural_bare: 'biletler',  plural_definite: 'biletleri' },
+                pl: { bare: 'bilet',    definite: 'bilet',        indefinite: 'biletu',
+                      plural_bare: 'bilety',    plural_definite: 'bilety' },
+                ro: { bare: 'bilet',    definite: 'biletul',      indefinite: 'un bilet',
+                      plural_bare: 'bilete',    plural_definite: 'biletele' } },
     water:    { tags: ['item', 'like'],
                 en: { bare: 'water',    definite: 'water',        indefinite: 'water',
                       plural_bare: 'water',     plural_definite: 'the water' },
                 es: { bare: 'agua',     definite: 'el agua',      indefinite: 'agua',
-                      plural_bare: 'agua',      plural_definite: 'el agua' } },
+                      plural_bare: 'agua',      plural_definite: 'el agua' },
+                pt: { bare: 'água',     definite: 'a água',       indefinite: 'água',
+                      plural_bare: 'água',      plural_definite: 'a água' },
+                tr: { bare: 'su',       definite: 'suyu',         indefinite: 'su',
+                      plural_bare: 'su',        plural_definite: 'suyu' },
+                pl: { bare: 'woda',     definite: 'wodę',         indefinite: 'wody',
+                      plural_bare: 'woda',      plural_definite: 'wodę' },
+                ro: { bare: 'apă',      definite: 'apa',          indefinite: 'apă',
+                      plural_bare: 'apă',       plural_definite: 'apa' } },
     soda:     { tags: ['item', 'like'],
                 en: { bare: 'soda',     definite: 'the soda',     indefinite: 'a soda',
                       plural_bare: 'sodas',     plural_definite: 'the sodas' },
                 es: { bare: 'refresco', definite: 'el refresco',  indefinite: 'un refresco',
-                      plural_bare: 'refrescos', plural_definite: 'los refrescos' } },
+                      plural_bare: 'refrescos', plural_definite: 'los refrescos' },
+                pt: { bare: 'refrigerante', definite: 'o refrigerante', indefinite: 'um refrigerante',
+                      plural_bare: 'refrigerantes', plural_definite: 'os refrigerantes' },
+                tr: { bare: 'gazoz',    definite: 'gazozu',       indefinite: 'bir gazoz',
+                      plural_bare: 'gazozlar',  plural_definite: 'gazozları' },
+                pl: { bare: 'oranżada', definite: 'oranżadę',     indefinite: 'oranżady',
+                      plural_bare: 'oranżady',  plural_definite: 'oranżady' },
+                ro: { bare: 'suc',      definite: 'sucul',        indefinite: 'un suc',
+                      plural_bare: 'sucuri',    plural_definite: 'sucurile' } },
     beer:     { tags: ['item', 'like'],
                 en: { bare: 'beer',     definite: 'the beer',     indefinite: 'a beer',
                       plural_bare: 'beer',      plural_definite: 'the beer' },
                 es: { bare: 'cerveza',  definite: 'la cerveza',   indefinite: 'una cerveza',
-                      plural_bare: 'cerveza',   plural_definite: 'la cerveza' } },
+                      plural_bare: 'cerveza',   plural_definite: 'la cerveza' },
+                pt: { bare: 'cerveja',  definite: 'a cerveja',    indefinite: 'uma cerveja',
+                      plural_bare: 'cerveja',   plural_definite: 'a cerveja' },
+                tr: { bare: 'bira',     definite: 'birayı',       indefinite: 'bir bira',
+                      plural_bare: 'bira',      plural_definite: 'birayı' },
+                pl: { bare: 'piwo',     definite: 'piwo',         indefinite: 'piwa',
+                      plural_bare: 'piwo',      plural_definite: 'piwo' },
+                ro: { bare: 'bere',     definite: 'berea',        indefinite: 'o bere',
+                      plural_bare: 'bere',      plural_definite: 'berea' } },
     sandwich: { tags: ['item', 'like'],
                 en: { bare: 'sandwich', definite: 'the sandwich', indefinite: 'a sandwich',
                       plural_bare: 'sandwiches', plural_definite: 'the sandwiches' },
                 es: { bare: 'bocadillo', definite: 'el bocadillo', indefinite: 'un bocadillo',
-                      plural_bare: 'bocadillos', plural_definite: 'los bocadillos' } },
+                      plural_bare: 'bocadillos', plural_definite: 'los bocadillos' },
+                /* `sandes` does not change in the plural, which is correct and
+                   is why the two plural slots repeat it. */
+                pt: { bare: 'sandes',   definite: 'a sandes',     indefinite: 'uma sandes',
+                      plural_bare: 'sandes',    plural_definite: 'as sandes' },
+                tr: { bare: 'sandviç',  definite: 'sandviçi',     indefinite: 'bir sandviç',
+                      plural_bare: 'sandviçler', plural_definite: 'sandviçleri' },
+                pl: { bare: 'kanapka',  definite: 'kanapkę',      indefinite: 'kanapki',
+                      plural_bare: 'kanapki',   plural_definite: 'kanapki' },
+                ro: { bare: 'sandviș',  definite: 'sandvișul',    indefinite: 'un sandviș',
+                      plural_bare: 'sandvișuri', plural_definite: 'sandvișurile' } },
     record:   { tags: ['item', 'like'],
                 en: { bare: 'record',   definite: 'the record',   indefinite: 'a record',
                       plural_bare: 'records',   plural_definite: 'the records' },
                 es: { bare: 'disco',    definite: 'el disco',     indefinite: 'un disco',
-                      plural_bare: 'discos',    plural_definite: 'los discos' } },
+                      plural_bare: 'discos',    plural_definite: 'los discos' },
+                pt: { bare: 'disco',    definite: 'o disco',      indefinite: 'um disco',
+                      plural_bare: 'discos',    plural_definite: 'os discos' },
+                tr: { bare: 'plak',     definite: 'plağı',        indefinite: 'bir plak',
+                      plural_bare: 'plaklar',   plural_definite: 'plakları' },
+                pl: { bare: 'płyta',    definite: 'płytę',        indefinite: 'płyty',
+                      plural_bare: 'płyty',     plural_definite: 'płyty' },
+                ro: { bare: 'disc',     definite: 'discul',       indefinite: 'un disc',
+                      plural_bare: 'discuri',   plural_definite: 'discurile' } },
     tshirt:   { tags: ['item', 'like'],
                 en: { bare: 't-shirt',  definite: 'the t-shirt',  indefinite: 'a t-shirt',
                       plural_bare: 't-shirts',  plural_definite: 'the t-shirts' },
                 es: { bare: 'camiseta', definite: 'la camiseta',  indefinite: 'una camiseta',
-                      plural_bare: 'camisetas', plural_definite: 'las camisetas' } },
+                      plural_bare: 'camisetas', plural_definite: 'las camisetas' },
+                pt: { bare: 't-shirt',  definite: 'a t-shirt',    indefinite: 'uma t-shirt',
+                      plural_bare: 't-shirts',  plural_definite: 'as t-shirts' },
+                tr: { bare: 'tişört',   definite: 'tişörtü',      indefinite: 'bir tişört',
+                      plural_bare: 'tişörtler', plural_definite: 'tişörtleri' },
+                pl: { bare: 'koszulka', definite: 'koszulkę',     indefinite: 'koszulki',
+                      plural_bare: 'koszulki',  plural_definite: 'koszulki' },
+                ro: { bare: 'tricou',   definite: 'tricoul',      indefinite: 'un tricou',
+                      plural_bare: 'tricouri',  plural_definite: 'tricourile' } },
     /* A band is not something you can be handed across a counter, so it
        carries `like` only and the engine will never pair it with "Can I have
        ___". That tag check is the whole point of NJA-3152's slot_tags: adding
@@ -91,12 +164,30 @@ window.QUEST = (function () {
                 en: { bare: 'band',     definite: 'the band',     indefinite: 'a band',
                       plural_bare: 'bands',     plural_definite: 'the bands' },
                 es: { bare: 'grupo',    definite: 'el grupo',     indefinite: 'un grupo',
-                      plural_bare: 'grupos',    plural_definite: 'los grupos' } },
+                      plural_bare: 'grupos',    plural_definite: 'los grupos' },
+                pt: { bare: 'banda',    definite: 'a banda',      indefinite: 'uma banda',
+                      plural_bare: 'bandas',    plural_definite: 'as bandas' },
+                tr: { bare: 'grup',     definite: 'grubu',        indefinite: 'bir grup',
+                      plural_bare: 'gruplar',   plural_definite: 'grupları' },
+                pl: { bare: 'zespół',   definite: 'zespół',       indefinite: 'zespołu',
+                      plural_bare: 'zespoły',   plural_definite: 'zespoły' },
+                ro: { bare: 'trupă',    definite: 'trupa',        indefinite: 'o trupă',
+                      plural_bare: 'trupe',     plural_definite: 'trupele' } },
     singer:   { tags: ['like'],
                 en: { bare: 'singer',   definite: 'the singer',   indefinite: 'a singer',
                       plural_bare: 'singers',   plural_definite: 'the singers' },
                 es: { bare: 'cantante', definite: 'el cantante',  indefinite: 'un cantante',
-                      plural_bare: 'cantantes', plural_definite: 'los cantantes' } },
+                      plural_bare: 'cantantes', plural_definite: 'los cantantes' },
+                pt: { bare: 'cantor',   definite: 'o cantor',     indefinite: 'um cantor',
+                      plural_bare: 'cantores',  plural_definite: 'os cantores' },
+                tr: { bare: 'şarkıcı',  definite: 'şarkıcıyı',    indefinite: 'bir şarkıcı',
+                      plural_bare: 'şarkıcılar', plural_definite: 'şarkıcıları' },
+                /* Animate masculine, so the accusative is not the nominative
+                   the way `bilet` and `zespół` are. */
+                pl: { bare: 'piosenkarz', definite: 'piosenkarza', indefinite: 'piosenkarza',
+                      plural_bare: 'piosenkarze', plural_definite: 'piosenkarzy' },
+                ro: { bare: 'cântăreț', definite: 'cântărețul',   indefinite: 'un cântăreț',
+                      plural_bare: 'cântăreți', plural_definite: 'cântăreții' } },
   };
 
   const FORMS = ['bare', 'definite', 'indefinite', 'plural_bare', 'plural_definite'];
@@ -127,22 +218,65 @@ window.QUEST = (function () {
      A shared item word ("entrada") is never restricted by this — only the
      frame, which is what carries the pragmatic role. */
   const vocabPatterns = {
-    'excuse-me':    { speaker: 'learner', en: 'Excuse me.',       es: 'Perdona.',                  opensOnly: true },
-    'do-you-have':  { speaker: 'either',  en: 'Do you have {item:indefinite}?',        es: '¿Tienes {item:indefinite}?' },
+    'excuse-me':    { speaker: 'learner', opensOnly: true,
+                      en: 'Excuse me.',   es: 'Perdona.',      pt: 'Desculpe.',
+                      tr: 'Affedersiniz.', pl: 'Przepraszam.', ro: 'Scuzați-mă.' },
+    'do-you-have':  { speaker: 'either',
+                      en: 'Do you have {item:indefinite}?',
+                      es: '¿Tienes {item:indefinite}?',
+                      pt: 'Tens {item:indefinite}?',
+                      /* Turkish puts the question particle at the end and does
+                         not inflect the noun here, so the bare slot is right. */
+                      tr: '{item:indefinite} var mı?',
+                      pl: 'Masz {item:definite}?',
+                      ro: 'Ai {item:indefinite}?' },
     /* Asking, and then asking politely, are two things to learn and so two
        stages. Taught as one, the child's first go at asking for anything is a
        five-word sentence with the courtesy welded on, and getting "por favor"
        wrong costs them the ask as well. */
-    'can-i-have':   { speaker: 'learner', en: 'Can I have {item:indefinite}?',          es: '¿Me das {item:indefinite}?' },
-    'can-i-have-please': { speaker: 'learner', en: 'Can I have {item:indefinite}, please?', es: '¿Me das {item:indefinite}, por favor?' },
+    'can-i-have':   { speaker: 'learner',
+                      en: 'Can I have {item:indefinite}?',
+                      es: '¿Me das {item:indefinite}?',
+                      pt: 'Dás-me {item:indefinite}?',
+                      tr: '{item:indefinite} alabilir miyim?',
+                      /* `prosić o` governs the accusative, which is what the
+                         Polish `definite` slot holds. */
+                      pl: 'Mogę prosić o {item:definite}?',
+                      ro: 'Îmi dai {item:indefinite}?' },
+    'can-i-have-please': { speaker: 'learner',
+                      en: 'Can I have {item:indefinite}, please?',
+                      es: '¿Me das {item:indefinite}, por favor?',
+                      pt: 'Dás-me {item:indefinite}, por favor?',
+                      tr: '{item:indefinite} alabilir miyim, lütfen?',
+                      pl: 'Czy mogę prosić o {item:definite}, proszę?',
+                      ro: 'Îmi dai {item:indefinite}, te rog?' },
     'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
     /* What you say to turn down what you have just been offered. The set had
        no way to decline at all, so the only near-miss the engine could reach
        for was the barman's own "there is no ___". */
-    'i-dont-want':  { speaker: 'learner', en: "I don't want {item:indefinite}.",       es: 'No quiero {item:indefinite}.' },
+    'i-dont-want':  { speaker: 'learner',
+                      en: "I don't want {item:indefinite}.",
+                      es: 'No quiero {item:indefinite}.',
+                      pt: 'Não quero {item:indefinite}.',
+                      tr: '{item:indefinite} istemiyorum.',
+                      /* Polish negation takes the genitive, which is the one
+                         thing the Polish `indefinite` slot is holding — see the
+                         note on the Polish forms above. */
+                      pl: 'Nie chcę {item:indefinite}.',
+                      ro: 'Nu vreau {item:indefinite}.' },
     'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
-    'do-you-like':  { speaker: 'either',  en: 'Do you like {like:definite}?',     es: '¿Te gusta {like:definite}?' },
+    'do-you-like':  { speaker: 'either',
+                      en: 'Do you like {like:definite}?',
+                      es: '¿Te gusta {like:definite}?',
+                      /* Portuguese likes things WITH `de`, and `de` + article
+                         contracts (de + a = da), which a slot cannot produce.
+                         The bare plural after `de` is both correct and the way
+                         this is actually said. */
+                      pt: 'Gostas de {like:plural_bare}?',
+                      tr: '{like:definite} seviyor musun?',
+                      pl: 'Lubisz {like:definite}?',
+                      ro: 'Îți place {like:definite}?' },
     /* The form differs between the languages, which is the point of NJA-3145's
        grammar context rather than an oversight: the ticket writes i-like-x as
        {like:bare} in English and {like:definite} in Spanish, because that is
@@ -154,15 +288,29 @@ window.QUEST = (function () {
        Each word is rendered in ITS OWN language's form, so the Spanish noun
        keeps its article when it crosses into the English frame rather than
        arriving bare. */
-    'i-like':       { speaker: 'either',  en: 'I like {like:plural_bare}.',       es: 'Me gusta {like:definite}.' },
+    'i-like':       { speaker: 'either',
+                      en: 'I like {like:plural_bare}.',
+                      es: 'Me gusta {like:definite}.',
+                      pt: 'Gosto de {like:plural_bare}.',
+                      tr: '{like:plural_definite} seviyorum.',
+                      pl: 'Lubię {like:plural_definite}.',
+                      /* `plac` rather than `place`: Romanian agrees the verb
+                         with the thing liked, and this slot is plural. */
+                      ro: 'Îmi plac {like:plural_definite}.' },
     /* Two slots. NJA-3160's third unit test is a pattern of exactly this
        shape, and the engine used to refuse them outright — one slot per
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
        apart; both draw on the same tag. */
     'i-like-two':   { speaker: 'either',
                       en: 'I like {like#1:definite} and {like#2:definite}.',
-                      es: 'Me gustan {like#1:definite} y {like#2:definite}.' },
-    'thank-you':    { speaker: 'learner', en: 'Thank you.',       es: 'Gracias.' },
+                      es: 'Me gustan {like#1:definite} y {like#2:definite}.',
+                      pt: 'Gosto de {like#1:plural_bare} e de {like#2:plural_bare}.',
+                      tr: '{like#1:definite} ve {like#2:definite} seviyorum.',
+                      pl: 'Lubię {like#1:definite} i {like#2:definite}.',
+                      ro: 'Îmi plac {like#1:definite} și {like#2:definite}.' },
+    'thank-you':    { speaker: 'learner',
+                      en: 'Thank you.',  es: 'Gracias.',      pt: 'Obrigado.',
+                      tr: 'Teşekkürler.', pl: 'Dziękuję.',    ro: 'Mulțumesc.' },
   };
 
   /* One activity, standing in for a row of quest_activities_nlt_prototype.
@@ -201,12 +349,56 @@ window.QUEST = (function () {
     /* The three screens before the game. Copy lives here rather than in the
        markup so it travels with the scenario — a different night out brings
        its own title, its own pep talk and its own way of getting there. */
+    /* One copy block per HINT language. The hint language IS the native
+       language (NJA-3204), so this is the screen in the child's own tongue,
+       and {0} / {1} are the names of the language being learned and of their
+       own — filled by resolveIntro() below, so what reaches the UI is a flat
+       object exactly as before. Each version is written to read naturally
+       with the name in the slot, which is why the sentences differ in shape
+       rather than being one sentence translated six times. */
     intro: {
-      title: 'GOING TO A GIG',
-      sub: 'Learn the Spanish to get in, get a drink and tell someone you love the song.',
-      coach: "Tonight's gonna be unreal — but the band's Spanish, the bar's Spanish, and the fella on the door doesn't do English. Stick with me. I'll tell you what to say, you just say it.",
-      loading: 'Getting a taxi to the club…',
-      tap: 'Tap to continue',
+      en: {
+        title: 'GOING TO A GIG',
+        sub: 'Learn the {0} to get in, get a drink and tell someone you love the song.',
+        coach: "Tonight's gonna be unreal — but the band's {0}, the bar's {0}, and the fella on the door doesn't do {1}. Stick with me. I'll tell you what to say, you just say it.",
+        loading: 'Getting a taxi to the club…',
+        tap: 'Tap to continue',
+      },
+      es: {
+        title: 'VAMOS A UN CONCIERTO',
+        sub: 'Aprende el {0} para entrar, pedir una bebida y decir que te encanta la canción.',
+        coach: 'Esta noche va a ser brutal — pero la banda canta en {0}, en la barra hablan {0} y el de la puerta no habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
+        loading: 'Cogiendo un taxi al club…',
+        tap: 'Toca para continuar',
+      },
+      pt: {
+        title: 'VAMOS A UM CONCERTO',
+        sub: 'Aprende o {0} para entrares, pedires uma bebida e dizeres que adoras a música.',
+        coach: 'Esta noite vai ser do caraças — mas a banda canta em {0}, no bar falam {0} e o tipo da porta não fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
+        loading: 'A apanhar um táxi para o clube…',
+        tap: 'Toca para continuar',
+      },
+      tr: {
+        title: 'KONSERE GİDİYORUZ',
+        sub: 'İçeri girmek, bir şeyler içmek ve şarkıyı sevdiğini söylemek için {0} öğren.',
+        coach: 'Bu gece efsane olacak — ama grup {0} söylüyor, barda {0} konuşuyorlar ve kapıdaki adam {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
+        loading: 'Kulübe taksiyle gidiyoruz…',
+        tap: 'Devam etmek için dokun',
+      },
+      pl: {
+        title: 'IDZIEMY NA KONCERT',
+        sub: 'Poznaj {0} — wejdź do środka, zamów coś do picia i powiedz, że uwielbiasz tę piosenkę.',
+        coach: 'Dziś będzie czad — ale zespół, bar i facet przy wejściu mówią w jednym języku, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
+        loading: 'Łapiemy taksówkę do klubu…',
+        tap: 'Dotknij, aby kontynuować',
+      },
+      ro: {
+        title: 'MERGEM LA UN CONCERT',
+        sub: 'Învață să vorbești {0} ca să intri, să ceri ceva de băut și să spui că îți place melodia.',
+        coach: 'Diseară o să fie nebunie — dar trupa cântă în {0}, la bar se vorbește {0}, iar tipul de la ușă nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
+        loading: 'Luăm un taxi până la club…',
+        tap: 'Atinge pentru a continua',
+      },
     },
     objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
     /* `there-is-no` is deliberately NOT here. It is the actor's way of saying
@@ -373,11 +565,32 @@ Return JSON only.`,
 
   /* NJA-3157 / NJA-3158's ui_strings collection. Copy the UI owns rather than
      the model, so it is identical every time and translatable as a unit. */
+  /* Every string a child reads, in every hint language. The hint language is
+     the native language (NJA-3204), so t() looks these up by it: a string that
+     is the same everywhere stays a plain string, one that differs is a map,
+     and a missing language falls back to English rather than to nothing. */
   const uiStrings = {
-    'answer-pane-correct-text':   'Nice Job!',
-    'answer-pane-incorrect-text': 'Not quite, try again',
-    'pause-menu-skip': 'Skip',
-    'pause-menu-exit': 'Exit',
+    'answer-pane-correct-text': {
+      en: 'Nice Job!', es: '¡Muy bien!', pt: 'Boa!',
+      tr: 'Harika!', pl: 'Świetnie!', ro: 'Bravo!',
+    },
+    'answer-pane-incorrect-text': {
+      en: 'Not quite, try again',   es: 'Casi, inténtalo otra vez',
+      pt: 'Quase, tenta outra vez', tr: 'Yaklaştın, tekrar dene',
+      pl: 'Prawie, spróbuj jeszcze raz', ro: 'Aproape, mai încearcă',
+    },
+    'pause-title': {
+      en: 'Paused', es: 'En pausa', pt: 'Em pausa',
+      tr: 'Duraklatıldı', pl: 'Pauza', ro: 'Pauză',
+    },
+    'pause-menu-skip': {
+      en: 'Skip', es: 'Saltar', pt: 'Saltar',
+      tr: 'Atla', pl: 'Pomiń', ro: 'Sari',
+    },
+    'pause-menu-exit': {
+      en: 'Exit', es: 'Salir', pt: 'Sair',
+      tr: 'Çık', pl: 'Wyjdź', ro: 'Ieși',
+    },
     /* NJA-3168. {0} is the number, and the marker is INSIDE the string on
        purpose: Turkish writes the percent before the figure with no space, so
        any code that appends "%" itself is wrong in Turkish and right nowhere
@@ -387,26 +600,173 @@ Return JSON only.`,
       es: 'Maestría: {0}%',
       pt: 'Mestria: {0}%',
       tr: 'Ustalık: %{0}',
+      pl: 'Opanowanie: {0}%',
+      ro: 'Stăpânire: {0}%',
     },
     /* The end of a go. The pass mark is a number the child should be told, so
        the two headline strings carry it: which one shows says whether they
        cleared it, and the difference is the point of NJA-3196 Q2. */
-    'end-passed-title': 'You made it.',
-    'end-short-title':  "That's the night.",
-    'end-passed-sub':   'Cleared the {0}% mark.',
-    'end-short-sub':    'Short of the {0}% mark — another go at what is left will get you there.',
-    'end-stuck-label':  'Stuck',
-    'end-shaky-label':  'Shaky',
-    'end-missed-label': 'Not yet',
-    'end-replay-some':  'PRACTISE WHAT IS LEFT',
-    'end-replay-all':   'PLAY AGAIN',
+    'end-passed-title': {
+      en: 'You made it.', es: 'Lo lograste.', pt: 'Conseguiste.',
+      tr: 'Başardın.', pl: 'Udało się.', ro: 'Ai reușit.',
+    },
+    'end-short-title': {
+      en: "That's the night.", es: 'Se acabó la noche.', pt: 'A noite acabou.',
+      tr: 'Gece bitti.', pl: 'Koniec wieczoru.', ro: 'Asta a fost seara.',
+    },
+    'end-passed-sub': {
+      en: 'Cleared the {0}% mark.', es: 'Has pasado del {0}%.',
+      pt: 'Passaste os {0}%.',     tr: '%{0} barajını geçtin.',
+      pl: 'Przekroczone {0}%.',    ro: 'Ai trecut de {0}%.',
+    },
+    'end-short-sub': {
+      en: 'Short of the {0}% mark — another go at what is left will get you there.',
+      es: 'Te faltó para el {0}% — otra vuelta a lo que queda y lo tienes.',
+      pt: 'Faltou para os {0}% — outra volta ao que falta e chegas lá.',
+      tr: '%{0} barajına az kaldı — kalanları bir daha dene, varırsın.',
+      pl: 'Zabrakło do {0}% — jeszcze jedno podejście do reszty i się uda.',
+      ro: 'Ți-a lipsit până la {0}% — încă o tură cu ce a rămas și ajungi acolo.',
+    },
+    'end-stuck-label': {
+      en: 'Stuck', es: 'Atascado', pt: 'Preso',
+      tr: 'Takıldın', pl: 'Zacięte', ro: 'Blocat',
+    },
+    'end-shaky-label': {
+      en: 'Shaky', es: 'Flojo', pt: 'Inseguro',
+      tr: 'Sallantıda', pl: 'Niepewne', ro: 'Nesigur',
+    },
+    'end-missed-label': {
+      en: 'Not yet', es: 'Todavía no', pt: 'Ainda não',
+      tr: 'Henüz değil', pl: 'Jeszcze nie', ro: 'Încă nu',
+    },
+    'end-replay-some': {
+      en: 'PRACTISE WHAT IS LEFT', es: 'PRACTICA LO QUE FALTA',
+      pt: 'PRATICA O QUE FALTA',   tr: 'KALANLARI ÇALIŞ',
+      pl: 'POĆWICZ RESZTĘ',        ro: 'EXERSEAZĂ CE A RĂMAS',
+    },
+    'end-replay-all': {
+      en: 'PLAY AGAIN', es: 'JUGAR OTRA VEZ', pt: 'JOGAR OUTRA VEZ',
+      tr: 'TEKRAR OYNA', pl: 'ZAGRAJ JESZCZE RAZ', ro: 'JOACĂ DIN NOU',
+    },
     /* The coach's line after a wrong answer. Written, not generated: it is the
        same sentence every time by design, it must never be wrong, and it is
        the one beat in the loop where a child is waiting to try again. */
-    'coach-retry': "Let's try that again.",
-    /* The language picker. The prototype only has these in English because
-       the screen is shown before a language is chosen — in the real build it
-       follows the device locale. */
+    'coach-retry': {
+      en: "Let's try that again.", es: 'Venga, otra vez.', pt: 'Vá, outra vez.',
+      tr: 'Hadi, bir daha.', pl: 'Dawaj, jeszcze raz.', ro: 'Hai, încă o dată.',
+    },
+    /* The answer tray. {0} is how many words are missing — the one-word case
+       is its own string because several of these languages inflect the noun
+       after a number, so "Tap the {0} missing words" cannot be built. */
+    'slot-hint-all': {
+      en: 'Build the whole sentence', es: 'Construye la frase entera',
+      pt: 'Constrói a frase toda',    tr: 'Cümlenin tamamını kur',
+      pl: 'Ułóż całe zdanie',         ro: 'Construiește toată propoziția',
+    },
+    'slot-hint-one': {
+      en: 'Tap the missing word',  es: 'Toca la palabra que falta',
+      pt: 'Toca na palavra que falta', tr: 'Eksik kelimeye dokun',
+      pl: 'Dotknij brakującego słowa', ro: 'Atinge cuvântul care lipsește',
+    },
+    'slot-hint-many': {
+      en: 'Tap the {0} missing words', es: 'Toca las {0} palabras que faltan',
+      pt: 'Toca nas {0} palavras que faltam', tr: 'Eksik {0} kelimeye dokun',
+      pl: 'Dotknij brakujących słów ({0})',   ro: 'Atinge cele {0} cuvinte care lipsesc',
+    },
+    /* The mercy line, after enough failed tries: {0} is the coach's name and
+       {1} the phrase he says for them. */
+    'coach-says-it': {
+      en: '— {0} says it for you: {1}',   es: '— {0} lo dice por ti: {1}',
+      pt: '— {0} di-lo por ti: {1}',      tr: '— {0} senin yerine söylüyor: {1}',
+      pl: '— {0} mówi to za ciebie: {1}', ro: '— {0} o spune în locul tău: {1}',
+    },
+    'mic-unavailable': {
+      en: 'No speech recognition in this browser — keep tapping.',
+      es: 'Este navegador no reconoce la voz — sigue tocando.',
+      pt: 'Este navegador não reconhece a voz — continua a tocar.',
+      tr: 'Bu tarayıcıda ses tanıma yok — dokunmaya devam et.',
+      pl: 'Ta przeglądarka nie rozpoznaje mowy — stukaj dalej.',
+      ro: 'Browserul nu recunoaște vocea — atinge mai departe.',
+    },
+    'mic-failed': {
+      en: 'Didn’t catch that — try tapping instead.',
+      es: 'No te he pillado — prueba a tocar.',
+      pt: 'Não apanhei — experimenta tocar.',
+      tr: 'Anlayamadım — dokunmayı dene.',
+      pl: 'Nie dosłyszałem — spróbuj stuknąć.',
+      ro: 'Nu am prins — încearcă să atingi.',
+    },
+    /* The written fallbacks, for when the model is slow or unreachable. One
+       list per speaker so the line is not the same every turn. */
+    'fb-actor-ask': {
+      en: ['What can I get you?', 'Yes? What do you need?', 'Right — what will it be?', 'Go on then.'],
+      es: ['¿Qué te pongo?', '¿Sí? ¿Qué necesitas?', 'Venga — ¿qué va a ser?', 'Dime.'],
+      pt: ['O que te sirvo?', 'Sim? Do que precisas?', 'Então — o que vai ser?', 'Diz lá.'],
+      tr: ['Ne vereyim?', 'Evet? Ne lazım?', 'Hadi — ne olacak?', 'Söyle bakalım.'],
+      pl: ['Co podać?', 'Tak? Czego potrzebujesz?', 'No dobra — co ma być?', 'Mów śmiało.'],
+      ro: ['Ce îți dau?', 'Da? De ce ai nevoie?', 'Hai — ce să fie?', 'Zi.'],
+    },
+    'fb-actor-offer': {
+      en: 'We have {0}. Do you want it?',  es: 'Tenemos {0}. ¿Lo quieres?',
+      pt: 'Temos {0}. Queres?',            tr: '{0} var. İster misin?',
+      pl: 'Mamy {0}. Chcesz?',             ro: 'Avem {0}. Vrei?',
+    },
+    'fb-coach-ask': {
+      en: ['Tell them.', 'Say it back.', 'Your turn.', 'Answer them.'],
+      es: ['Díselo.', 'Repítelo.', 'Te toca.', 'Contéstale.'],
+      pt: ['Diz-lhe.', 'Repete.', 'É a tua vez.', 'Responde-lhe.'],
+      tr: ['Söyle ona.', 'Tekrar et.', 'Sıra sende.', 'Cevap ver.'],
+      pl: ['Powiedz mu.', 'Powtórz.', 'Twoja kolej.', 'Odpowiedz mu.'],
+      ro: ['Spune-i.', 'Repetă.', 'E rândul tău.', 'Răspunde-i.'],
+    },
+    'fb-coach-new': {
+      en: "Here's how you say it: “{0}”", es: 'Así se dice: “{0}”',
+      pt: 'Diz-se assim: “{0}”',          tr: 'Şöyle deniyor: “{0}”',
+      pl: 'Mówi się tak: “{0}”',          ro: 'Se spune așa: „{0}”',
+    },
+    /* The pause sheet — the night so far, in the epic's PPP terms. Parent-
+       facing as much as child-facing, and on screen in the same language as
+       everything else. The pill's CSS class comes from the phase key, never
+       from this text. */
+    'prog-head-phrases': {
+      en: 'Phrases', es: 'Frases', pt: 'Frases',
+      tr: 'Kalıplar', pl: 'Zwroty', ro: 'Expresii',
+    },
+    'prog-head-words': {
+      en: 'Words', es: 'Palabras', pt: 'Palavras',
+      tr: 'Kelimeler', pl: 'Słowa', ro: 'Cuvinte',
+    },
+    'prog-phase-present': {
+      en: 'new', es: 'nuevo', pt: 'novo',
+      tr: 'yeni', pl: 'nowe', ro: 'nou',
+    },
+    'prog-phase-practice': {
+      en: 'practising', es: 'practicando', pt: 'a praticar',
+      tr: 'çalışıyor', pl: 'w treningu', ro: 'exersează',
+    },
+    'prog-phase-produce': {
+      en: 'can use', es: 'ya la usa', pt: 'já usa',
+      tr: 'kullanabiliyor', pl: 'umie', ro: 'o folosește',
+    },
+    'prog-counts': {
+      en: 'seen {0}, right {1}, wrong {2}',
+      es: 'vista {0}, bien {1}, mal {2}',
+      pt: 'vista {0}, certas {1}, erradas {2}',
+      tr: '{0} kez geldi, {1} doğru, {2} yanlış',
+      pl: 'widziane {0}, dobrze {1}, źle {2}',
+      ro: 'văzută {0}, corect {1}, greșit {2}',
+    },
+    'sound-on': {
+      en: 'SOUND ON', es: 'SONIDO SÍ', pt: 'SOM LIGADO',
+      tr: 'SES AÇIK', pl: 'DŹWIĘK WŁ.', ro: 'SUNET PORNIT',
+    },
+    'sound-off': {
+      en: 'SOUND OFF', es: 'SONIDO NO', pt: 'SOM DESLIGADO',
+      tr: 'SES KAPALI', pl: 'DŹWIĘK WYŁ.', ro: 'SUNET OPRIT',
+    },
+    /* The language picker. These stay English: the screen is shown BEFORE a
+       language is chosen, so there is nothing yet to show them in — in the
+       real build it follows the device locale. */
     'lang-pick-title':   'HINT LANGUAGE',
     'lang-pick-sub':     'The language your pal talks to you in.',
     'lang-pick-go':      'START',
@@ -503,13 +863,24 @@ Return JSON only.`,
      case ("I like disco" for "I like el disco"), so `forms` is looked up per
      (slot key, language) from that language's own chunked pattern. */
   function render(frames, lang, fill, inTarget, forms) {
-    return frames.map(f => {
+    const out = frames.map(f => {
       if (f.type === 'text') return f.text;
       const id = fill[f.key];
       if (!id) return '___';
       const wordLang = (inTarget && inTarget.has(f.key)) ? lang.target : lang.native;
       return vocabItems[id][wordLang][formOf(forms, f, wordLang)];
     }).join('');
+    return openCap(out);
+  }
+  /* A pattern that OPENS with a slot starts its sentence with a stored word,
+     and stored words are lowercase — so Turkish came out "bir bilet var mı?".
+     Only character zero is touched, and only when it is a lowercase letter:
+     "¿Me das" already starts with punctuation and is right, and a blanked
+     frame starts with "___" and must not have its first real word
+     capitalised. */
+  function openCap(str) {
+    const c = str.charAt(0);
+    return c && c !== c.toUpperCase() ? c.toUpperCase() + str.slice(1) : str;
   }
   /* The form this language asks for in this slot, falling back to the form
      written in the frame we are rendering when the other language has nothing
@@ -519,10 +890,31 @@ Return JSON only.`,
     return (byLang && byLang[wordLang]) || f.forms[0];
   }
 
+  /* The intro block for one pair: the hint language's copy, with the two
+     language names filled in. Falls back to English copy for a hint language
+     that has none yet, so adding a language to LANGUAGES never blanks the
+     first screen. */
+  function resolveIntro(nativeCode, targetCode) {
+    const all = activity.intro || {};
+    const copy = all[nativeCode] || all.en || {};
+    const names = LANG_NAMES[nativeCode] || LANG_NAMES.en;
+    const args = [names[targetCode] || targetCode, names[nativeCode] || nativeCode];
+    const out = {};
+    for (const k of Object.keys(copy)) {
+      out[k] = args.reduce((acc, v, i) => acc.split('{' + i + '}').join(v), String(copy[k]));
+    }
+    return out;
+  }
+
   function expand(nativeCode, targetCode) {
     const LANGS = { native: nativeCode, target: targetCode };
     const q = {
-      id: activity.id, title: activity.title, activity,
+      id: activity.id, title: activity.title,
+      /* The intro copy is resolved for THIS pair before anything reads it, so
+         the UI keeps seeing a flat { title, sub, coach, loading, tap }. The
+         shared `activity` is left alone — a second build() with another pair
+         must not inherit the first one's screen. */
+      activity: Object.assign({}, activity, { intro: resolveIntro(LANGS.native, LANGS.target) }),
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,

@@ -388,7 +388,11 @@
      taxi ride is the natural place to have found out. */
   async function intro() {
     const el = $('intro');
-    const copy = (Q.activity.intro || {});
+    /* Deliberately a function, not a value: the copy belongs to the hint
+       language, and the hint language is not known until pickLanguages() has
+       run and setPair() has rebuilt Q. Reading it once at the top of intro()
+       gave every child the English screen. */
+    const copyOf = () => (Q.activity.intro || {});
 
     /* ?intro=0 goes straight to the night. Five seconds of taxi is right once
        and tiresome on the fortieth run, so anyone working on the game itself —
@@ -408,13 +412,6 @@
       return ok;
     }
 
-    $('intro-title-text').textContent = copy.title || Q.title || '';
-    $('intro-sub').textContent = copy.sub || '';
-    $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
-    $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
-    $('intro-load-text').textContent = copy.loading || '';
-    $('intro-bubble').textContent = copy.coach || '';
-
     el.classList.remove('hidden');
 
     /* First screen: which way round is this session? The whole content object
@@ -422,6 +419,15 @@
        card and before anything that reads a pattern. */
     showPanel('intro-langs');
     await pickLanguages();
+
+    /* Now the hint language is settled, so the screens can be written. */
+    const copy = copyOf();
+    $('intro-title-text').textContent = copy.title || Q.title || '';
+    $('intro-sub').textContent = copy.sub || '';
+    $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
+    $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
+    $('intro-load-text').textContent = copy.loading || '';
+    $('intro-bubble').textContent = copy.coach || '';
 
     showPanel('intro-title');
 
@@ -937,14 +943,13 @@
      is never interesting. */
   function fallbackLines(plan) {
     const intro = newThing(plan);
-    const asks = ['What can I get you?', 'Yes? What do you need?',
-                  'Right — what will it be?', 'Go on then.'];
+    const asks = tList('fb-actor-ask');
     let actor = asks[(state.turn + plan.pair.id.length) % asks.length];
-    if (intro && intro.by === 'actor') actor = `We have ${intro.target}. Do you want it?`;
+    if (intro && intro.by === 'actor') actor = t('fb-actor-offer', intro.target);
 
-    const coachAsks = ['Tell them.', 'Say it back.', 'Your turn.', 'Answer them.'];
+    const coachAsks = tList('fb-coach-ask');
     let coach = `${coachAsks[state.turn % coachAsks.length]} “${plan.pair.allNative}”`;
-    if (intro && intro.kind === 'pattern') coach = `Here's how you say it: “${plan.pair.allNative}”`;
+    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allNative);
     return { actor_line: actor, coach_line: coach };
   }
 
@@ -1156,8 +1161,8 @@
   function slotLabel(p) {
     const n = p.answer.length;
     if (!n) return '';
-    if (n >= p.cells.length) return 'Build the whole sentence';
-    return n === 1 ? 'Tap the missing word' : 'Tap the ' + n + ' missing words';
+    if (n >= p.cells.length) return t('slot-hint-all');
+    return n === 1 ? t('slot-hint-one') : t('slot-hint-many', n);
   }
 
   /* ---------- render ---------- */
@@ -1203,8 +1208,19 @@
      looked up by native language and falls back to English. */
   function t(key, ...args) {
     const raw = Q.uiStrings[key];
-    const s = (raw && typeof raw === 'object') ? (raw[NL()] || raw.en || '') : (raw || '');
+    const got = (raw && typeof raw === 'object' && !Array.isArray(raw))
+      ? (raw[NL()] || raw.en || '') : (raw || '');
+    const s = Array.isArray(got) ? (got[0] || '') : got;
     return args.reduce((acc, v, i) => acc.split('{' + i + '}').join(String(v)), s);
+  }
+
+  /* The same lookup for a ui_string that is a LIST — the written fallbacks,
+     which rotate so the stand-in line is not the same one every turn. */
+  function tList(key) {
+    const raw = Q.uiStrings[key];
+    const got = (raw && typeof raw === 'object' && !Array.isArray(raw))
+      ? (raw[NL()] || raw.en || []) : raw;
+    return Array.isArray(got) ? got : [String(got || '')];
   }
 
   function renderHud() {
@@ -1948,7 +1964,7 @@
     if (E.mercyDue(state)) {
       recordTurn(plan, turnLine, turnAsk, false);
       hideBanner();
-      $('verdict').textContent = '— ' + COACH + ' says it for you: ' + plan.expected;
+      $('verdict').textContent = t('coach-says-it', COACH, plan.expected);
       /* Written, not spoken. The bartender is the only one who talks out loud
          without being asked; the coach's voice is available on a tap — the
          hint sheet has a button, and every highlighted word reads itself. */
@@ -2069,7 +2085,7 @@
 
   function toggleMic() {
     if (micOn) { setMic(false); return; }
-    if (!micAvailable()) { $('verdict').textContent = 'No speech recognition in this browser — keep tapping.'; return; }
+    if (!micAvailable()) { $('verdict').textContent = t('mic-unavailable'); return; }
     V.stop();
     setMic(true);
     $('mic-heard').textContent = '';
@@ -2084,7 +2100,7 @@
       $('mic-heard').textContent = txt;
       if (ev.results[ev.results.length - 1].isFinal) { setMic(false); submit(txt, 'voice'); }
     };
-    recog.onerror = () => { setMic(false); $('verdict').textContent = 'Didn’t catch that — try tapping instead.'; };
+    recog.onerror = () => { setMic(false); $('verdict').textContent = t('mic-failed'); };
     recog.onend = () => { if (micOn) setMic(false); };
     try { recog.start(); } catch { setMic(false); }
   }
@@ -2117,43 +2133,51 @@
     const body = $('prog-body');
     body.innerHTML = '';
 
-    const head = t => {
+    const head = text => {
       const h = document.createElement('div');
       h.className = 'scene-h';
-      h.innerHTML = `<b>${esc(t)}</b><span></span>`;
+      h.innerHTML = `<b>${esc(text)}</b><span></span>`;
       body.appendChild(h);
     };
     const row = (main, sub, rec) => {
       const ph = E.phase(rec);
-      const label = { present: 'new', practice: 'practising', produce: 'can use' }[ph];
+      /* The class is the phase, the text is the translation — the two were
+         the same string before, so localising the pill restyled it. */
+      const cls = { present: 'new', practice: 'practising', produce: 'canuse' }[ph];
+      const label = t('prog-phase-' + ph);
       const n = rec.correct + rec.incorrect;
       const r = document.createElement('div');
       r.className = 'row';
       r.innerHTML =
         `<div class="l"><span class="t">${esc(main)}</span><span class="m">${esc(sub)}</span></div>` +
         `<div class="r"><span class="pct">${n ? Math.round(E.ratio(rec) * 100) + '%' : '—'}</span>` +
-        `<span class="pill ${label.replace(' ', '')}">${label}</span></div>`;
+        `<span class="pill ${cls}">${esc(label)}</span></div>`;
       body.appendChild(r);
     };
 
-    head('Phrases');
+    $('prog-eyebrow').textContent = t('pause-title');
+    /* The night's name, in the child's language: the intro title is the one
+       the scenario already carries in all six. */
+    $('prog-name').textContent = (Q.activity.intro || {}).title || Q.title;
+    syncSound();
+    head(t('prog-head-phrases'));
     for (const pid of Q.activity.patterns) {
       const rec = state.patterns[pid];
       if (!rec) continue;
       const pat = Q.vocabPatterns[pid];
       row(pat[TL()].replace(/\{[^}]+\}/g, '___'),
           pat[NL()].replace(/\{[^}]+\}/g, '___') +
-          (rec.exposures ? `  ·  seen ${rec.exposures}, right ${rec.correct}, wrong ${rec.incorrect}` : ''),
+          (rec.exposures ? '  ·  ' + t('prog-counts', rec.exposures, rec.correct, rec.incorrect) : ''),
           rec);
     }
 
-    head('Words');
+    head(t('prog-head-words'));
     for (const iid of Q.activity.items) {
       const rec = state.items[iid];
       if (!rec) continue;
       const it = Q.vocabItems[iid];
       row(it[TL()].indefinite, it[NL()].indefinite +
-          (rec.exposures ? `  ·  seen ${rec.exposures}, right ${rec.correct}, wrong ${rec.incorrect}` : ''),
+          (rec.exposures ? '  ·  ' + t('prog-counts', rec.exposures, rec.correct, rec.incorrect) : ''),
           rec);
     }
 
@@ -2231,7 +2255,7 @@
   $('chat-close').addEventListener('click', () => $('chat-full').classList.add('hidden'));
 
   function syncSound() {
-    $('sound-label').textContent = V.isEnabled() ? 'SOUND ON' : 'SOUND OFF';
+    $('sound-label').textContent = t(V.isEnabled() ? 'sound-on' : 'sound-off');
   }
   $('btn-sound').addEventListener('click', () => {
     const on = !V.isEnabled();
