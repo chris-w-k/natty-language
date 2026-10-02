@@ -586,6 +586,52 @@
     return WHITELIST;
   }
 
+  /* The mirror of the above: every word this scenario can say in the CHILD'S
+     language. Used to spot a sentence that is half one language and half the
+     other, which is a thing only a model writes and never a thing anyone
+     says. Rebuilt with the pair, like everything else keyed on a language. */
+  let NATIVE_WORDS = null, nativeWordsFor = null;
+  function nativeWords() {
+    if (NATIVE_WORDS && nativeWordsFor === Q) return NATIVE_WORDS;
+    nativeWordsFor = Q;
+    const out = new Set();
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    for (const id of Q.activity.items)
+      for (const f of Q.forms) add(Q.vocabItems[id][NL()][f]);
+    for (const id of Q.activity.patterns)
+      if (Q.vocabPatterns[id][NL()]) add(Q.vocabPatterns[id][NL()].replace(/\{[^}]+\}/g, ' '));
+    NATIVE_WORDS = out;
+    return out;
+  }
+
+  /* A quoted sentence that mixes the two languages. The coach is allowed to
+     quote the child's own language (that is the meaning) and allowed to quote
+     the target (that is the answer, when it is introducing it) — but
+     "Di: «¿Me das water?»" is neither: it is the native frame with a target
+     word dropped in, told to a child as a thing to say. Copying it teaches
+     them a sentence that is wrong in both languages. Cheaper to catch here
+     than to trust a prompt not to do it. */
+  function mixedQuote(text) {
+    const quotes = String(text).match(/[“"«]([^”"»]{2,})[”"»]/g) || [];
+    for (const q of quotes) {
+      let target = 0, native = 0;
+      for (const tok of q.split(/\s+/)) {
+        const w = bare(tok);
+        if (!w || AMBIGUOUS.has(w)) continue;
+        /* Deliberately NOT countsAsTarget: that one also counts a token as
+           target because it LOOKS foreign — an inverted question mark or an
+           accent — which was written when the target was always Spanish. Here
+           that reads "¿Tienes una entrada?" as a target sentence and flags the
+           child's own language as a mix. Membership of the two vocabularies is
+           the only test that survives the pair being reversed. */
+        if (glossable().has(w)) target += 1;
+        else if (nativeWords().has(w)) native += 1;
+      }
+      if (target && native) return q;
+    }
+    return null;
+  }
+
   /* Target-language words the child has already been introduced to. These are
      the ones the character may use, and the ones that render as blue. */
   function introducedWords() {
@@ -923,6 +969,8 @@
     const allowed = introducedWords();
     if (intro && intro.by === 'coach') for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
     if (auditLine(j.coachText, allowed).over > 0) { lastCoachWhy = 'wrote in the target language'; return null; }
+    const mixed = mixedQuote(j.coachText);
+    if (mixed) { lastCoachWhy = 'quoted a half-translated sentence: ' + mixed; return null; }
     lastCoachWhy = 'gemini';
     recentCoach.push(j.coachText);
     return j;
@@ -973,8 +1021,14 @@
     let actor = asks[(state.turn + plan.pair.id.length) % asks.length];
     if (intro && intro.by === 'actor') actor = t('fb-actor-offer', intro.target);
 
+    /* The native sentence is the MEANING, and the line says so by naming the
+       language it has to come out in. Quoting it after a bare "repeat it" told
+       a Spanish child to repeat Spanish. */
     const coachAsks = tList('fb-coach-ask');
-    let coach = `${coachAsks[state.turn % coachAsks.length]} “${plan.pair.allNative}”`;
+    const ask = coachAsks[state.turn % coachAsks.length];
+    let coach = ask
+      .split('{0}').join(plan.pair.allNative)
+      .split('{1}').join(Q.languageNames.target);
     /* The TARGET phrase, not the native one. "Here's how you say it" promises
        the language the child is about to produce, and it was being handed the
        language they already speak — so a Spanish child learning English was
@@ -1454,6 +1508,12 @@
     const slot = $('slot');
     slot.className = '';
     slot.innerHTML = '';
+    /* A blank is as wide as it can afford to be. Five of them at the old fixed
+       62px did not fit a phone, so "Can I have a ticket?" wrapped into a
+       scrolling box. They are uniform within a turn — a blank sized to its own
+       word would be telling the child the answer's length. */
+    const gaps = plan ? plan.cells.filter(c => c.gap).length : 0;
+    slot.style.setProperty('--gap-w', (gaps >= 5 ? 38 : gaps === 4 ? 46 : 62) + 'px');
     if (judged()) slot.classList.add(marks.every(m => m === true) ? 'judged-ok' : 'judged-bad');
 
     let g = 0;
@@ -1467,10 +1527,22 @@
       else run.textContent += ' ' + txt;
     };
 
+    /* The punctuation that belongs to a gap, printed beside it rather than
+       welded into the pill. It also tells the child what they are building:
+       a blank followed by "?" is a question before they have tapped anything. */
+    const mark = (txt, where) => {
+      if (!txt) return;
+      const m = document.createElement('span');
+      m.className = 'frame mark ' + where;
+      m.textContent = txt;
+      slot.appendChild(m);
+    };
+
     for (const cell of plan.cells) {
       if (!cell.gap) { pushWord(cell.w); continue; }
       flushRun();
       const i = g++;
+      mark(cell.lead, 'lead');
       if (placed[i] === undefined) {
         const e = document.createElement('span');
         e.className = 'gap';
@@ -1500,6 +1572,7 @@
         }
         slot.appendChild(b);
       }
+      mark(cell.tail, 'tail');
     }
     flushRun();
     syncSay();
@@ -1871,7 +1944,9 @@
       .map(c => {
         if (!c.gap) return c.w;
         const p = placed[g++];
-        return p === undefined ? '…' : p.label;
+        /* The marks live on the cell now, so they are put back here — the
+           transcript should read "Do you have a ticket?", not "... ticket". */
+        return (c.lead || '') + (p === undefined ? '…' : p.label) + (c.tail || '');
       })
       .join(' ');
   }
@@ -2120,8 +2195,40 @@
     step();
   }
 
-  /* ---------- mic ---------- */
-  const micAvailable = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  /* ---------- mic ----------
+     The browser's own speech recognition does not exist in an iOS webview and
+     is unreliable in Safari, which is most of the children this is for — so a
+     mic that only ever used it was a button that did nothing on half the
+     devices. The microphone records and the server's model transcribes, the
+     same way the voices are the model's rather than the browser's.
+
+     SpeechRecognition stays as the fallback for the case the recorder cannot
+     cover: no server. It is never the first choice, because the two disagree
+     about what a seven-year-old just said and only one of them is the same on
+     every phone. */
+  const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+                             window.MediaRecorder);
+  const canListen = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const micAvailable = () => canRecord() || canListen();
+
+  /* iOS records mp4/aac and everything else records webm/opus. Asked for one
+     it does not have, MediaRecorder either throws or silently gives a format
+     the model cannot read, so the type is chosen rather than assumed. */
+  const MIC_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg'];
+  function micType() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    return MIC_TYPES.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch { return false; } }) || '';
+  }
+
+  /* Long enough for "Can I have a soda, please?" said slowly by a child who is
+     thinking, short enough that a pocketed phone does not record the room. */
+  const MIC_MAX_MS = 9000;
+  let media = null, micStream = null, micChunks = [], micTimer = null, micSending = false;
+
+  function micLabels() {
+    $('mic-state').textContent = micSending ? t('mic-thinking') : t('mic-open');
+    $('mic-hidden').textContent = t('mic-hidden-words');
+  }
 
   function setMic(on) {
     micOn = on;
@@ -2132,18 +2239,115 @@
     $('btn-mic').classList.toggle('on', on);
     $('btn-say').style.display = on ? 'none' : '';
     $('btn-clear').style.display = on ? 'none' : '';
-    if (!on && recog) { try { recog.stop(); } catch {} recog = null; }
+    if (on) micLabels();
+    if (!on) {
+      micSending = false;
+      if (recog) { try { recog.stop(); } catch {} recog = null; }
+      stopRecorder(true);
+    }
+  }
+
+  /* Releases the microphone as well as stopping the recorder: a stream left
+     running leaves the recording indicator up, which to a parent looking over
+     a shoulder is an app still listening. */
+  function stopRecorder(discard) {
+    if (micTimer) { clearTimeout(micTimer); micTimer = null; }
+    const m = media;
+    media = null;
+    if (m && discard) m.onstop = null;
+    try { if (m && m.state !== 'inactive') m.stop(); } catch {}
+    if (micStream) { for (const tr of micStream.getTracks()) { try { tr.stop(); } catch {} } micStream = null; }
   }
 
   function toggleMic() {
-    if (micOn) { setMic(false); return; }
+    if (micSending) return;                       // already on its way
+    if (micOn) { finishRecording(); return; }
     if (!micAvailable()) { $('verdict').textContent = t('mic-unavailable'); return; }
     V.stop();
-    setMic(true);
     $('mic-heard').textContent = '';
+    if (canRecord() && serverUp) { startRecording(); return; }
+    startListening();
+  }
+
+  async function startRecording() {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      /* Denied, or the host never asked for the permission at all — which is
+         what a webview does unless the app grants it. Either way the child
+         taps instead, and is told why rather than left with a dead button. */
+      AN('NovaPals.Activity.Error', { reason: 'mic-denied', detail: (e && e.name) || 'unknown' });
+      $('verdict').textContent = t('mic-blocked');
+      $('btn-mic').style.opacity = '.4';
+      return;
+    }
+    micStream = stream;
+    micChunks = [];
+    const type = micType();
+    try {
+      media = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    } catch {
+      media = new MediaRecorder(stream);
+    }
+    media.ondataavailable = e => { if (e.data && e.data.size) micChunks.push(e.data); };
+    media.onstop = () => transcribe(media && media.mimeType || type || 'audio/webm');
+    setMic(true);
+    try { media.start(); } catch { setMic(false); $('verdict').textContent = t('mic-failed'); return; }
+    micTimer = setTimeout(() => { if (micOn) finishRecording(); }, MIC_MAX_MS);
+  }
+
+  function finishRecording() {
+    if (!media) { setMic(false); return; }
+    micSending = true;
+    micLabels();
+    const m = media;
+    const type = m.mimeType || micType() || 'audio/webm';
+    media = null;
+    if (micTimer) { clearTimeout(micTimer); micTimer = null; }
+    m.onstop = () => transcribe(type);
+    try { m.stop(); } catch { transcribe(type); }
+  }
+
+  async function transcribe(type) {
+    if (micStream) { for (const tr of micStream.getTracks()) { try { tr.stop(); } catch {} } micStream = null; }
+    const blob = new Blob(micChunks, { type });
+    micChunks = [];
+    if (!blob.size) { setMic(false); $('verdict').textContent = t('mic-nothing'); return; }
+    const j = await post('/api/listen',
+      { audio: await toBase64(blob), mime: type, language: TL() }, 15000);
+    setMic(false);
+    const said = String((j && j.text) || '').trim();
+    if (!said) {
+      $('verdict').textContent = t(j && j.fail ? 'mic-failed' : 'mic-nothing');
+      return;
+    }
+    $('mic-heard').textContent = said;
+    submit(said, 'voice');
+  }
+
+  /* In chunks, because String.fromCharCode on a whole clip is an argument list
+     long enough to blow the stack on the devices this most needs to work on. */
+  async function toBase64(blob) {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  /* The fallback. Only reached with no server to transcribe for us. */
+  function startListening() {
+    if (!canListen()) { $('verdict').textContent = t('mic-unavailable'); return; }
+    setMic(true);
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recog = new SR();
-    recog.lang = TL() === 'es' ? 'es-ES' : 'en-GB';
+    /* The target language, whichever of the six it is — this used to read
+       "es-ES unless Spanish, otherwise en-GB", written when the pair could
+       only face one way. */
+    recog.lang = { en: 'en-GB', es: 'es-ES', pt: 'pt-PT',
+                   tr: 'tr-TR', pl: 'pl-PL', ro: 'ro-RO' }[TL()] || 'en-GB';
     recog.interimResults = true;
     recog.continuous = false;
     recog.onresult = ev => {
@@ -2419,6 +2623,9 @@
     overall: () => E.overall(state, Q),
     finish: reason => finish(reason || 'debug'),
     replay: () => replayLeftovers(),
+    /* so a test can put a line to the guard without waiting for the model to
+       write a bad one */
+    mixedQuote: txt => mixedQuote(txt),
   };
 
   boot();

@@ -553,6 +553,14 @@ Write in {{native_language}}. The only {{target_language}} you may write is a
 word or construction you are told you are introducing. Never translate the
 character's line word for word; say what they want.
 
+NEVER put a sentence in quotes and tell them to say it unless it is exactly
+{{user_expected_answer}}, word for word. In particular, never build a sentence
+out of {{native_language}} grammar with a {{target_language}} word dropped into
+it — "Di: «¿Me das water?»" is not a thing anyone says, and a child who copies
+it has been taught something that is wrong in both languages. If you want to
+remind them what they are aiming for, say it in {{native_language}} as a
+MEANING, with no "say this" in front of it.
+
 No stage directions, no emoji, no questions to an adult. Vary your wording.
 Return JSON only.`,
   };
@@ -674,6 +682,38 @@ Return JSON only.`,
       pt: '— {0} di-lo por ti: {1}',      tr: '— {0} senin yerine söylüyor: {1}',
       pl: '— {0} mówi to za ciebie: {1}', ro: '— {0} o spune în locul tău: {1}',
     },
+    /* The mic panel. "Words hidden" is the point of the screen: the child is
+       speaking, not reading, so the sentence comes off the page while the mic
+       is open and they cannot simply read it aloud. */
+    'mic-open': {
+      en: 'MIC OPEN — TAP TO STOP', es: 'MICRO ABIERTO — TOCA PARA PARAR',
+      pt: 'MICRO ABERTO — TOCA PARA PARAR', tr: 'MİKROFON AÇIK — DURDURMAK İÇİN DOKUN',
+      pl: 'MIKROFON WŁĄCZONY — DOTKNIJ, BY ZATRZYMAĆ', ro: 'MICROFON PORNIT — ATINGE PENTRU A OPRI',
+    },
+    'mic-hidden-words': {
+      en: 'WORDS HIDDEN', es: 'PALABRAS OCULTAS', pt: 'PALAVRAS ESCONDIDAS',
+      tr: 'KELİMELER GİZLİ', pl: 'SŁOWA UKRYTE', ro: 'CUVINTE ASCUNSE',
+    },
+    'mic-thinking': {
+      en: 'Listening…', es: 'Escuchando…', pt: 'A ouvir…',
+      tr: 'Dinliyorum…', pl: 'Słucham…', ro: 'Ascult…',
+    },
+    'mic-blocked': {
+      en: 'The microphone is not switched on for this app.',
+      es: 'El micrófono no está activado para esta app.',
+      pt: 'O microfone não está ligado para esta app.',
+      tr: 'Bu uygulama için mikrofon açık değil.',
+      pl: 'Mikrofon nie jest włączony dla tej aplikacji.',
+      ro: 'Microfonul nu este pornit pentru această aplicație.',
+    },
+    'mic-nothing': {
+      en: 'Didn’t hear anything — have another go.',
+      es: 'No he oído nada — prueba otra vez.',
+      pt: 'Não ouvi nada — tenta outra vez.',
+      tr: 'Bir şey duymadım — tekrar dene.',
+      pl: 'Nic nie usłyszałem — spróbuj jeszcze raz.',
+      ro: 'Nu am auzit nimic — mai încearcă.',
+    },
     'mic-unavailable': {
       en: 'No speech recognition in this browser — keep tapping.',
       es: 'Este navegador no reconoce la voz — sigue tocando.',
@@ -705,13 +745,31 @@ Return JSON only.`,
       pt: 'Temos {0}. Queres?',            tr: '{0} var. İster misin?',
       pl: 'Mamy {0}. Chcesz?',             ro: 'Avem {0}. Vrei?',
     },
+    /* {0} is what they want to SAY, written in their own language, and {1} is
+       the name of the language they have to say it in. Both halves are load-
+       bearing. The first version of these was a bare verb plus the native
+       sentence — "Repítelo. «¿Tienes una entrada?»" — which to a Spanish child
+       learning English is an instruction to repeat Spanish. Every line here
+       names the language, so the quote can only be read as the meaning. */
     'fb-coach-ask': {
-      en: ['Tell them.', 'Say it back.', 'Your turn.', 'Answer them.'],
-      es: ['Díselo.', 'Repítelo.', 'Te toca.', 'Contéstale.'],
-      pt: ['Diz-lhe.', 'Repete.', 'É a tua vez.', 'Responde-lhe.'],
-      tr: ['Söyle ona.', 'Tekrar et.', 'Sıra sende.', 'Cevap ver.'],
-      pl: ['Powiedz mu.', 'Powtórz.', 'Twoja kolej.', 'Odpowiedz mu.'],
-      ro: ['Spune-i.', 'Repetă.', 'E rândul tău.', 'Răspunde-i.'],
+      en: ['You want to say: “{0}”. Now in {1}.',
+           'What you mean is “{0}”. Say it in {1}.',
+           'Your turn: “{0}” — in {1}.'],
+      es: ['Quieres decir: “{0}”. Ahora en {1}.',
+           'Lo que quieres decir es “{0}”. Dilo en {1}.',
+           'Te toca: “{0}” — en {1}.'],
+      pt: ['Queres dizer: “{0}”. Agora em {1}.',
+           'O que queres dizer é “{0}”. Di-lo em {1}.',
+           'É a tua vez: “{0}” — em {1}.'],
+      tr: ['Şunu demek istiyorsun: “{0}”. Şimdi {1}.',
+           'Demek istediğin “{0}”. Bunu {1} söyle.',
+           'Sıra sende: “{0}” — {1}.'],
+      pl: ['Chcesz powiedzieć: “{0}”. Teraz po angielsku.',
+           'Chodzi ci o “{0}”. Powiedz to po angielsku.',
+           'Twoja kolej: “{0}” — po angielsku.'],
+      ro: ['Vrei să spui: “{0}”. Acum în {1}.',
+           'Ce vrei să spui e “{0}”. Spune-o în {1}.',
+           'E rândul tău: “{0}” — în {1}.'],
     },
     'fb-coach-new': {
       en: "Here's how you say it: “{0}”", es: 'Así se dice: “{0}”',
@@ -931,6 +989,13 @@ Return JSON only.`,
     const LANGS = { native: nativeCode, target: targetCode };
     const q = {
       id: activity.id, title: activity.title,
+      /* What this pair's two languages are CALLED, in the child's own
+         language, so a written line can say "now in English" without a
+         sentence per pair. */
+      languageNames: {
+        native: (LANG_NAMES[nativeCode] || LANG_NAMES.en)[nativeCode] || nativeCode,
+        target: (LANG_NAMES[nativeCode] || LANG_NAMES.en)[targetCode] || targetCode,
+      },
       /* The intro copy is resolved for THIS pair before anything reads it, so
          the UI keeps seeing a flat { title, sub, coach, loading, tap }. The
          shared `activity` is left alone — a second build() with another pair

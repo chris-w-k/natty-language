@@ -270,8 +270,13 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 #slot{
   flex:1;min-width:0;background:var(--fill);border-radius:var(--r-md);
   min-height:52px;padding:8px 12px;
-  display:flex;flex-wrap:wrap;align-items:center;gap:6px;
-  max-height:132px;overflow-y:auto;
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 6px;
+  /* Three rows of answer, not two and a scrollbar. "Can I have a ticket?" is
+     five pills, which is the longest this scenario asks for, and a child
+     scrolling to see the sentence they are building has lost the sentence.
+     The width of a blank comes from --gap-w, set per turn in renderSlot from
+     how many there are. */
+  max-height:none;
 }
 #slot.ok{background:var(--good-soft);}
 
@@ -289,9 +294,14 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 #slot .frame{color:var(--ink-2);font-size:14.5px;}
 #slot .frame.hug{margin-left:-8px;}
 #slot .gap{
-  width:62px;height:2px;background:var(--ink-3);border-radius:2px;
+  width:var(--gap-w,62px);height:2px;background:var(--ink-3);border-radius:2px;
   margin:0 2px 6px;flex:none;
 }
+/* Punctuation sits tight against what it belongs to, not floated off by the
+   flex gap — "ticket ?" is not a sentence anyone writes. */
+#slot .mark{font-size:14.5px;color:var(--ink-2);}
+#slot .mark.lead{margin-right:-5px;}
+#slot .mark.tail{margin-left:-5px;}
 #slot .chip{font-size:14.5px;}
 #slot .chip.locked{background:none;border:0;padding:0 1px;color:var(--ink);}
 #slot .chip.placed{

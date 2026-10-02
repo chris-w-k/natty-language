@@ -498,9 +498,12 @@ function serveStatic(req, res) {
 }
 
 /* ---------- server ---------- */
-function readBody(req) {
+/* The cap is per route because one of them carries audio: a few seconds of
+   recorded speech, base64'd, is bigger than every other body put together and
+   far smaller than anything worth streaming. */
+function readBody(req, max = 1e5) {
   return new Promise((resolve, reject) => {
-    let d = ''; req.on('data', c => { d += c; if (d.length > 1e5) reject(new Error('too big')); });
+    let d = ''; req.on('data', c => { d += c; if (d.length > max) reject(new Error('too big')); });
     req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch (e) { reject(e); } });
   });
 }
@@ -600,6 +603,48 @@ http.createServer(async (req, res) => {
     } catch (e) {
       // the client falls back to browser synthesis, so this is never fatal
       return json(res, 200, { audio: null, error: e.message });
+    }
+  }
+
+  /* ---------- hearing them ----------
+     The browser's own speech recognition does not exist on iOS inside a
+     webview and is unreliable in Safari, which is most of the children this
+     prototype is for. So the microphone records and the model transcribes,
+     the same way the voices are the model's rather than the browser's.
+
+     It transcribes and nothing else: no judging, no correcting, no guessing
+     at what they meant. The engine decides whether the words are right, and a
+     transcriber that helpfully fixed them would hand every child a pass. */
+  if (url === '/api/listen' && req.method === 'POST') {
+    try {
+      const b = await readBody(req, 6e6);
+      if (!authed(req, b)) return json(res, 401, { error: 'Locked.' });
+      const audio = String(b.audio || '');
+      if (!audio) return json(res, 400, { error: 'no audio' });
+      if (MOCK) return json(res, 200, { text: String(b.mockText || ''), mock: true });
+
+      const mime = /^audio\/[a-z0-9.;=+-]+$/i.test(String(b.mime || '')) ? b.mime : 'audio/webm';
+      /* The client sends a language CODE; the prompt wants a name, and the
+         name has to be in the prompt's own language rather than the child's —
+         "speaking inglés" is not an instruction. */
+      const NAMES = { en: 'English', es: 'Spanish', pt: 'Portuguese',
+                      tr: 'Turkish', pl: 'Polish', ro: 'Romanian' };
+      const lang = NAMES[String(b.language || '').slice(0, 5)] || 'the language of the recording';
+      const out = await askJSON({
+        system: `You transcribe a short recording of a child aged 7-10 speaking ${lang}.
+Write down exactly the words you hear, and nothing else. Do not correct their
+grammar, their word order or their pronunciation, do not finish their sentence,
+and do not translate. If you cannot make out any words, return an empty string.`,
+        contents: [{ role: 'user', parts: [
+          { inlineData: { mimeType: String(mime).split(';')[0], data: audio } },
+          { text: 'Transcribe this.' },
+        ] }],
+        schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        temperature: 0, tries: 2, timeoutMs: 12000,
+      });
+      return json(res, 200, { text: String((out && out.text) || '').slice(0, 300) });
+    } catch (e) {
+      return json(res, 200, { text: '', error: e.message });
     }
   }
 

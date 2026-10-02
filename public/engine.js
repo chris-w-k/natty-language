@@ -448,17 +448,30 @@ window.ENGINE = (function () {
       for (const w of words(text)) cells.push({ w, gap: inTarget, from: f.key });
     }
 
-    /* Punctuation that follows a slot belongs to the pill, per NJA-3151's
-       tokenisation — "entrada?" is one token. Rebuilding from chunks splits
-       it off, because the "?" lives in the next text chunk, so it is glued
-       back on here. */
+    /* The sentence is rebuilt from the finished string so a token that spans
+       two chunks is still one token — "entrada?" has its "?" in the next text
+       chunk, and a word split across a chunk boundary would otherwise come out
+       as two.
+
+       Punctuation is then held on the CELL rather than welded into the word. A
+       pill is a word: "ticket?" as a thing to tap is noise, and dressing the
+       decoys to match it so the "?" was not a tell made every pill on screen
+       read "water?", "band?", "a?". The marks belong to the sentence, so they
+       stay in the sentence — printed either side of the gap, where they also
+       show the child the shape of what they are building. */
     const joined = words(expected(pair, frameTarget, targetSlots));
     const merged = [];
     let ci = 0;
     for (const token of joined) {
       const cell = cells[ci];
-      if (!cell) { merged.push({ w: token, gap: frameTarget, from: 'frame' }); continue; }
-      merged.push({ w: token, gap: cell.gap, from: cell.from });
+      const at = cell || { gap: frameTarget, from: 'frame' };
+      if (at.gap) {
+        const { lead, tail, word } = split(token);
+        merged.push({ w: word, lead, tail, gap: true, from: at.from });
+      } else {
+        merged.push({ w: token, lead: '', tail: '', gap: false, from: at.from });
+      }
+      if (!cell) continue;
       // a token can span several cells when a chunk boundary falls mid-word
       let acc = cell.w;
       ci += 1;
@@ -493,16 +506,12 @@ window.ENGINE = (function () {
 
     const taken = new Set(answer.map(norm));
 
-    /* The answer's punctuation, slot by slot. A decoy has to wear the same
-       marks as the pill it competes with, or the question mark on "entrada?"
-       is a tell — the child picks the one with the punctuation without reading
-       any of them. NJA-3151 defers decoys to a later ticket, so this shape is
-       ours; the tokenisation it borrows is the ticket's. */
-    const dress = i => {
-      const a = answer[Math.min(i, answer.length - 1)] || '';
-      const { lead, tail } = split(a);
-      return w => lead + w + tail;
-    };
+    /* No dressing. The answer words arrive here bare — gaps() keeps the
+       sentence's punctuation on the cell — so a decoy is already wearing
+       exactly what the pill it competes with wears, which is nothing. The
+       version that dressed decoys to match took its marks from the LAST
+       answer word and put them on everything, which is where "singer?" and
+       "a?" came from. */
 
     /* And a whole phrase competes with other whole phrases: offering "ticket"
        and "water" against "Perdona" is not a choice, it is a spot-the-odd-one
@@ -516,8 +525,7 @@ window.ENGINE = (function () {
           if (w && !taken.has(norm(w)) && !solos.some(x => norm(x) === norm(w))) solos.push(w);
         }
       }
-      const dressed = solos.slice(0, count).map((w, i) => dress(i + answer.length)(w));
-      return makePills(shuffle([...answer, ...dressed], state));
+      return makePills(shuffle([...answer, ...solos.slice(0, count)], state));
     }
 
     /* Decoys are drawn PER SLOT now. With two slots the wrong answers have to
@@ -565,8 +573,7 @@ window.ENGINE = (function () {
     const pool = [...invalid, ...valid, ...(answer.length > 1 ? frames : [])];
     const decoys = pool.slice(0, count);
 
-    const dressed = decoys.map((w, i) => dress(i + answer.length)(w));
-    return makePills(shuffle([...answer, ...dressed], state));
+    return makePills(shuffle([...answer, ...decoys], state));
   }
 
   /* "pills are displayed in a randomised order" — but the same order every
