@@ -29,12 +29,12 @@ window.QUEST = (function () {
      shows what the content could support and greys out what it does not:
      filling them in is a content edit and nothing else. */
   const LANGUAGES = [
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Español' },
-    { code: 'pt', name: 'Português' },
-    { code: 'tr', name: 'Türkçe' },
-    { code: 'pl', name: 'Polski' },
-    { code: 'ro', name: 'Română' },
+    { code: 'en', name: 'English',    flag: '🇬🇧' },
+    { code: 'es', name: 'Español',    flag: '🇪🇸' },
+    { code: 'pt', name: 'Português',  flag: '🇵🇹' },
+    { code: 'tr', name: 'Türkçe',     flag: '🇹🇷' },
+    { code: 'pl', name: 'Polski',     flag: '🇵🇱' },
+    { code: 'ro', name: 'Română',     flag: '🇷🇴' },
   ];
 
   const slotTags = ['ticket', 'item', 'like'];
@@ -407,9 +407,8 @@ Return JSON only.`,
     /* The language picker. The prototype only has these in English because
        the screen is shown before a language is chosen — in the real build it
        follows the device locale. */
-    'lang-pick-title':   'Pick your languages',
-    'lang-pick-native':  'I SPEAK',
-    'lang-pick-target':  "I'M LEARNING",
+    'lang-pick-title':   'HINT LANGUAGE',
+    'lang-pick-sub':     'The language your pal talks to you in.',
     'lang-pick-go':      'START',
     'lang-pick-missing': 'No words yet for {0}.',
   };
@@ -435,6 +434,20 @@ Return JSON only.`,
     masteryBar: 0.8,       // correct / (correct + incorrect) to count as produced
     minExposures: 2,       // ...but not before this many tries, or 1/1 = mastered
     mercyAfterFailedTurns: 4,
+    /* ---------- which way round, by default ----------
+       The learner picks ONE language: the one their hints are in, which is
+       the one they already speak. What they are here to learn does not need
+       picking — this scenario teaches `learning`, and the pair is the two
+       together.
+
+       The default hint language is Spanish because that is who plays it: the
+       prototype runs inside the app, and the learners are Spanish, Portuguese,
+       Turkish, Polish or Romanian speakers learning English. English is in the
+       list so the direction can be reversed for a walkthrough, and when it is
+       picked as the hint language the scenario teaches the first other
+       language it has words for instead. */
+    hintDefault: 'es',
+    learning: 'en',
     /* 'walk' (default): each pattern of the syllabus takes the first noun
        nobody has had yet, so every stage has a new word to teach.
        'first': every pattern takes its first valid noun, which is the same
@@ -743,6 +756,19 @@ Return JSON only.`,
     languages: LANGUAGES,
     covered: covered(),
     name: code => (LANGUAGES.find(l => l.code === code) || {}).name || code,
+    /* Given a hint language, what this scenario teaches: `learning`, unless
+       that IS the hint language, in which case the first other one it has. */
+    learns(hint) {
+      const want = session.learning;
+      if (hint !== want && CONTENT.covered.includes(want)) return want;
+      return CONTENT.covered.find(c => c !== hint) || want;
+    },
+    /* The pair a session starts on when nothing says otherwise. */
+    defaultPair() {
+      const hint = CONTENT.covered.includes(session.hintDefault)
+        ? session.hintDefault : CONTENT.covered[0];
+      return { native: hint, target: CONTENT.learns(hint) };
+    },
     /* NJA-3204: the pair is an input, and a pair this content does not hold
        is an error with the languages it DOES hold named in it. */
     build(nativeCode, targetCode) {
@@ -760,5 +786,6 @@ Return JSON only.`,
   window.CONTENT = CONTENT;
   /* The default pair, so anything that reads window.QUEST at load still has
      one. The session replaces it the moment a pair is chosen. */
-  return CONTENT.build(CONTENT.covered[0] || 'en', CONTENT.covered[1] || 'es');
+  const d = CONTENT.defaultPair();
+  return CONTENT.build(d.native, d.target);
 })();

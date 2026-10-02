@@ -318,75 +318,63 @@
     return { native: n || Q.nativeLang, target: t || Q.targetLang };
   }
 
-  /* The pair the screen opens on: whatever the URL says, else whatever is
-     already loaded, else the first two the content covers. */
+  /* The pair the screen opens on: whatever the URL says, else the content's
+     own default — hints in Spanish, because that is who plays this. */
   function startingPair() {
     const p = paramPair();
     if (p && C.covered.includes(p.native) && C.covered.includes(p.target) && p.native !== p.target)
       return p;
-    return { native: Q.nativeLang, target: Q.targetLang };
+    return C.defaultPair();
   }
 
+  /* One question, not two. The learner picks the language their hints are in
+     — the one they already speak — and what the scenario teaches follows from
+     it, because a scenario teaches one thing and does not need picking.
+     Asking twice made the second answer a formality with one possible value,
+     and made it possible to pick a pair the content could not teach. */
   function pickLanguages() {
-    let chosen = startingPair();
+    let hint = startingPair().native;
 
-    /* With a pair already in the URL there is nothing to ask: apply it and
-       let the title card come up. */
-    if (paramPair()) { apply(chosen); return Promise.resolve(); }
+    if (paramPair()) { apply(startingPair()); return Promise.resolve(); }
 
-    $('lang-title').textContent = t('lang-pick-title') || 'Pick your languages';
-    $('lang-lab-native').textContent = t('lang-pick-native') || 'I SPEAK';
-    $('lang-lab-target').textContent = t('lang-pick-target') || "I'M LEARNING";
+    $('lang-title').textContent = t('lang-pick-title') || 'HINT LANGUAGE';
+    $('lang-sub').textContent = t('lang-pick-sub') || '';
     $('lang-go').querySelector('span').textContent = t('lang-pick-go') || 'START';
 
     return new Promise(resolve => {
       draw();
       $('lang-go').addEventListener('click', () => {
-        if (!valid(chosen)) return;
-        apply(chosen);
+        if (!C.covered.includes(hint)) return;
+        apply({ native: hint, target: C.learns(hint) });
         /* This click is the gesture the browser wants before any audio. */
         V.unlock(); SFX.unlock();
         resolve();
       });
 
       function draw() {
-        for (const side of ['native', 'target']) {
-          const row = $('lang-' + side);
-          row.innerHTML = '';
-          for (const lang of C.languages) {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'lang-chip';
-            b.textContent = lang.name;
-            b.dataset.code = lang.code;
-            const known = C.covered.includes(lang.code);
-            /* Picking the language the OTHER side holds swaps the pair rather
-               than being refused. Refusing it is a dead end: with two
-               languages covered, both cross-choices are the other side's, so
-               there would be no way to turn the session round at all. */
-            const taken = chosen[side === 'native' ? 'target' : 'native'] === lang.code;
-            b.disabled = !known;
-            b.setAttribute('aria-pressed', String(chosen[side] === lang.code));
-            if (known) b.addEventListener('click', () => {
-              chosen = taken
-                ? { native: chosen.target, target: chosen.native }
-                : Object.assign({}, chosen, { [side]: lang.code });
-              draw();
-            });
-            row.appendChild(b);
-          }
+        const row = $('lang-native');
+        row.innerHTML = '';
+        for (const lang of C.languages) {
+          const known = C.covered.includes(lang.code);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lang-chip';
+          b.dataset.code = lang.code;
+          b.disabled = !known;
+          b.setAttribute('aria-pressed', String(hint === lang.code));
+          /* The flag is what a child recognises before they can read the
+             name, so it leads and the name confirms it. */
+          b.innerHTML = '<span class="fl" aria-hidden="true">' + esc(lang.flag || '') + '</span>' +
+                        '<span class="nm">' + esc(lang.name) + '</span>';
+          if (known) b.addEventListener('click', () => { hint = lang.code; draw(); });
+          row.appendChild(b);
         }
         const missing = C.languages.filter(l => !C.covered.includes(l.code));
         $('lang-note').textContent = missing.length
           ? (t('lang-pick-missing') || 'No words yet for {0}.')
               .split('{0}').join(missing.map(l => l.name).join(', '))
           : '';
-        $('lang-go').disabled = !valid(chosen);
-      }
-
-      function valid(p) {
-        return p.native !== p.target &&
-               C.covered.includes(p.native) && C.covered.includes(p.target);
+        $('lang-go').disabled = !C.covered.includes(hint);
       }
     });
 

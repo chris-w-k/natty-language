@@ -382,18 +382,29 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .lang-card{width:min(340px,86vw);background:var(--paper);border-radius:20px;padding:22px 20px 20px;
            box-shadow:0 18px 50px rgba(0,0,0,.34);text-align:left;
            max-height:calc(100% - 48px);overflow-y:auto;}
-.lang-card h2{margin:0 0 18px;font-size:19px;font-weight:600;letter-spacing:-.01em;}
-.lang-group{margin-bottom:16px;}
-.lang-lab{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
-          color:var(--ink-3);margin-bottom:7px;}
-.lang-row{display:flex;flex-wrap:wrap;gap:6px;}
-.lang-chip{appearance:none;border:1px solid var(--line);background:var(--paper);color:var(--ink);
-           border-radius:var(--r-pill);padding:7px 13px;font:inherit;font-size:13.5px;cursor:pointer;}
-.lang-chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+/* The headline is the whole question, so it carries the weight rather than a
+   label above a row. */
+.lang-card h2{margin:0 0 4px;font-family:var(--mono);font-size:13px;font-weight:600;
+              letter-spacing:.14em;text-transform:uppercase;}
+.lang-sub{margin:0 0 16px;font-size:13px;line-height:1.45;color:var(--ink-3);}
+/* Two to a row at card width, so six languages are three tidy rows rather
+   than a ragged wrap. */
+.lang-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.lang-chip{appearance:none;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);
+           border-radius:14px;padding:12px 10px;font:inherit;font-size:13.5px;cursor:pointer;
+           display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.1;}
+/* The flag does the recognising, so it is the biggest thing on the button and
+   the name underneath confirms it. A platform with no flag glyphs renders the
+   country's letters instead, which still reads. */
+.lang-chip .fl{font-size:26px;line-height:1;}
+/* The chosen one is the accent, not a grey box: a child has to be able to see
+   which language is set from across a classroom. */
+.lang-chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);}
+.lang-chip[aria-pressed="true"] .nm{font-weight:600;color:var(--accent-deep);}
 /* A language with no words yet is shown, not hidden: the gap is the content's,
    and seeing it is the point. */
 .lang-chip:disabled{opacity:.34;cursor:default;}
-.lang-note{min-height:16px;margin:2px 0 14px;font-size:12px;color:var(--ink-3);}
+.lang-note{min-height:16px;margin:12px 0 14px;font-size:12px;color:var(--ink-3);}
 .lang-note.warn{color:var(--warn);}
 
 /* the end of a go (NJA-3196) */
