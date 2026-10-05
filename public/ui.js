@@ -326,7 +326,7 @@
     const q = new URLSearchParams(location.search);
     const lang = (q.get('lang') || '').slice(0, 5).toLowerCase();
     const n = q.get('native') || (lang && C.covered.includes(lang) ? lang : '');
-    const t = q.get('target') || (n && !q.get('target') && lang === n ? C.learns(n) : '');
+    const t = q.get('target') || (n && !q.get('target') && lang === n ? C.learns() : '');
     if (!n && !t) return null;
     return { native: n || Q.nativeLang, target: t || Q.targetLang };
   }
@@ -346,9 +346,15 @@
   function deviceLang() {
     const list = (navigator.languages && navigator.languages.length
       ? navigator.languages : [navigator.language || '']);
+    /* Hintable, not covered: a phone set to English cannot answer this
+       question, because English is what the scenario teaches. It is also weak
+       evidence — of the children on an English phone, more than one in five
+       went and chose something else, which is a device language that is not
+       the language they read in. Those get asked rather than assumed. */
+    const can = C.hintable();
     for (const tag of list) {
       const code = String(tag).slice(0, 2).toLowerCase();
-      if (C.covered.includes(code)) return code;
+      if (can.includes(code)) return code;
     }
     return null;
   }
@@ -368,7 +374,7 @@
     const device = deviceLang();
     if (device) {
       langSource = 'device';
-      return { native: device, target: C.learns(device) };
+      return { native: device, target: C.learns() };
     }
     langSource = 'default';
     return C.defaultPair();
@@ -402,6 +408,9 @@
 
     $('lang-title').textContent = t('lang-pick-title') || 'HINT LANGUAGE';
     $('lang-sub').textContent = t('lang-pick-sub') || '';
+    /* The hint language opens on something real rather than nothing: a device
+       we could not use still tells us the content's own default. */
+    if (!C.hintable().includes(hint)) hint = C.defaultPair().native;
     $('lang-go').querySelector('span').textContent = t('lang-pick-go') || 'START';
 
     return new Promise(resolve => {
@@ -409,7 +418,7 @@
       $('lang-go').addEventListener('click', () => {
         if (!C.covered.includes(hint)) return;
         langSource = 'picker';
-        apply({ native: hint, target: C.learns(hint) });
+        apply({ native: hint, target: C.learns() });
         /* This click is the gesture the browser wants before any audio. */
         V.unlock(); SFX.unlock();
         resolve();
@@ -418,27 +427,40 @@
       function draw() {
         const row = $('lang-native');
         row.innerHTML = '';
-        for (const lang of C.languages) {
-          const known = C.covered.includes(lang.code);
+        /* Only the languages a child can take hints in. English is not among
+           them: it is what the scenario teaches, and offering it here was
+           offering the one answer that inverts the whole night. */
+        const offer = C.languages.filter(l => C.hintable().includes(l.code));
+        for (const lang of offer) {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'lang-chip';
           b.dataset.code = lang.code;
-          b.disabled = !known;
           b.setAttribute('aria-pressed', String(hint === lang.code));
           /* The flag is what a child recognises before they can read the
              name, so it leads and the name confirms it. */
           b.innerHTML = '<span class="fl" aria-hidden="true">' + esc(lang.flag || '') + '</span>' +
                         '<span class="nm">' + esc(lang.name) + '</span>';
-          if (known) b.addEventListener('click', () => { hint = lang.code; draw(); });
+          b.addEventListener('click', () => { hint = lang.code; draw(); });
           row.appendChild(b);
         }
-        const missing = C.languages.filter(l => !C.covered.includes(l.code));
+        /* The direction, drawn rather than described: the chosen language, an
+           arrow, English. This screen is in English and is shown to children
+           who may not read it, so the sentence under the heading is the part
+           they are least likely to get — the arrow is not. */
+        const chosen = offer.find(l => l.code === hint);
+        $('lang-way').innerHTML = chosen
+          ? '<span class="from">' + esc(chosen.flag || '') + ' ' + esc(chosen.name) + '</span>' +
+            '<span class="arrow" aria-hidden="true">→</span>' +
+            '<span class="to">🇬🇧 ' + esc(C.name(C.learns())) + '</span>'
+          : '';
+        const missing = C.languages.filter(l =>
+          l.code !== C.learns() && !C.covered.includes(l.code));
         $('lang-note').textContent = missing.length
           ? (t('lang-pick-missing') || 'No words yet for {0}.')
               .split('{0}').join(missing.map(l => l.name).join(', '))
           : '';
-        $('lang-go').disabled = !C.covered.includes(hint);
+        $('lang-go').disabled = !C.hintable().includes(hint);
       }
     });
 

@@ -886,8 +886,13 @@ Return JSON only.`,
     /* The language picker. These stay English: the screen is shown BEFORE a
        language is chosen, so there is nothing yet to show them in — in the
        real build it follows the device locale. */
-    'lang-pick-title':   'HINT LANGUAGE',
-    'lang-pick-sub':     'The language your pal talks to you in.',
+    /* "HINT LANGUAGE" was jargon, and a third of the children on a non-English
+       phone read the screen as "which language do you want to learn" and
+       picked English. The question is now asked as a question, and what they
+       are getting is stated rather than implied. The direction strip under the
+       flags carries it for anyone who cannot read this. */
+    'lang-pick-title':   'WHICH LANGUAGE DO YOU SPEAK?',
+    'lang-pick-sub':     'Axel will give you your hints in it. You will be learning English.',
     'lang-pick-go':      'START',
     'lang-pick-missing': 'No words yet for {0}.',
   };
@@ -1274,18 +1279,25 @@ Return JSON only.`,
     languages: LANGUAGES,
     covered: covered(),
     name: code => (LANGUAGES.find(l => l.code === code) || {}).name || code,
-    /* Given a hint language, what this scenario teaches: `learning`, unless
-       that IS the hint language, in which case the first other one it has. */
-    learns(hint) {
-      const want = session.learning;
-      if (hint !== want && CONTENT.covered.includes(want)) return want;
-      return CONTENT.covered.find(c => c !== hint) || want;
-    },
+    /* The languages a child can take HINTS in. Not the same list as `covered`:
+       you cannot learn English out of English, so the language this scenario
+       teaches is not among the ones it can teach from. That is the whole of
+       why the picker used to offer a choice that inverted it — English sat in
+       the list looking like an answer, and picking it quietly switched the
+       scenario to teaching Spanish. */
+    hintable: () => CONTENT.covered.filter(c => c !== session.learning),
+    /* What this scenario teaches, which is one thing and does not depend on
+       the hint language. It used to fall back to "the first other language we
+       have" when the hint WAS the target — the only way English could ever be
+       a hint — and that fallback is what produced a Spanish lesson nobody
+       asked for. A pair that teaches out of its own language is now an error
+       (build() refuses it) rather than something quietly rewritten. */
+    learns() { return session.learning; },
     /* The pair a session starts on when nothing says otherwise. */
     defaultPair() {
-      const hint = CONTENT.covered.includes(session.hintDefault)
-        ? session.hintDefault : CONTENT.covered[0];
-      return { native: hint, target: CONTENT.learns(hint) };
+      const hintable = CONTENT.hintable();
+      const hint = hintable.includes(session.hintDefault) ? session.hintDefault : hintable[0];
+      return { native: hint, target: CONTENT.learns() };
     },
     /* NJA-3204: the pair is an input, and a pair this content does not hold
        is an error with the languages it DOES hold named in it. */

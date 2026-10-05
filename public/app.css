@@ -427,6 +427,16 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 /* A language with no words yet is shown, not hidden: the gap is the content's,
    and seeing it is the point. */
 .lang-chip:disabled{opacity:.34;cursor:default;}
+/* "Español → English": the only part of this screen that does not need
+   reading. The chosen language is in the accent colour, what they are learning
+   is not, so the direction reads at a glance. */
+.lang-way{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  margin:16px 0 2px;font-size:15px;font-weight:600;flex-wrap:wrap;
+}
+.lang-way .from{color:var(--accent);}
+.lang-way .arrow{color:var(--ink-3);font-size:17px;}
+.lang-way .to{color:var(--ink-2);}
 .lang-note{min-height:16px;margin:12px 0 14px;font-size:12px;color:var(--ink-3);}
 .lang-note.warn{color:var(--warn);}
 
