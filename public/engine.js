@@ -166,6 +166,10 @@ window.ENGINE = (function () {
          NJA-3196's "the minimum they will get is always 85%" reachable. */
       best: {},
       drills: {},           // how many times each step has come round
+      /* Steps handed over after three failed tries. They are not drilled again
+         this go: a child who has been shown a line and still cannot say it
+         needs the night to move, not that same line a fourth time. */
+      released: {},
       makeup: false,        // past the syllabus, drilling to reach the pass mark
       done: false,
       /* kept so applying an outcome can move the syllabus on without every
@@ -323,7 +327,8 @@ window.ENGINE = (function () {
      — otherwise a child who cannot get one line out would meet that same line
      for the rest of the night instead of the several they are weakest at. */
   function weakest(state, quest) {
-    const open = allSteps(quest).filter(s => (state.best[s.key] || 0) < 1);
+    const open = allSteps(quest).filter(s =>
+      (state.best[s.key] || 0) < 1 && !state.released[s.key]);
     if (!open.length) return null;
     const rank = s => [state.best[s.key] || 0, state.drills[s.key] || 0, s.stage, s.step];
     return open.reduce((a, b) => {
@@ -492,6 +497,13 @@ window.ENGINE = (function () {
     return -1;
   }
 
+  /* The very first turn of the first go. Not of a replay: by then they know
+     how this works, and a free pass would only inflate the second score. */
+  function isOpener(state) {
+    if (state.noOpener) return false;   // the test door, see ?opener=0
+    return state.go === 1 && state.turn === 0 && !state.makeup;
+  }
+
   /* ---------- 6. answer pills ----------
      "split expected answer by word, introduce red herrings i.e. words that
      don't work in a valid combination". The red herrings are drawn from items
@@ -503,6 +515,19 @@ window.ENGINE = (function () {
     const pair = plan.pair;
     const answer = plan.answer.slice();
     if (!answer.length) return [];
+
+    /* The opening turn carries no decoys. A child meets the language and the
+       tap-to-build mechanic in the same moment, and the data says the mechanic
+       is what costs them: the first two steps have the WORST accuracy of the
+       night (62% and 54%) on the simplest content there is, while the last is
+       93% on the hardest — accuracy climbing as the grammar gets harder is
+       survivorship, not learning. And a child who gets the opener wrong
+       finishes at 23% against 38%.
+
+       So the first turn is a lesson, not a test. There is still a task — the
+       words have to go in the right order — but it cannot be failed, and the
+       night starts scoring once they know what they are doing. */
+    if (isOpener(state)) return makePills(answer.slice());
 
     const taken = new Set(answer.map(norm));
 
@@ -697,6 +722,16 @@ window.ENGINE = (function () {
   function applyMercy(state, plan) {
     const { pattern, item } = recOf(state, plan.pair);
     for (const r of [pattern, item]) { if (r) r.lastTurn = state.turn; }
+    /* Retired from the makeup pool. Without this the two halves of the design
+       fight each other: mercy scores 0, 0 keeps the child under the pass mark,
+       and the pass mark sends the WEAKEST step round again — which is the one
+       they have just been shown and still could not produce. A child who gets
+       nothing right gave 160 answers across 40 turns and was handed the answer
+       40 times, and the engine never ended the go; the turn cap did.
+
+       A step they have been shown and still cannot say is not the one with the
+       most to gain. It is the one they have proved they cannot do today. */
+    state.released[stepKey(state.stage, state.step)] = true;
     state.turn += 1;
     state.attempts = 0;
     bank(state, STEP_SCORE.mercy);
@@ -715,7 +750,7 @@ window.ENGINE = (function () {
   return {
     createState, pickNext, planTurn, pills, check, validate, makePills, slug,
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
-    seen, applyCorrect, applyWrong, mercyDue, applyMercy, track,
+    seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,

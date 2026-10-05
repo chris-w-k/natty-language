@@ -987,6 +987,20 @@
   /* The character's line. The guard is unchanged: the engine's list is the
      whole of what may appear in the target language, and a line reaching past
      it is inventing curriculum — the failure the epic names. */
+  /* The one turn of the night that is the same every time, so nothing has to
+     be decided and nothing has to be waited for. Two model calls and their
+     retries were being spent on it at the worst possible moment — cold
+     instance, cold model, no clip cached, and a child with nothing invested
+     yet. The lines are in content, in their own language, and the call that
+     used to produce them is skipped rather than raced. */
+  function openingLines(plan) {
+    const target = plan.pair.allTarget;
+    return {
+      actor_line: t('open-actor'),
+      coach_line: t('open-coach', target),
+    };
+  }
+
   async function generateActorLine(plan) {
     if (!serverUp) { lastGenWhy = 'no server'; return null; }
     const t0 = Date.now();
@@ -1086,6 +1100,11 @@
      Written from the engine's own plan, so it is always correct even though it
      is never interesting. */
   function fallbackLines(plan) {
+    /* The opening turn's lines live here rather than beside the call that
+       skips the model, so every reader of them — the bubble, the retry floor,
+       the transcript — gets the same pair without having to know it is the
+       opener. */
+    if (E.isOpener(state)) return openingLines(plan);
     const intro = newThing(plan);
     const asks = tList('fb-actor-ask');
     let actor = asks[(state.turn + plan.pair.id.length) % asks.length];
@@ -1434,10 +1453,16 @@
     $('turn-loading').classList.remove('hidden');
     preloadScene();
 
+    /* The opening turn is written, so neither call is made and there is
+       nothing to wait for: the bartender is on screen as fast as his voice can
+       be fetched. */
+    const written = E.isOpener(state);
+
     /* Call one: the character. Nothing can be drawn until his line exists,
        because everything else this turn is a reaction to it. */
-    const gen = await generateActorLine(plan);
+    const gen = written ? null : await generateActorLine(plan);
     $('turn-loading').classList.add('hidden');
+    if (written) { lastGenWhy = 'written opening'; lastCoachWhy = 'written opening'; }
 
     const fb = fallbackLines(plan);
     const actorLine = gen ? gen.actorText : fb.actor_line;
@@ -1450,7 +1475,7 @@
     /* Call two: the coach, told what the character actually said. Fired now,
        awaited later — it has until his audio finishes, which is when the coach
        has always been allowed to speak. */
-    const coachPending = generateCoachLine(plan, actorLine);
+    const coachPending = written ? Promise.resolve(null) : generateCoachLine(plan, actorLine);
 
     mountBackground($('layer-bg'), Q.activity.background);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
@@ -2585,6 +2610,10 @@
     }
 
     state = E.createState(Q);
+    /* ?opener=0 turns off the taught first turn, so a harness about generated
+       lines or wrong answers can reach one without playing through a turn that
+       has neither. Same door as ?intro=0, and the same reason. */
+    if (/[?&]opener=0/.test(location.search)) state.noOpener = true;
     E.track(state, 'session_start', { activity: Q.activity.id, native: NL(), target: TL() });
     /* Quest then Activity, in that order: the quest is the thing the child
        picked and the activity is this run of it, and the rest of the app

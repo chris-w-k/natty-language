@@ -770,6 +770,35 @@ Return JSON only.`,
       pl: 'Nie dosłyszałem — spróbuj stuknąć.',
       ro: 'Nu am prins — încearcă să atingi.',
     },
+    /* THE OPENING TURN, written rather than generated. It is the same every
+       time — the night always starts with the bartender not having noticed
+       them — so there is nothing for a model to decide, and two calls plus
+       their retries were being spent on it at the one moment nothing is warm:
+       cold instance, cold model, first clip. The slowest 10% of children waited
+       133 seconds on this turn, and the single commonest place to stop playing
+       is a question that was shown and never answered.
+
+       The bartender brushing them off is also what makes "Excuse me" a thing
+       worth saying, which a generated "¿Sí? ¿Qué necesitas?" quietly undid.
+
+       The coach's line names the mechanic, because the mechanic is what the
+       first turn is actually teaching. {0} is the phrase they are to build. */
+    'open-actor': {
+      en: 'Yeah yeah, in a minute.',
+      es: 'Sí, sí, un momento.',
+      pt: 'Sim, sim, um momento.',
+      tr: 'Tamam tamam, bir dakika.',
+      pl: 'Tak, tak, za chwilę.',
+      ro: 'Da, da, un moment.',
+    },
+    'open-coach': {
+      en: 'He has not seen you. Tap the words to say “{0}”.',
+      es: 'No te ha visto. Toca las palabras para decir “{0}”.',
+      pt: 'Não te viu. Toca nas palavras para dizer “{0}”.',
+      tr: 'Seni görmedi. Kelimelere dokunup “{0}” de.',
+      pl: 'Nie zauważył cię. Dotknij słów, żeby powiedzieć “{0}”.',
+      ro: 'Nu te-a văzut. Atinge cuvintele ca să spui “{0}”.',
+    },
     /* The written fallbacks, for when the model is slow or unreachable. One
        list per speaker so the line is not the same every turn. */
     'fb-actor-ask': {
@@ -917,7 +946,12 @@ Return JSON only.`,
     keepMark: 1,
     masteryBar: 0.8,       // correct / (correct + incorrect) to count as produced
     minExposures: 2,       // ...but not before this many tries, or 1/1 = mastered
-    mercyAfterFailedTurns: 4,
+    /* Three wrong answers and the line is handed over and the night moves on.
+       It was four, and the data said four was already too many: the children
+       who could not produce a line were answering it 1.8 times on the easy
+       steps and 17 times on the hard ones. The point of a retry is a second
+       chance, not a war of attrition with a seven-year-old. */
+    mercyAfterFailedTurns: 3,
     /* ---------- which way round, by default ----------
        The learner picks ONE language: the one their hints are in, which is
        the one they already speak. What they are here to learn does not need
