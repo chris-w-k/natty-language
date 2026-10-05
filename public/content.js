@@ -629,9 +629,16 @@ Return JSON only.`,
       pl: 'Zabrakło do {0}% — jeszcze jedno podejście do reszty i się uda.',
       ro: 'Ți-a lipsit până la {0}% — încă o tură cu ce a rămas și ajungi acolo.',
     },
+    /* The engine's verdict is `stuck` meaning IT STUCK — the line stayed with
+       them — and the row is green. The English word is ambiguous enough that
+       it was read the other way when these were translated, so all five came
+       out as the child being stuck: "Atascado", "Takıldın", "Zacięte". A child
+       who had just mastered every line was being told they were jammed, in
+       green. The English label goes too, rather than leave the next person the
+       same trap. */
     'end-stuck-label': {
-      en: 'Stuck', es: 'Atascado', pt: 'Preso',
-      tr: 'Takıldın', pl: 'Zacięte', ro: 'Blocat',
+      en: 'Got it', es: 'Lo tienes', pt: 'Já sabes',
+      tr: 'Öğrendin', pl: 'Umiesz', ro: 'O știi',
     },
     'end-shaky-label': {
       en: 'Shaky', es: 'Flojo', pt: 'Inseguro',
