@@ -331,12 +331,46 @@
     return { native: n || Q.nativeLang, target: t || Q.targetLang };
   }
 
-  /* The pair the screen opens on: whatever the URL says, else the content's
-     own default — hints in Spanish, because that is who plays this. */
+  /* The language the phone is set to, if this scenario can teach out of it.
+     navigator.languages is the ordered list the child's device reports — a
+     phone set to Spanish with English second gives ['es-US','en-US'], so the
+     first match in order is the one they actually read in. Region is dropped:
+     es-US, es-419 and es-ES are all Spanish to us.
+
+     This was always meant to be here — the note on lang-pick-* has said "in
+     the real build it follows the device locale" since the picker was written.
+     It matters more than it looked: of the children arriving on a non-English
+     phone, 30% were choosing English on that screen, which hands them hints in
+     a language they do not read and teaches them Spanish instead. They
+     finished at a quarter the rate of the ones who got it right. */
+  function deviceLang() {
+    const list = (navigator.languages && navigator.languages.length
+      ? navigator.languages : [navigator.language || '']);
+    for (const tag of list) {
+      const code = String(tag).slice(0, 2).toLowerCase();
+      if (C.covered.includes(code)) return code;
+    }
+    return null;
+  }
+
+  /* Where the pair came from, in order of authority: the URL (a walkthrough,
+     or the app passing ?lang=), then the phone, then the content's default.
+     The SOURCE is kept, not just the answer — it decides whether the picker is
+     shown at all, and it goes out with the analytics so the next read of this
+     screen is about something other than guesswork. */
+  let langSource = 'default';
   function startingPair() {
     const p = paramPair();
-    if (p && C.covered.includes(p.native) && C.covered.includes(p.target) && p.native !== p.target)
+    if (p && C.covered.includes(p.native) && C.covered.includes(p.target) && p.native !== p.target) {
+      langSource = 'url';
       return p;
+    }
+    const device = deviceLang();
+    if (device) {
+      langSource = 'device';
+      return { native: device, target: C.learns(device) };
+    }
+    langSource = 'default';
     return C.defaultPair();
   }
 
@@ -346,12 +380,25 @@
      Asking twice made the second answer a formality with one possible value,
      and made it possible to pick a pair the content could not teach. */
   function pickLanguages() {
-    let hint = startingPair().native;
+    const opening = startingPair();
+    let hint = opening.native;
 
-    /* Always shown. The app passes a language on the URL, but not every child
-       is in the language their account says they are, and the one screen that
-       lets them put it right costs a single tap. So a URL language preselects
-       its chip (via startingPair above) and nothing more. */
+    /* Asked only when nothing else can answer it. The screen was shown to
+       everyone so a child in the wrong language could put it right — and the
+       numbers say it did the opposite: on a non-English phone, three in ten
+       were choosing English, which is this screen being read as "which
+       language do you want to learn" rather than "which do you already
+       speak". It is asked in English, before a language is known, so that
+       reading is a fair one.
+
+       So when the URL or the phone already answers it, it is not asked. The
+       picker stays for the case it was built for: a device in a language this
+       scenario cannot teach out of, where there is a real question and no
+       default worth trusting. */
+    if (langSource !== 'default') {
+      apply(opening);
+      return Promise.resolve();
+    }
 
     $('lang-title').textContent = t('lang-pick-title') || 'HINT LANGUAGE';
     $('lang-sub').textContent = t('lang-pick-sub') || '';
@@ -361,6 +408,7 @@
       draw();
       $('lang-go').addEventListener('click', () => {
         if (!C.covered.includes(hint)) return;
+        langSource = 'picker';
         apply({ native: hint, target: C.learns(hint) });
         /* This click is the gesture the browser wants before any audio. */
         V.unlock(); SFX.unlock();
@@ -2521,8 +2569,14 @@
        reports them as a pair. */
     /* The pair is only settled once the picker has been answered, so the
        language super-properties are registered here rather than at init. */
-    SCREEN.register({ native_language: NL(), target_language: TL() });
-    AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL() });
+    /* ...and HOW the pair was decided, so the next read of this screen is
+       about something other than guesswork: 'url' when a walkthrough or the
+       app named it, 'device' when the phone did, 'picker' when the child
+       answered, 'default' when nothing could. */
+    SCREEN.register({ native_language: NL(), target_language: TL(),
+                      language_source: langSource });
+    AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL(),
+                                 languageSource: langSource });
     AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),
                                     stages: E.syllabus(Q).length, steps: E.allSteps(Q).length });
     buildRail();
@@ -2681,6 +2735,8 @@
     /* so a test can put a line to the guard without waiting for the model to
        write a bad one */
     mixedQuote: txt => mixedQuote(txt),
+    langSource: () => langSource,
+    deviceLang: () => deviceLang(),
   };
 
   boot();

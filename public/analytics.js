@@ -26,6 +26,12 @@ window.ANALYTICS = (function () {
   const APP = 'NattyLanguage';
   let ready = false, enabled = false, base = {};
   const pending = [];
+  /* Super-properties asked for before init has finished. init() is async and
+     its callers do not await it, so every register() made during boot — the
+     webview flag, the language pair, how that pair was decided — arrived while
+     `enabled` was still false and was dropped on the floor. They are held here
+     and applied the moment there is a posthog to apply them to. */
+  let supers = {};
 
   const off = () => /[?&]analytics=0/.test(location.search);
 
@@ -65,8 +71,11 @@ window.ANALYTICS = (function () {
         disable_session_recording: true,
         person_profiles: 'identified_only',
       });
-      window.posthog.register(Object.assign({ $app_name: APP }, base));
       enabled = true;
+      /* In its own try: a posthog build without register must cost us the
+         super-properties, not every event. Inside the outer try it set
+         enabled=false and silently turned the whole thing off. */
+      try { window.posthog.register(Object.assign({ $app_name: APP }, base, supers)); } catch {}
     } catch { enabled = false; }
     ready = true;
     flush();
@@ -95,6 +104,7 @@ window.ANALYTICS = (function () {
   /* Super-properties set after init — the webview flag and the language pair,
      neither of which is known when init runs. */
   function register(props) {
+    Object.assign(supers, props || {});
     if (!enabled) return;
     try { window.posthog.register(props || {}); } catch {}
   }
