@@ -25,6 +25,17 @@ const TTS_MODEL   = process.env.TTS_MODEL || 'gemini-2.5-flash-preview-tts';
    it is meant to sit in a browser — but it still comes from the environment
    rather than the repo, so a checkout cannot write into the production
    project and a local run sends nothing at all. */
+/* Which build is running, so a release can be measured against the one before
+   it rather than against a clock. Splitting on a deploy TIME is wrong: the
+   webview is a cached page, and after the 7 Oct deploy children were still
+   being served the previous JS for another forty minutes. A build tag travels
+   with the code that was actually loaded, so a session can never be filed
+   under a release it did not run.
+
+   Render sets RENDER_GIT_COMMIT on every deploy; the others are for other
+   hosts and for a local checkout. */
+const BUILD = (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
+               process.env.SOURCE_VERSION || '').trim().slice(0, 7) || 'dev';
 const POSTHOG_KEY  = (process.env.POSTHOG_KEY || '').trim();
 const POSTHOG_HOST = (process.env.POSTHOG_HOST || 'https://eu.i.posthog.com').trim();
 /* One prebuilt voice per speaker. Swap freely — the names are Gemini's.
@@ -518,6 +529,7 @@ http.createServer(async (req, res) => {
   if (url === '/api/health') {
     return json(res, 200, {
       ok: true, mock: MOCK, locked: !!ACCESS_CODE, unlocked: authed(req, null),
+      build: BUILD,
       model: MOCK ? 'local' : MODEL,
       tts: MOCK ? null : TTS_MODEL,
       analytics: POSTHOG_KEY ? { key: POSTHOG_KEY, host: POSTHOG_HOST } : null,

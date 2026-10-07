@@ -59,6 +59,12 @@ window.ANALYTICS = (function () {
       activity_type: cfg.activityType || 'nlt_prototype',
       quest_activity_type: cfg.questActivityType || 'nlt_prototype',
       activityId: cfg.activityId,
+      /* The commit this page was served from. In `base` rather than a
+         super-property on purpose: base is merged into events replayed from
+         the boot queue as well, so the first events of a session carry it too.
+         A super-property would miss exactly those — which is how in_webview
+         came to be absent from every event ever sent. */
+      build: cfg.build || 'unknown',
     };
     if (off() || !cfg.key || !cfg.host) { ready = true; flush(); return false; }
     try {

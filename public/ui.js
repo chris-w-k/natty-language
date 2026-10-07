@@ -221,8 +221,13 @@
          not fire analytics events" for a prototype with no fixtures. */
       if (!analyticsStarted) {
         analyticsStarted = true;
+        /* The build tag rides with every event, so one release can be read
+           against the one before it. It goes through init rather than
+           register() because init folds it into the props applied to events
+           queued during boot — Quest.Start among them. */
         window.ANALYTICS.init(Object.assign(
-          { activityId: Q.activity.id }, (j && j.analytics) || {}));
+          { activityId: Q.activity.id, build: (j && j.build) || 'unknown' },
+          (j && j.analytics) || {}));
         /* Which side of the webview this is. Set once, as a super-property, so
            every event — the NovaPals.* ones and the $screen ones alike — can be
            split by it without each call site having to remember. */
