@@ -2104,7 +2104,13 @@
     submitted = true;
     $('btn-say').disabled = true;
 
-    const said = builtSentence();
+    /* What the child actually produced. A tapped answer is the sentence as the
+       tray built it; a spoken one is the transcript, because on that path the
+       tray is empty and builtSentence() returns "Do you have a …?" — a row of
+       ellipses in the chat bubble, in the line the bartender reacts to, and in
+       the analytics, where it made every spoken answer look identical and left
+       no way to tell a mishearing from a wrong answer. */
+    const said = mode === 'chips' ? builtSentence() : String(text || '').trim();
     /* The child's own sentence is not read back to them. It is a fresh line
        every time, so it is never cached — a Gemini TTS call, a download and a
        clip to sit through, all to hear words they just chose themselves, and
@@ -2125,8 +2131,15 @@
     }
     renderSlot();
 
+    /* answerMode separates the two input paths in the dashboard. Without it a
+       spoken answer and a tapped one are the same row, and the speech funnel
+       cannot be read at all. */
     AN('NovaPals.Nlt.QuestionEnd',
-      Object.assign(questionProps(plan), { answerText: said, isCorrect: !!v.correct }));
+      Object.assign(questionProps(plan), {
+        answerText: said,
+        answerMode: mode === 'chips' ? 'tap' : 'voice',
+        isCorrect: !!v.correct,
+      }));
 
     if (v.correct) {
       say('me', spanishHTML(said), said, null, 'right');
