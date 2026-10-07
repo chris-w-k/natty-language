@@ -2472,8 +2472,11 @@
     const blob = new Blob(micChunks, { type });
     micChunks = [];
     if (!blob.size) { setMic(false); $('verdict').textContent = t('mic-nothing'); return; }
+    /* Both languages: what the line asks them to produce, and the one the
+       rest of the line is in. The transcriber needs both to write down a
+       mixed sentence as it was actually said. */
     const j = await post('/api/listen',
-      { audio: await toBase64(blob), mime: type, language: TL() }, 15000);
+      { audio: await toBase64(blob), mime: type, language: TL(), nativeLanguage: NL() }, 15000);
     setMic(false);
     const said = String((j && j.text) || '').trim();
     if (!said) {

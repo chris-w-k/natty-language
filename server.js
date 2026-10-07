@@ -624,17 +624,31 @@ http.createServer(async (req, res) => {
       if (MOCK) return json(res, 200, { text: String(b.mockText || ''), mock: true });
 
       const mime = /^audio\/[a-z0-9.;=+-]+$/i.test(String(b.mime || '')) ? b.mime : 'audio/webm';
-      /* The client sends a language CODE; the prompt wants a name, and the
-         name has to be in the prompt's own language rather than the child's —
-         "speaking inglés" is not an instruction. */
+      /* The client sends language CODES; the prompt wants names, and the names
+         have to be in the prompt's own language rather than the child's —
+         "speaking inglés" is not an instruction.
+
+         BOTH languages, not just the target. The sentence on screen is mixed:
+         the frame is in the child's own language and only the gap is in the
+         one they are learning, so "¿Tienes a ticket?" is a correct reading of
+         it. A transcriber told to expect English alone hears the Spanish half
+         as noise and writes it down as whatever English it sounds nearest to,
+         and the child is then marked wrong for words they never said. */
       const NAMES = { en: 'English', es: 'Spanish', pt: 'Portuguese',
                       tr: 'Turkish', pl: 'Polish', ro: 'Romanian' };
-      const lang = NAMES[String(b.language || '').slice(0, 5)] || 'the language of the recording';
+      const code = c => NAMES[String(c || '').slice(0, 5)] || '';
+      const lang = code(b.language) || 'the language of the recording';
+      const own = code(b.nativeLanguage);
+      const who = own && own !== lang
+        ? `a child aged 7-10 who is learning ${lang} and whose own language is ${own}. ` +
+          `They may speak either, or one sentence with both in it`
+        : `a child aged 7-10 speaking ${lang}`;
       const out = await askJSON({
-        system: `You transcribe a short recording of a child aged 7-10 speaking ${lang}.
-Write down exactly the words you hear, and nothing else. Do not correct their
-grammar, their word order or their pronunciation, do not finish their sentence,
-and do not translate. If you cannot make out any words, return an empty string.`,
+        system: `You transcribe a short recording of ${who}.
+Write down exactly the words you hear, in whichever of the two languages you
+hear them, and nothing else. Do not correct their grammar, their word order or
+their pronunciation, do not finish their sentence, and do not translate. If you
+cannot make out any words, return an empty string.`,
         contents: [{ role: 'user', parts: [
           { inlineData: { mimeType: String(mime).split(';')[0], data: audio } },
           { text: 'Transcribe this.' },
