@@ -760,6 +760,16 @@ Return JSON only.`,
       en: 'Checking…', es: 'Comprobando…', pt: 'A verificar…',
       tr: 'Kontrol ediyorum…', pl: 'Sprawdzam…', ro: 'Verific…',
     },
+    /* The microphone's mistake, said out loud rather than charged to them.
+       {0} is the transcript, so they can see what was written down. */
+    'misheard': {
+      en: 'I heard “{0}”. That might be me — say it again?',
+      es: 'He oído “{0}”. Igual soy yo — ¿lo dices otra vez?',
+      pt: 'Ouvi “{0}”. Pode ter sido eu — dizes outra vez?',
+      tr: '“{0}” duydum. Belki ben yanlış duydum — bir daha söyler misin?',
+      pl: 'Usłyszałem „{0}”. Może to moja wina — powiesz jeszcze raz?',
+      ro: 'Am auzit „{0}”. Poate am greșit eu — mai spui o dată?',
+    },
     'mic-nothing': {
       en: 'Didn’t hear anything — have another go.',
       es: 'No he oído nada — prueba otra vez.',

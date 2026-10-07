@@ -26,6 +26,9 @@
   const NL = () => Q.nativeLang;
 
   let state, current = null, plan = null, hinted = false, attempts = 0;
+  /* one free go per turn when the microphone, rather than the child, is what
+     got it wrong — see submit() */
+  let misheardOnce = false;
   /* slot-indexed and sparse; marks[i] is null until judged (NJA-3162) */
   let placed = [], marks = [], submitted = false;
   /* set while a pointer drag is in flight, so the click that ends a drag is
@@ -634,6 +637,12 @@
      costs a call, and the call returns FLAGS — the engine still owns every
      number, as it does for the pills. */
   const JUDGE_DEADLINE_MS = 6000;
+
+  /* The two readings that say the microphone, not the child, is what got it
+     wrong: a transcript the judge could only call garbled, and an answer given
+     in their own language. One source for both the free go and the flag the
+     dashboard counts them by. */
+  const freeGo = j => !!j && (j.error_type === 'typo' || j.error_type === 'native_fallback');
 
   function spokenTargets(pl) {
     const gaps = (pl.expectedAnswerPills || []).map(p => p.label).join(' ').trim();
@@ -1523,6 +1532,7 @@
 
     hinted = false;
     attempts = 0;
+    misheardOnce = false;
     $('slot-label').textContent = slotLabel(plan);
     renderSlot();
     renderTray();
@@ -2189,7 +2199,42 @@
            Together they are what tells a mishearing from a wrong answer. */
         judgedBy: spoken ? spoken.judged : undefined,
         errorType: spoken ? spoken.error_type : undefined,
+        /* true where the answer was not counted against them because the
+           transcript, not the child, is what went wrong */
+        misheard: spoken ? (!v.correct && !misheardOnce && freeGo(spoken)) : undefined,
       }));
+
+    /* ---------- a mishearing is not a wrong answer ----------
+       The transcript is a model's reading of a child in a room with a band in
+       it, and sometimes it is a reading of something they did not say.
+       Charging that to one of their three attempts spends the turn on the
+       microphone's mistake, and the mastery number then records a phrase they
+       could not say when what happened is that nobody heard them.
+
+       Two of the judge's readings get a free go. A transcript it could only
+       call garbled, and an answer given in their own language — which is a
+       thing to be told, not a thing to be marked. One per turn, so it cannot
+       be farmed, and it is still sent to the dashboard, because how often this
+       happens is the number the speech funnel turns on. */
+    if (!v.correct && spoken && !misheardOnce && freeGo(spoken)) {
+      misheardOnce = true;
+      say('me', esc(said), said, null, 'wrong');
+      const again = spoken.error_type === 'native_fallback'
+        /* already written, already translated, and it names the language,
+           which is the whole of what they need told */
+        ? t('fb-coach-ask', plan.pair.allNative, Q.languageNames.target)
+        : t('misheard', said);
+      say('axel', esc(again), again);
+      /* the pane goes back to how it was before they spoke: nothing marked,
+         nothing spent */
+      marks = new Array(slotCount()).fill(null);
+      submitted = false;
+      renderSlot();
+      renderTray();
+      syncSay();
+      busy = false;
+      return;
+    }
 
     if (v.correct) {
       say('me', spanishHTML(said), said, null, 'right');
