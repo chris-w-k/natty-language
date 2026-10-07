@@ -616,23 +616,64 @@
     });
   }
 
-  async function evaluateSpoken(text, item) {
-    if (serverUp) {
-      try {
-        const r = await fetch('/api/evaluate', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            learnerText: text, target: item.target, native: item.native,
-            accept: item.accept, nativeLang: NL(), targetLang: TL()
-          })
-        });
-        if (r.ok) {
-          const j = await r.json();
-          if (typeof j.target_produced === 'boolean') return j;
-        }
-      } catch { /* fall through */ }
-    }
-    return E.evaluateLocal(text, item);
+  /* ---------- judging a spoken answer ----------
+     A tapped answer is exact by construction: the pills are the words, and
+     which slot each went in is the whole question. A spoken one cannot be
+     judged that way. The transcript is one model's reading of a seven-year-old
+     in a room with other people in it, and the child may say the gap words on
+     their own ("a ticket") or the whole line as it is printed in front of them
+     ("¿Tienes a ticket?"). Both are correct answers to what was asked.
+
+     What was here compared the transcript letter for letter against the gap
+     words alone, so everything but one of those readings came out wrong: 598
+     of 613 spoken answers in the last run were marked incorrect, which is not
+     a measure of how the children spoke.
+
+     Three things now count as having said it, and an exact match against any
+     of them is settled here with no model and no wait. Only an inexact answer
+     costs a call, and the call returns FLAGS — the engine still owns every
+     number, as it does for the pills. */
+  const JUDGE_DEADLINE_MS = 6000;
+
+  function spokenTargets(pl) {
+    const gaps = (pl.expectedAnswerPills || []).map(p => p.label).join(' ').trim();
+    /* the gap words; the line as printed, which is usually mixed; and the line
+       wholly in the language they are learning, which is what a child who has
+       run ahead will say */
+    return [gaps, pl.expected, pl.pair && pl.pair.allTarget]
+      .map(v => String(v || '').trim())
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
+  }
+
+  /* The fallback, for no server and for a call that does not come back. It is
+     deliberately strict: it can only recognise the shapes it is given, and a
+     generous guess here would hand out passes the engine would then count. */
+  function localVerdict(text, pl) {
+    const want = spokenTargets(pl);
+    const words = v => E.norm(v).split(' ').filter(Boolean);
+    if (want.some(w => E.norm(text) === E.norm(w)))
+      return { target_produced: true, understandable: true, error_type: 'none' };
+    if (want.some(w => words(text).sort().join(' ') === words(w).sort().join(' ')))
+      return { target_produced: false, understandable: true, error_type: 'word_order' };
+    return { target_produced: false, understandable: false, error_type: 'wrong_word' };
+  }
+
+  async function judgeSpoken(text, pl) {
+    const want = spokenTargets(pl);
+    if (want.some(w => E.norm(text) === E.norm(w)))
+      return { target_produced: true, understandable: true, error_type: 'none', judged: 'exact' };
+    if (!serverUp) return Object.assign(localVerdict(text, pl), { judged: 'local' });
+
+    const j = await post('/api/evaluate', {
+      learnerText: text,
+      target: want[0],
+      accept: want.slice(1),
+      native: (pl.pair && pl.pair.allNative) || '',
+      nativeLang: NL(), targetLang: TL(),
+    }, JUDGE_DEADLINE_MS);
+    if (j && typeof j.target_produced === 'boolean') return Object.assign(j, { judged: 'model' });
+    return Object.assign(localVerdict(text, pl), { judged: 'local' });
   }
 
   /* ---------- the tutor turn ----------
@@ -2120,14 +2161,18 @@
     /* The judgement. Per pill for the pane, and the same booleans collapse to
        the verdict for the engine — one source, so the banner and the mastery
        number can never say different things. */
-    let v;
+    let v, spoken = null;
     if (mode === 'chips') {
       v = E.validate(placed, plan);
       marks = v.marks;
     } else {
-      const ok = E.norm(text) === E.norm(plan.expectedAnswerPills.map(p => p.label).join(' '));
-      v = { correct: ok };
-      marks = new Array(slotCount()).fill(ok);
+      /* An inexact answer costs a model call, so the wait is named rather
+         than left as a dead second between speaking and being told. */
+      $('verdict').textContent = t('checking');
+      spoken = await judgeSpoken(said, plan);
+      $('verdict').textContent = '';
+      v = { correct: !!spoken.target_produced };
+      marks = new Array(slotCount()).fill(v.correct);
     }
     renderSlot();
 
@@ -2139,6 +2184,11 @@
         answerText: said,
         answerMode: mode === 'chips' ? 'tap' : 'voice',
         isCorrect: !!v.correct,
+        /* only on the spoken path, and only ever flags: judgedBy says whether
+           a model was needed at all, errorType what it made of the answer.
+           Together they are what tells a mishearing from a wrong answer. */
+        judgedBy: spoken ? spoken.judged : undefined,
+        errorType: spoken ? spoken.error_type : undefined,
       }));
 
     if (v.correct) {

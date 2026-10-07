@@ -753,6 +753,13 @@ Return JSON only.`,
       en: 'Listening…', es: 'Escuchando…', pt: 'A ouvir…',
       tr: 'Dinliyorum…', pl: 'Słucham…', ro: 'Ascult…',
     },
+    /* Said while a spoken answer is with the judge. An exact answer never
+       shows it — that is settled on the device — so it appears only where
+       there is a real wait to account for. */
+    'checking': {
+      en: 'Checking…', es: 'Comprobando…', pt: 'A verificar…',
+      tr: 'Kontrol ediyorum…', pl: 'Sprawdzam…', ro: 'Verific…',
+    },
     'mic-nothing': {
       en: 'Didn’t hear anything — have another go.',
       es: 'No he oído nada — prueba otra vez.',
