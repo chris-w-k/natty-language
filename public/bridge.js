@@ -12,13 +12,21 @@
 
    The names are the app's, not ours: handleWebViewPostMessage is already
    shipped and keyed on them, so this is a contract to meet rather than one to
-   design. The shape is the part we guess at. react-native-webview delivers
-   every message as a string, and the app's handler is on the other side of a
-   boundary this page cannot read — so each message goes twice, once as the
-   bare event name and once as JSON carrying that name under type, event AND
-   name. A handler keyed on any of those sees it; the others fail to parse and
-   are ignored. If the real contract turns out to be something else, this file
-   is the only thing to change.
+   design.
+
+   The SHAPE used to be a guess, and the guess was wrong in a way that cost
+   the app rather than us. Each message went twice — once as the bare event
+   name, once as JSON — on the theory that a handler keyed on either would see
+   one and ignore the other. It does not ignore it: handleWebViewPostMessage
+   calls JSON.parse on every message it is handed, so the bare name threw
+   "SyntaxError: Unexpected character: N" (the N of NovaPals) in the app, three
+   times per session for Start alone. Engineering confirmed the contract:
+
+     { "type": "NovaPals.Prototype.Start" }   — and nothing else
+
+   So one message, one shape, exactly that. Nothing extra rides along: how the
+   night went goes to PostHog, which is where it is read from anyway, and the
+   app does not need it to pay the gems.
 
    Start is idempotent — it hides an overlay — so it is repeated, because a
    missed Start strands the child on that spinner for ever. End is not: it
@@ -39,22 +47,18 @@ window.BRIDGE = (function () {
     return rn && typeof rn.postMessage === 'function' ? rn : null;
   }
 
-  function send(name, extra) {
+  function send(name) {
     const rn = host();
-    const payloads = [
-      name,
-      JSON.stringify(Object.assign(
-        { type: name, event: name, name, source: 'natty-language' }, extra || {})),
-    ];
-    for (const payload of payloads) {
-      try { if (rn) rn.postMessage(payload); }
-      catch (e) { console.warn('[NovaPals] bridge failed:', e && e.message); }
-      /* And up to a parent frame, so the same page still works if it is ever
-         embedded in an iframe instead of a native webview. Skipped entirely
-         when there is no parent, so a plain tab sends nothing at all. */
-      try { if (window.parent && window.parent !== window) window.parent.postMessage(payload, '*'); }
-      catch { /* cross-origin parent that won't take it; nothing to do */ }
-    }
+    /* The whole payload. A second, differently-shaped copy is not insurance —
+       it is an exception thrown inside the app's message handler. */
+    const payload = JSON.stringify({ type: name });
+    try { if (rn) rn.postMessage(payload); }
+    catch (e) { console.warn('[NovaPals] bridge failed:', e && e.message); }
+    /* And up to a parent frame, so the same page still works if it is ever
+       embedded in an iframe instead of a native webview. Skipped entirely
+       when there is no parent, so a plain tab sends nothing at all. */
+    try { if (window.parent && window.parent !== window) window.parent.postMessage(payload, '*'); }
+    catch { /* cross-origin parent that won't take it; nothing to do */ }
     console.log('[NovaPals] ->', name, rn ? '(webview)' : '(no host — standalone browser)');
   }
 
@@ -80,13 +84,13 @@ window.BRIDGE = (function () {
 
     /**
      * The child finished and tapped FINISH. Only ever called from that tap.
-     * `result` is what the night came to — the app does not need it to pay the
-     * gems, but a quest that reports nothing about how it went is a quest the
-     * dashboards cannot tell apart from any other.
+     * The argument is ignored: the contract carries a type and nothing else,
+     * and how the night went is already in PostHog under NovaPals.Activity.End.
+     * It is still accepted so callers do not have to change.
      */
-    finish(result) {
+    finish() {
       endSends++;
-      send(END, Object.assign({ attempt: endSends }, result || {}));
+      send(END);
       return endSends;
     },
   };
