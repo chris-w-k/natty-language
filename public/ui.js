@@ -659,10 +659,13 @@
        NJA-3211. The title card is the SCENARIO's, not the venue's — it is
        shown before the venue is chosen, so it cannot name a place. Axel's
        line is the scenario's too: he asks what the child wants to do, which
-       is a question only he can ask before the answer is known. The per-venue
-       `copy.title` / `copy.sub` / `copy.coach` are no longer read here; they
-       are still in content.js, and still the only written description each
-       venue has. */
+       is a question only he can ask before the answer is known.
+
+       The per-venue coach lines are gone with it. They were written to be
+       said once the place was known — "the band's English, the bar's
+       English, and the woman on the door doesn't do Spanish" — and there is
+       no longer a moment between knowing the place and being in it. Only
+       `copy.tap` is still read from the venue's intro block. */
     const copy = copyOf();
     $('intro-title-text').textContent = t('scenario-title') || 'A big night out!';
     $('intro-sub').textContent = t('scenario-sub') || '';
