@@ -402,7 +402,13 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
    across the bottom of the card. */
 #intro-langs{justify-content:center;color:var(--ink);}
 #intro-langs::after{display:none;}
-.lang-card{width:min(340px,86vw);background:var(--paper);border-radius:20px;padding:22px 20px 20px;
+/* `.intro` sets color:#fff for the night scene, and this card is a white card
+   inside it — so it has to put the ink back, or its heading and any plain .btn
+   in it are white on white. And z-index 4 puts it above the panel's dark foot
+   (::after, z-index 3), which is there to darken the scene behind the tap hint
+   — not to grey out the bottom half of a card that sits low in the frame. */
+.lang-card{width:min(340px,86vw);background:var(--paper);color:var(--ink);border-radius:20px;padding:22px 20px 20px;
+           position:relative;z-index:4;
            box-shadow:0 18px 50px rgba(0,0,0,.34);text-align:left;
            max-height:calc(100% - 48px);overflow-y:auto;}
 /* The headline is the whole question, so it carries the weight rather than a
@@ -843,3 +849,152 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
   background:linear-gradient(to bottom,
     rgba(16,10,16,0) 0%, rgba(16,10,16,.44) 46%, rgba(16,10,16,.76) 100%);
 }
+
+/* ---------- the other two rooms (NJA-3207) ----------
+   Same six elements as the bar, restyled. The markup does not change because
+   the room is a skin: .s-wall is whatever is behind her, .s-shelf and
+   .s-bottles are whatever is up above her head, .s-lamps is the light, and
+   .s-counter is the thing she is standing behind. Composed for the same crop
+   as the bar — detail high and down the margins, because her head and torso
+   take the middle.
+
+   Each venue overrides all six. The bar's rules are not venue-scoped, so they
+   would otherwise show through as a base layer; an attribute selector outranks
+   them, which is what keeps these self-contained. */
+#layer-bg[data-bg="venue-stadium"] .scene,
+#layer-bg[data-bg="venue-cinema"] .scene{display:block;}
+
+/* ---- a floodlit stand, half an hour before kick-off ---- */
+#layer-bg[data-bg="venue-stadium"]{background:#071017;}
+#layer-bg[data-bg="venue-stadium"] .scene > .s-wall{
+  background:
+    /* the pitch, throwing green up off the bottom edge */
+    radial-gradient(150% 46% at 50% 104%, rgba(86,200,120,.26) 0%, rgba(86,200,120,0) 64%),
+    linear-gradient(#061019 0%, #0b1d2b 30%, #123047 60%, #0a1a26 100%);
+}
+#layer-bg[data-bg="venue-stadium"] .scene > .s-wall::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(40% 26% at 8% 6%, rgba(220,240,255,.34), rgba(220,240,255,0) 70%),
+    radial-gradient(40% 26% at 92% 6%, rgba(220,240,255,.30), rgba(220,240,255,0) 70%);
+  mix-blend-mode:screen;
+}
+/* the barrier rail along the front of the tier */
+#layer-bg[data-bg="venue-stadium"] .scene > .s-shelf{
+  top:23%;height:1.4%;left:0;right:0;bottom:auto;
+  background:linear-gradient(#9fb6c6, #5b7383);
+  box-shadow:0 3px 7px rgba(0,0,0,.55);
+}
+/* the crowd: rows of heads, close enough together to read as a stand */
+#layer-bg[data-bg="venue-stadium"] .scene > .s-bottles{
+  top:9%;height:14%;left:0;right:0;bottom:auto;opacity:.9;
+  background:
+    radial-gradient(circle, #e8c9a6 48%, transparent 52%) 2% 92%/4.4% 26% repeat-x,
+    radial-gradient(circle, #c98f6b 48%, transparent 52%) 6% 64%/4.4% 24% repeat-x,
+    radial-gradient(circle, #f0d9bd 48%, transparent 52%) 0 34%/4.0% 22% repeat-x,
+    linear-gradient(#17384f, #0e2537);
+}
+/* floodlights on their pylons */
+#layer-bg[data-bg="venue-stadium"] .scene > .s-lamps{
+  top:0;height:9%;left:0;right:0;bottom:auto;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255,255,240,.95) 0 14%, rgba(255,255,240,.25) 30%, transparent 62%) 10% 50%/16% 100% no-repeat,
+    radial-gradient(circle at 50% 30%, rgba(255,255,240,.95) 0 14%, rgba(255,255,240,.25) 30%, transparent 62%) 90% 50%/16% 100% no-repeat;
+}
+/* the kiosk counter she is leaning on */
+#layer-bg[data-bg="venue-stadium"] .scene > .s-counter{
+  top:auto;bottom:0;height:19%;left:0;right:0;
+  background:linear-gradient(#20506b 0%, #143a4f 40%, #0a2130 100%);
+  box-shadow:inset 0 2px 0 rgba(190,225,245,.26);
+}
+#layer-bg[data-bg="venue-stadium"] .scene > .s-haze{
+  background:radial-gradient(90% 60% at 50% 20%, rgba(150,200,230,.10), rgba(150,200,230,0) 70%);
+}
+#layer-bg[data-bg="venue-stadium"] ~ #layer-char::after{
+  background:linear-gradient(to bottom,
+    rgba(6,16,24,0) 0%, rgba(6,16,24,.44) 46%, rgba(6,16,24,.78) 100%);
+}
+
+/* ---- a cinema foyer, trailers already running ---- */
+#layer-bg[data-bg="venue-cinema"]{background:#140a10;}
+#layer-bg[data-bg="venue-cinema"] .scene > .s-wall{
+  background:
+    radial-gradient(120% 50% at 50% 102%, rgba(255,186,96,.16) 0%, rgba(255,186,96,0) 62%),
+    linear-gradient(#17090f 0%, #2a1119 28%, #3d1922 56%, #1d0c13 100%);
+}
+#layer-bg[data-bg="venue-cinema"] .scene > .s-wall::after{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(44% 30% at 0% 12%, rgba(255,156,60,.22), rgba(255,156,60,0) 72%),
+    radial-gradient(44% 30% at 100% 12%, rgba(255,80,120,.18), rgba(255,80,120,0) 72%);
+  mix-blend-mode:screen;
+}
+/* the lightbox rail the posters hang from */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-shelf{
+  top:22%;height:1.2%;left:2%;right:2%;bottom:auto;
+  background:linear-gradient(#6a3550, #34172a);
+  box-shadow:0 2px 6px rgba(0,0,0,.6), 0 -1px 0 rgba(255,206,150,.3);
+}
+/* backlit posters, up where they clear her head */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-bottles{
+  top:6%;height:15.5%;left:2%;right:2%;bottom:auto;
+  background:
+    linear-gradient(170deg,#f2c14e,#b5561f) 4%  50%/11% 92% no-repeat,
+    linear-gradient(170deg,#56a7d8,#1d4a7a) 20% 50%/11% 92% no-repeat,
+    linear-gradient(170deg,#e0657f,#7a1f3c) 36% 50%/11% 92% no-repeat,
+    linear-gradient(170deg,#7fcf9b,#1f6340) 52% 50%/11% 92% no-repeat,
+    linear-gradient(170deg,#c79bf0,#4a2673) 68% 50%/11% 92% no-repeat,
+    linear-gradient(170deg,#f2c14e,#b5561f) 84% 50%/11% 92% no-repeat;
+  filter:saturate(.92) brightness(.96);
+}
+/* ceiling downlights */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-lamps{
+  top:0;height:6.5%;left:0;right:0;bottom:auto;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,214,150,.75) 0 10%, rgba(255,214,150,.18) 34%, transparent 66%) 22% 0/22% 100% no-repeat,
+    radial-gradient(circle at 50% 0%, rgba(255,214,150,.75) 0 10%, rgba(255,214,150,.18) 34%, transparent 66%) 78% 0/22% 100% no-repeat;
+}
+/* the counter, with the warmer glowing under it */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-counter{
+  top:auto;bottom:0;height:18%;left:0;right:0;
+  background:
+    radial-gradient(60% 70% at 50% 0%, rgba(255,196,110,.30), rgba(255,196,110,0) 70%),
+    linear-gradient(#5a2437 0%, #3a1526 45%, #1d0a12 100%);
+  box-shadow:inset 0 2px 0 rgba(255,206,150,.3);
+}
+#layer-bg[data-bg="venue-cinema"] .scene > .s-haze{
+  background:radial-gradient(90% 60% at 50% 18%, rgba(255,190,130,.09), rgba(255,190,130,0) 70%);
+}
+#layer-bg[data-bg="venue-cinema"] ~ #layer-char::after{
+  background:linear-gradient(to bottom,
+    rgba(20,10,16,0) 0%, rgba(20,10,16,.44) 46%, rgba(20,10,16,.78) 100%);
+}
+
+/* ---------- the venue picker ----------
+   Same card as the language screen, so the two intro screens read as one
+   sequence rather than two designs. */
+.venue-row{display:flex;flex-direction:column;gap:10px;margin:14px 0 12px;}
+.venue-btn{position:relative;overflow:hidden;padding-left:26px;
+           /* .btn centres with flex, so text-align alone does nothing here —
+              and centring inside a 26px-padded box reads as crooked. */
+           justify-content:flex-start;text-align:left;}
+/* a sliver of the room on the edge of each button, so the choice is a place
+   rather than three words. A stripe rather than a wash: a full-bleed gradient
+   behind the label took the contrast out of it, and these are three words a
+   child has to be able to read. */
+.venue-btn::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:12px;
+}
+.venue-btn[data-bg="venue-bar"]::before{
+  background:linear-gradient(100deg,#2a1726 0%, #d64ea8 58%, #3fd0d8 100%);
+}
+.venue-btn[data-bg="venue-stadium"]::before{
+  background:linear-gradient(100deg,#0b1d2b 0%, #2f7f52 58%, #cfe6f5 100%);
+}
+.venue-btn[data-bg="venue-cinema"]::before{
+  background:linear-gradient(100deg,#2a1119 0%, #b5561f 58%, #f2c14e 100%);
+}
+.venue-btn > span{position:relative;}
+
+/* the end screen's invitation, above the button it belongs to */
+.end-ask{margin:14px 0 6px;text-align:center;font-weight:600;}

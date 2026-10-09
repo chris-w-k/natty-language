@@ -49,7 +49,13 @@ const POSTHOG_HOST = (process.env.POSTHOG_HOST || 'https://eu.i.posthog.com').tr
 const VOICES = {
   axel:      process.env.VOICE_AXEL      || 'Zubenelgenubi',
   bouncer:   process.env.VOICE_BOUNCER   || 'Algenib',
-  bartender: process.env.VOICE_BARTENDER || 'Algenib',   // the one person the child talks to
+  /* The three people behind the three counters. All one voice on purpose:
+     the venue changes, the job does not, and a child who plays two nights
+     should meet the same person in a different room rather than a new
+     stranger. Female, per the art. */
+  bartender:      process.env.VOICE_BARTENDER || 'Achernar',
+  stadium_worker: process.env.VOICE_STADIUM   || 'Achernar',
+  cinema_worker:  process.env.VOICE_CINEMA    || 'Achernar',
   fan:       process.env.VOICE_FAN       || 'Callirrhoe',
   learner:   process.env.VOICE_LEARNER   || 'Leda',
 };
@@ -68,7 +74,13 @@ const STYLES = {
   /* The accent is pinned to the PERSON, not to the sentence. Without saying so
      the model reads an English line in English and a Spanish line in Spanish,
      and the same barman changes nationality between one turn and the next. */
-  bartender: process.env.STYLE_BARTENDER || 'Say with a Spanish accent, in a deep, warm, slightly weary voice over a noisy bar — a big bloke behind the counter who has seen it all, patient but with a queue building. Keep the Spanish accent throughout, INCLUDING on every English word:',
+  /* One woman, three rooms. The accent rule is unchanged and is the reason
+     each of these ends the same way: it is pinned to the PERSON, so she does
+     not change nationality between an English line and a Spanish one. Only
+     the room and her mood differ. */
+  bartender:      process.env.STYLE_BARTENDER || 'Say with a Spanish accent, in a warm, slightly weary woman\'s voice over a noisy bar — she has worked this counter for years and seen it all, patient but with a queue building. Keep the Spanish accent throughout, INCLUDING on every English word:',
+  stadium_worker: process.env.STYLE_STADIUM   || 'Say with a Spanish accent, in a brisk, cheerful woman\'s voice pitched over a football crowd — friendly, quick, half an eye on the pitch. Keep the Spanish accent throughout, INCLUDING on every English word:',
+  cinema_worker:  process.env.STYLE_CINEMA    || 'Say with a Spanish accent, in a friendly, hurrying woman\'s voice in a quiet cinema foyer — polite and a little rushed, because the film starts in five minutes. Keep the Spanish accent throughout, INCLUDING on every English word:',
   fan:       process.env.STYLE_FAN       || 'Say with a Spanish accent, shouted happily over loud live music, delighted and a bit breathless:',
   learner:   process.env.STYLE_LEARNER   || 'Say clearly and simply, at a learner\'s pace, like a British child carefully repeating a phrase they have just worked out:',
 };

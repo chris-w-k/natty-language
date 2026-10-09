@@ -9,9 +9,16 @@
      capturing bits of it. */
   let Q = window.QUEST;
   const C = window.CONTENT;
-  function setPair(nativeCode, targetCode) {
-    Q = C.build(nativeCode, targetCode);
+  /* Which night this is. Set before the quest starts and never changed inside
+     a go — a venue switch rebuilds the whole content object through here. */
+  let venue = C.defaultVenue;
+  const played = [];
+  function setPair(nativeCode, targetCode, venueId) {
+    if (venueId) venue = venueId;
+    Q = C.build(nativeCode, targetCode, venue);
     window.QUEST = Q;
+    ACTOR = Q.activity.actor.id;
+    COACH = Q.activity.coach.name;
     return Q;
   }
   const E = window.ENGINE;
@@ -34,8 +41,13 @@
   /* set while a pointer drag is in flight, so the click that ends a drag is
      not also read as a tap (NJA-3161 AC 1.3, NJA-3178 AC 1.4) */
   let dragMoved = false;
-  const ACTOR = Q.activity.actor.id;
-  const COACH = Q.activity.coach.name;   // the activity itself does not change with the pair
+  /* These used to be const, on the grounds that the activity did not change
+     with the pair. The venue choice changes the activity — a different room
+     with a different person behind the counter — so they are reassigned every
+     time the content is rebuilt. Left as plain bindings rather than getters so
+     the forty call sites that read them stay unchanged. */
+  let ACTOR = Q.activity.actor.id;
+  let COACH = Q.activity.coach.name;
   let inputLocked = false;
   let turnLine = '', turnAsk = '', turnCoachHtml = '', turnCoachFrags = null;   // this turn's words, for history and the repeat
   let micOn = false, busy = false, recog = null, serverUp = false, health = {};
@@ -53,13 +65,14 @@
 
      The clips are 1920x1080 and the slot is portrait, so something always gets
      cropped. What gets cropped is decided in frameRig() below. */
-  /* The bouncer became the person behind the counter — he sells the tickets,
-     the drinks and the merch now, because one room with one person is what
-     gives the generator enough to talk about. The art files keep their old
-     names; only who he is changed. */
+  /* One person behind the counter per venue — she sells the tickets, the
+     drinks and the merch, because one room with one person is what gives the
+     generator enough to talk about. Three rooms now, so three of her. */
   const ANIM = {
-    axel:      { idle: 'anim/axel-idle.json',    speak: 'anim/axel-talk.json' },
-    bartender: { idle: 'anim/bouncer-idle.json', speak: 'anim/bouncer-talk.json' },
+    axel:           { idle: 'anim/axel-idle.json',            speak: 'anim/axel-talk.json' },
+    bartender:      { idle: 'anim/bartender-idle.json',       speak: 'anim/bartender-talk.json' },
+    stadium_worker: { idle: 'anim/stadium-worker-idle.json',  speak: 'anim/stadium-worker-talk.json' },
+    cinema_worker:  { idle: 'anim/cinema-worker-idle.json',   speak: 'anim/cinema-worker-talk.json' },
   };
 
   /* ---------- framing ----------
@@ -76,12 +89,32 @@
      crop be computed rather than dialled in: the two constants below frame any
      character once its box is known, and the maths re-runs on resize instead
      of assuming a phone. */
+  /* x and w describe only the part of the figure the crop actually shows,
+     which is not the same as the whole figure: the stadium worker has a
+     football at her feet and the bartender's hands sit wide and low, and
+     measuring those in would drag the centring sideways by up to 60px. y and
+     h stay whole-figure, because that is what the crop line is computed from.
+     All six were measured off renders at 1920x1080; idle and talk frame
+     identically for every character, so nothing shifts when she starts
+     speaking. */
   const FIGURE = {
-    bartender: { x: 662, y: 128, w: 538, h: 940 },
-    axel:      { x: 732, y:  88, w: 386, h: 952 },
+    bartender:      { x: 749, y: 150, w: 409, h: 920 },
+    stadium_worker: { x: 741, y: 214, w: 358, h: 856 },
+    cinema_worker:  { x: 702, y: 176, w: 452, h: 893 },
+    axel:           { x: 732, y:  88, w: 386, h: 952 },
   };
   const CLIP_W = 1920, CLIP_H = 1080;
-  const CROP = 0.56;        // how far down the figure to show — roughly the waist
+  /* How far down the figure to show. It is per character because the three
+     people behind the counters are drawn with much larger heads than Axel is:
+     56% of one of them lands at the chest rather than the waist, which crops
+     the top of the hair off and fills the stage with a face. Measured by
+     rendering the stage at 0.56 / 0.68 / 0.78 / 0.88 and picking the one that
+     gives the composition the rest of this block describes — hair clear of the
+     pause button, shoulders running off both edges, torso continuing down
+     behind the chat. */
+  const CROP_DEFAULT = 0.56;
+  const CROP_BY = { bartender: 0.78, stadium_worker: 0.78, cinema_worker: 0.78 };
+  const cropOf = character => CROP_BY[character] || CROP_DEFAULT;
   /* Scene left above the head. It is not decoration: the pause button and the
      mastery pill sit in the top 50px, and at 4.5% the hair ran behind them. */
   const SKY  = 0.105;
@@ -102,7 +135,7 @@
 
     const cx  = left + (f.x + f.w / 2) * s;          // figure centre, before the crop
     const y0  = top + f.y * s;                        // top of the head
-    const y1  = top + (f.y + f.h * CROP) * s;         // where we cut the body
+    const y1  = top + (f.y + f.h * cropOf(character)) * s;   // where we cut the body
 
     const want0 = SKY * H, want1 = H;
     const Z = Math.max(1, (want1 - want0) / Math.max(1, y1 - y0));
@@ -339,6 +372,14 @@
     return { native: n || Q.nativeLang, target: t || Q.targetLang };
   }
 
+  /* ?venue=cinema names the night, the way ?lang= names the pair — for a
+     walkthrough, and for a headless test that needs a particular room. An
+     unknown name is ignored rather than fatal. */
+  function paramVenue() {
+    const v = (new URLSearchParams(location.search).get('venue') || '').toLowerCase();
+    return C.venues.includes(v) ? v : '';
+  }
+
   /* The language the phone is set to, if this scenario can teach out of it.
      navigator.languages is the ordered list the child's device reports — a
      phone set to Spanish with English second gives ['es-US','en-US'], so the
@@ -478,6 +519,58 @@
     }
   }
 
+  /* ---------- picking the night (NJA-3207) ----------
+     Three venues, the same nine constructions in each, a different set of
+     nouns. Asked after the hint language so it can be asked in the child's own
+     words, and before the quest starts so the venue rides on every event.
+
+     "Surprise me" is an answer, not an escape hatch. It is recorded as one —
+     `how: 'random'` — because a venue split that pools the children who chose
+     with the children who could not be bothered is not a preference, it is a
+     shrug with a bar chart on it. */
+  function pickVenue() {
+    const forced = paramVenue();
+    if (forced) {
+      setPair(Q.nativeLang, Q.targetLang, forced);
+      return Promise.resolve({ venue: forced, how: 'url' });
+    }
+
+    const list = C.venueList(NL());
+    $('venue-title').textContent = t('venue-pick-title') || 'WHERE ARE WE GOING?';
+    $('venue-sub').textContent = t('venue-pick-sub') || '';
+    $('venue-surprise').querySelector('span').textContent = t('venue-surprise') || 'Surprise me';
+    showPanel('intro-venue');
+    SCREEN.at('Venue');
+    AN('NovaPals.Nlt.VenueOffered', { options: list.length });
+    const offeredAt = Date.now();
+
+    return new Promise(resolve => {
+      const row = $('venue-row');
+      row.innerHTML = '';
+      for (const v of list) {
+        const b = document.createElement('button');
+        b.className = 'btn wide venue-btn';
+        b.dataset.venue = v.id;
+        b.dataset.bg = v.background;
+        b.innerHTML = '<span>' + esc(v.name) + '</span>';
+        b.addEventListener('click', () => choose(v.id, 'picked'));
+        row.appendChild(b);
+      }
+      $('venue-surprise').onclick = () =>
+        choose(list[Math.floor(Math.random() * list.length)].id, 'random');
+
+      function choose(id, how) {
+        setPair(Q.nativeLang, Q.targetLang, id);
+        /* This tap is also the gesture the browser wants before any audio,
+           the same job the language screen's START used to do alone. */
+        V.unlock(); SFX.unlock();
+        AN('NovaPals.Nlt.VenueChosen',
+           { venue: id, how, msToChoose: Date.now() - offeredAt });
+        resolve({ venue: id, how });
+      }
+    });
+  }
+
   /* Returns whatever probeServer() resolved to, because boot needs it and the
      taxi ride is the natural place to have found out. */
   async function intro() {
@@ -502,9 +595,12 @@
       /* No screen, but ?native=/?target= still decide the direction — that is
          how the headless tests play the night both ways round. */
       const p = paramPair();
+      const v = paramVenue();
       if (p && p.native !== p.target &&
           C.covered.includes(p.native) && C.covered.includes(p.target)) {
-        setPair(p.native, p.target);
+        setPair(p.native, p.target, v || undefined);
+      } else if (v) {
+        setPair(Q.nativeLang, Q.targetLang, v);
       }
       const ok = await probeServer();
       SFX.bed('room', 'audio/loading.mp3', { volume: 0.12, fade: 1200 });
@@ -519,6 +615,11 @@
     showPanel('intro-langs');
     SCREEN.at('Hint Language');
     await pickLanguages();
+
+    /* ...and now where we are going. After the language because the question
+       is asked in it; before the title card because the title card is the
+       venue's own. */
+    await pickVenue();
 
     /* Now the hint language is settled, so the screens can be written. */
     const copy = copyOf();
@@ -1253,8 +1354,15 @@
      the actor, whatever the scenario has named them. */
   const ROLE = who => who === 'axel' ? 'coach' : who === 'me' ? 'user' : 'actor';
   const AVATARS = { axel: 'img/axel-avatar.png' };
-  const LABEL   = { axel: 'Coach', me: 'You' };
-  const label = who => LABEL[who] || (who.charAt(0).toUpperCase() + who.slice(1));
+  const LABEL   = { me: 'You' };
+  /* The person behind the counter is named by the venue she works in, in the
+     child's own language. This used to title-case the actor's id, which read
+     fine while the id was the English word "bartender" and became
+     "Cinema_worker" the moment there were three of her. */
+  const label = who =>
+    who === ACTOR ? (Q.activity.actor.name || who) :
+    who === 'axel' ? (Q.activity.coach.name || 'Coach') :
+    LABEL[who] || (who.charAt(0).toUpperCase() + who.slice(1));
 
   function avatarEl(who) {
     const a = document.createElement('span');
@@ -2363,12 +2471,28 @@
         '<span class="vd">' + esc(t(label[r.verdict])) + '</span>' +
       '</div>').join('');
 
-    /* Two ways back in, and they are not the same offer: one redrills only
-       what did not stick, the other starts the night over. */
-    const some = $('btn-again'), all = $('btn-restart');
+    /* Three ways back in, and they are not the same offer: one goes somewhere
+       new, one redrills only what did not stick, the other starts this night
+       over. */
+    const some = $('btn-again'), all = $('btn-restart'), other = $('btn-another');
     some.querySelector('span').textContent = t('end-replay-some');
     all.querySelector('span').textContent = t('end-replay-all');
     some.classList.toggle('hidden', left.length === 0);
+
+    /* Somewhere they have not been yet, by preference — a child who has done
+       the gig twice is offered the cinema rather than a third gig. */
+    const list = C.venueList(NL());
+    const nextVenue = list.find(v => played.indexOf(v.id) < 0) ||
+                      list.find(v => v.id !== venue) || null;
+    other.classList.toggle('hidden', !nextVenue);
+    $('end-ask').classList.toggle('hidden', !nextVenue);
+    if (nextVenue) {
+      $('end-ask').textContent = t('end-another-ask');
+      other.querySelector('span').textContent = t('end-another-go', nextVenue.name);
+      other.onclick = () => goToVenue(nextVenue.id);
+      AN('NovaPals.Nlt.AnotherPlaceOffered',
+         { from: venue, to: nextVenue.id, passed: ok, go: state.go });
+    }
 
     /* In a quest, finishing means completing the quest rather than looping, so
        FINISH leads and the two replays drop to secondary. Outside the app
@@ -2378,7 +2502,12 @@
     fin.classList.toggle('hidden', !B.inApp);
     fin.disabled = false;
     $('end-note').classList.add('hidden');
-    some.classList.toggle('primary', !B.inApp);
+    /* Who leads. In a quest FINISH always leads, because leaving without it
+       is leaving without the gems. Outside one, a child who PASSED is offered
+       somewhere new — there is nothing left here for them — and a child who
+       did not is offered the thing they did not get. */
+    other.classList.toggle('primary', !B.inApp && ok);
+    some.classList.toggle('primary', !B.inApp && !ok);
     all.classList.toggle('hidden', B.inApp && left.length > 0);
 
     $('end-eyebrow').textContent = t('end-eyebrow');
@@ -2388,6 +2517,39 @@
 
   /* A second go at the material that did not land. The engine carries the
      steps that stuck at their score, so this cannot cost the child mastery. */
+  /* ---------- a different night (NJA-3207) ----------
+     The same nine constructions somewhere else. The content object is rebuilt
+     for the new venue, which swaps the room, the person behind the counter and
+     every noun, and the engine carries over only the two steps that have no
+     noun in them (see switchVenue). The venue super-property is re-registered
+     first, so the events of the second night are filed under the second
+     venue rather than the first. */
+  async function goToVenue(id) {
+    const from = venue;
+    setPair(Q.nativeLang, Q.targetLang, id);
+    if (played.indexOf(id) < 0) played.push(id);
+    SCREEN.register({ venue: id });
+    AN('NovaPals.Nlt.AnotherPlaceTaken', { from, to: id, go: (state.go || 1) + 1 });
+
+    state = E.switchVenue(state, Q);
+    state.finished = false;
+    $('end').classList.add('hidden');
+    E.track(state, 'session_start', { activity: Q.activity.id, venue: id, go: state.go });
+    AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),
+                                    stages: E.syllabus(Q).length, steps: E.allSteps(Q).length,
+                                    venue: id, go: state.go });
+    chatLog.length = 0;
+    $('chat').innerHTML = '';
+    buildRail();
+    hideGloss();
+    $('chat-full').classList.add('hidden');
+    mountBackground($('layer-bg'), Q.activity.background);
+    mountCharacter($('character'), { character: ACTOR, state: 'idle' });
+    renderHud();
+    SCREEN.at('Night');
+    step();
+  }
+
   function replayLeftovers() {
     const next = E.replay(state, Q);
     $('end').classList.add('hidden');
@@ -2740,8 +2902,13 @@
        about something other than guesswork: 'url' when a walkthrough or the
        app named it, 'device' when the phone did, 'picker' when the child
        answered, 'default' when nothing could. */
+    /* The venue is a super-property for the same reason the build tag is:
+       every existing measure then splits by it without a single call site
+       having to remember, and a question nobody thought to ask on the day can
+       still be asked of the data afterwards. */
     SCREEN.register({ native_language: NL(), target_language: TL(),
-                      language_source: langSource });
+                      language_source: langSource, venue });
+    if (played.indexOf(venue) < 0) played.push(venue);
     AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL(),
                                  languageSource: langSource });
     AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),

@@ -363,6 +363,41 @@ window.ENGINE = (function () {
     return next;
   }
 
+  /* ---------- a different night out (NJA-3207) ----------
+     The venue choice offers the same nine constructions somewhere else, with a
+     new set of nouns in them. So what carries over is exactly the steps with
+     no noun in them: "Excuse me." and "Thank you." are the same sentence at a
+     gig, a match and a cinema, and a child who has them should not be made to
+     earn them twice.
+
+     Everything else resets, which is the point. replay() above carries every
+     banked step, and every venue shares the same seventeen step keys — so
+     reusing it for a venue switch would hand the second night fifteen free
+     steps and end it in two turns. The child would have "played the cinema"
+     without meeting a single cinema word.
+
+     Patterns stay INTRODUCED and items do not: they know "Can I have ___?"
+     and should not have it handed over again, but `popcorn` is a word they
+     have never seen and the coach has to give it to them. */
+  function switchVenue(state, quest) {
+    const next = createState(quest);
+    const bar = keepMark(quest);
+    for (const s of allSteps(quest)) {
+      if (s.pair.hasSlot) continue;
+      if ((state.best[s.key] || 0) >= bar) next.best[s.key] = state.best[s.key];
+    }
+    next.plan = allSteps(quest)
+      .filter(s => (next.best[s.key] || 0) < bar)
+      .map(s => ({ stage: s.stage, step: s.step, key: s.key }));
+    next.go = (state.go || 1) + 1;
+    next.coins = state.coins;
+    for (const k of Object.keys(next.patterns))
+      if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
+    if (next.plan.length) { next.stage = next.plan[0].stage; next.step = next.plan[0].step; }
+    else retarget(next, quest);
+    return next;
+  }
+
   /* How each pattern of the syllabus came out, for the results screen: the
      mean of its steps' best scores. */
   function report(state, quest) {
@@ -504,6 +539,14 @@ window.ENGINE = (function () {
     return state.go === 1 && state.turn === 0 && !state.makeup;
   }
 
+  /* The nouns a scenario actually teaches. Falls back to the whole table so a
+     content object without an item list still produces decoys rather than
+     none. */
+  function venueItems(quest) {
+    const list = quest.activity && quest.activity.items;
+    return (list && list.length) ? list : Object.keys(quest.vocabItems);
+  }
+
   /* ---------- 6. answer pills ----------
      "split expected answer by word, introduce red herrings i.e. words that
      don't work in a valid combination". The red herrings are drawn from items
@@ -576,8 +619,16 @@ window.ENGINE = (function () {
       const lang = want.has(key) ? quest.targetLang : quest.nativeLang;
       const form = sl.forms[0];
       const mine = pair.fill[key];
-      for (const [iid, item] of Object.entries(quest.vocabItems)) {
-        if (iid === mine) continue;
+      /* Only the nouns THIS venue teaches. The vocabulary table is shared
+         across all three — one `ticket`, one `water` — so drawing decoys from
+         the whole of it put a band and a singer on the tray at a football
+         match, and offered the child a wrong answer they had no way of
+         knowing was wrong. The activity's own list is the scenario's
+         vocabulary, which is what a decoy has to come from to be a fair
+         mistake. */
+      for (const iid of venueItems(quest)) {
+        const item = quest.vocabItems[iid];
+        if (!item || iid === mine) continue;
         const bucket = (item.tags || []).includes(sl.tag) ? valid : invalid;
         /* Word by word, like the answer: "un refresco" offers "un" and
            "refresco". The article half is not padding — "un" against "una" is
@@ -752,7 +803,7 @@ window.ENGINE = (function () {
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
-    passMark, keepMark, passed, replay, report, allSteps, stepKey, weakest,
+    passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,
   };
 })();

@@ -175,6 +175,21 @@
       </div>
     </section>
 
+    <!-- NJA-3207: where the night happens. Comes AFTER the hint language, so
+         it can be asked in the child's own words, and BEFORE the quest starts,
+         so every event of the session carries the venue it belongs to.
+         "Surprise me" is a real answer rather than a dodge — it is recorded
+         separately, so children who wanted the night rather than the menu do
+         not contaminate the split. -->
+    <section class="intro-panel hidden" id="intro-venue">
+      <div class="lang-card">
+        <h2 id="venue-title">WHERE ARE WE GOING?</h2>
+        <p class="lang-sub" id="venue-sub"></p>
+        <div class="venue-row" id="venue-row"></div>
+        <button class="btn wide" id="venue-surprise"><span></span></button>
+      </div>
+    </section>
+
     <section class="intro-panel hidden" id="intro-title">
       <div class="intro-copy">
         <h1 id="intro-title-text">GOING TO A GIG</h1>
@@ -280,6 +295,10 @@
              quest and pays the gems. Hidden outside the app, where there is no
              quest to complete. -->
         <button class="btn wide primary hidden" id="btn-finish"><span></span></button>
+        <!-- The replay offer the venue choice exists for. Named rather than
+             generic: "Go to the cinema" is most of the invitation. -->
+        <p class="end-ask" id="end-ask"></p>
+        <button class="btn wide" id="btn-another"><span></span></button>
         <button class="btn wide primary" id="btn-again"><span></span></button>
         <button class="btn wide" id="btn-restart"><span></span></button>
         <p class="end-note hidden" id="end-note"></p>

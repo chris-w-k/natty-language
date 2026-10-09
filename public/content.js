@@ -188,6 +188,145 @@ window.QUEST = (function () {
                       plural_bare: 'piosenkarze', plural_definite: 'piosenkarzy' },
                 ro: { bare: 'cântăreț', definite: 'cântărețul',   indefinite: 'un cântăreț',
                       plural_bare: 'cântăreți', plural_definite: 'cântăreții' } },
+    /* ---------- the other two venues ----------
+       Added for NJA-3207's venue choice. Every pattern is shared across the
+       three nights; only the nouns change, which is the whole point — the
+       child meets the same nine constructions with a new set of words in
+       them. Drafted here and NOT yet proofread by localisation: the forms
+       follow the same cases as the items above (Polish `definite` is the
+       accusative and `indefinite` the genitive, because that is what the
+       frames ask for), but a native reader should pass over them before any
+       of this leaves prototype. */
+    hotdog:   { tags: ['item', 'like'],
+                en: { bare: 'hot dog',  definite: 'the hot dog',  indefinite: 'a hot dog',
+                      plural_bare: 'hot dogs',  plural_definite: 'the hot dogs' },
+                es: { bare: 'perrito caliente', definite: 'el perrito caliente', indefinite: 'un perrito caliente',
+                      plural_bare: 'perritos calientes', plural_definite: 'los perritos calientes' },
+                pt: { bare: 'cachorro-quente', definite: 'o cachorro-quente', indefinite: 'um cachorro-quente',
+                      plural_bare: 'cachorros-quentes', plural_definite: 'os cachorros-quentes' },
+                tr: { bare: 'sosisli',  definite: 'sosisliyi',    indefinite: 'bir sosisli',
+                      plural_bare: 'sosisliler', plural_definite: 'sosislileri' },
+                pl: { bare: 'hot dog',  definite: 'hot doga',     indefinite: 'hot doga',
+                      plural_bare: 'hot dogi',  plural_definite: 'hot dogi' },
+                ro: { bare: 'hot dog',  definite: 'hot dogul',    indefinite: 'un hot dog',
+                      plural_bare: 'hot dogi',  plural_definite: 'hot dogii' } },
+    /* A mass noun in English and Turkish, a plural in the romance languages —
+       which the five forms carry without the frames having to know. */
+    /* `item` but NOT `like`: the Spanish and Portuguese frames for liking a
+       thing are a fixed singular ("¿Te gusta ...?", "Me gusta ..."), and both
+       of these nouns are inherently plural in those languages — so a like-slot
+       filled with one produced "Me gusta los nachos". They can be asked for
+       and refused, which is every slot that matters at a snack counter, and
+       the liking is left to the film, the poster and the t-shirt. */
+    popcorn:  { tags: ['item'],
+                en: { bare: 'popcorn',  definite: 'the popcorn',  indefinite: 'popcorn',
+                      plural_bare: 'popcorn',   plural_definite: 'the popcorn' },
+                es: { bare: 'palomitas', definite: 'las palomitas', indefinite: 'palomitas',
+                      plural_bare: 'palomitas', plural_definite: 'las palomitas' },
+                pt: { bare: 'pipocas',  definite: 'as pipocas',   indefinite: 'pipocas',
+                      plural_bare: 'pipocas',   plural_definite: 'as pipocas' },
+                tr: { bare: 'patlamış mısır', definite: 'patlamış mısırı', indefinite: 'patlamış mısır',
+                      plural_bare: 'patlamış mısır', plural_definite: 'patlamış mısırı' },
+                pl: { bare: 'popcorn',  definite: 'popcorn',      indefinite: 'popcornu',
+                      plural_bare: 'popcorn',   plural_definite: 'popcorn' },
+                ro: { bare: 'popcorn',  definite: 'popcornul',    indefinite: 'popcorn',
+                      plural_bare: 'popcorn',   plural_definite: 'popcornul' } },
+    nachos:   { tags: ['item'],
+                en: { bare: 'nachos',   definite: 'the nachos',   indefinite: 'nachos',
+                      plural_bare: 'nachos',    plural_definite: 'the nachos' },
+                es: { bare: 'nachos',   definite: 'los nachos',   indefinite: 'nachos',
+                      plural_bare: 'nachos',    plural_definite: 'los nachos' },
+                pt: { bare: 'nachos',   definite: 'os nachos',    indefinite: 'nachos',
+                      plural_bare: 'nachos',    plural_definite: 'os nachos' },
+                tr: { bare: 'nacho',    definite: 'nachoyu',      indefinite: 'nacho',
+                      plural_bare: 'nacholar',  plural_definite: 'nachoları' },
+                pl: { bare: 'nachos',   definite: 'nachosy',      indefinite: 'nachosów',
+                      plural_bare: 'nachosy',   plural_definite: 'nachosy' },
+                ro: { bare: 'nachos',   definite: 'nachosul',     indefinite: 'nachos',
+                      plural_bare: 'nachos',    plural_definite: 'nachosurile' } },
+    scarf:    { tags: ['item', 'like'],
+                en: { bare: 'scarf',    definite: 'the scarf',    indefinite: 'a scarf',
+                      plural_bare: 'scarves',   plural_definite: 'the scarves' },
+                es: { bare: 'bufanda',  definite: 'la bufanda',   indefinite: 'una bufanda',
+                      plural_bare: 'bufandas',  plural_definite: 'las bufandas' },
+                pt: { bare: 'cachecol', definite: 'o cachecol',   indefinite: 'um cachecol',
+                      plural_bare: 'cachecóis', plural_definite: 'os cachecóis' },
+                tr: { bare: 'atkı',     definite: 'atkıyı',       indefinite: 'bir atkı',
+                      plural_bare: 'atkılar',   plural_definite: 'atkıları' },
+                pl: { bare: 'szalik',   definite: 'szalik',       indefinite: 'szalika',
+                      plural_bare: 'szaliki',   plural_definite: 'szaliki' },
+                ro: { bare: 'fular',    definite: 'fularul',      indefinite: 'un fular',
+                      plural_bare: 'fulare',    plural_definite: 'fularele' } },
+    poster:   { tags: ['item', 'like'],
+                en: { bare: 'poster',   definite: 'the poster',   indefinite: 'a poster',
+                      plural_bare: 'posters',   plural_definite: 'the posters' },
+                es: { bare: 'póster',   definite: 'el póster',    indefinite: 'un póster',
+                      plural_bare: 'pósters',   plural_definite: 'los pósters' },
+                pt: { bare: 'poster',   definite: 'o poster',     indefinite: 'um poster',
+                      plural_bare: 'posters',   plural_definite: 'os posters' },
+                tr: { bare: 'poster',   definite: 'posteri',      indefinite: 'bir poster',
+                      plural_bare: 'posterler', plural_definite: 'posterleri' },
+                pl: { bare: 'plakat',   definite: 'plakat',       indefinite: 'plakatu',
+                      plural_bare: 'plakaty',   plural_definite: 'plakaty' },
+                ro: { bare: 'poster',   definite: 'posterul',     indefinite: 'un poster',
+                      plural_bare: 'postere',   plural_definite: 'posterele' } },
+    team:     { tags: ['like'],
+                en: { bare: 'team',     definite: 'the team',     indefinite: 'a team',
+                      plural_bare: 'teams',     plural_definite: 'the teams' },
+                es: { bare: 'equipo',   definite: 'el equipo',    indefinite: 'un equipo',
+                      plural_bare: 'equipos',   plural_definite: 'los equipos' },
+                pt: { bare: 'equipa',   definite: 'a equipa',     indefinite: 'uma equipa',
+                      plural_bare: 'equipas',   plural_definite: 'as equipas' },
+                tr: { bare: 'takım',    definite: 'takımı',       indefinite: 'bir takım',
+                      plural_bare: 'takımlar',  plural_definite: 'takımları' },
+                pl: { bare: 'drużyna',  definite: 'drużynę',      indefinite: 'drużyny',
+                      plural_bare: 'drużyny',   plural_definite: 'drużyny' },
+                ro: { bare: 'echipă',   definite: 'echipa',       indefinite: 'o echipă',
+                      plural_bare: 'echipe',    plural_definite: 'echipele' } },
+    /* Animate masculine in Polish, like `singer` above, so the accusative is
+       not the nominative. */
+    player:   { tags: ['like'],
+                en: { bare: 'player',   definite: 'the player',   indefinite: 'a player',
+                      plural_bare: 'players',   plural_definite: 'the players' },
+                es: { bare: 'jugador',  definite: 'el jugador',   indefinite: 'un jugador',
+                      plural_bare: 'jugadores', plural_definite: 'los jugadores' },
+                pt: { bare: 'jogador',  definite: 'o jogador',    indefinite: 'um jogador',
+                      plural_bare: 'jogadores', plural_definite: 'os jogadores' },
+                tr: { bare: 'futbolcu', definite: 'futbolcuyu',   indefinite: 'bir futbolcu',
+                      plural_bare: 'futbolcular', plural_definite: 'futbolcuları' },
+                pl: { bare: 'piłkarz',  definite: 'piłkarza',     indefinite: 'piłkarza',
+                      plural_bare: 'piłkarze',  plural_definite: 'piłkarzy' },
+                ro: { bare: 'jucător',  definite: 'jucătorul',    indefinite: 'un jucător',
+                      plural_bare: 'jucători',  plural_definite: 'jucătorii' } },
+    film:     { tags: ['like'],
+                en: { bare: 'film',     definite: 'the film',     indefinite: 'a film',
+                      plural_bare: 'films',     plural_definite: 'the films' },
+                es: { bare: 'película', definite: 'la película',  indefinite: 'una película',
+                      plural_bare: 'películas', plural_definite: 'las películas' },
+                pt: { bare: 'filme',    definite: 'o filme',      indefinite: 'um filme',
+                      plural_bare: 'filmes',    plural_definite: 'os filmes' },
+                tr: { bare: 'film',     definite: 'filmi',        indefinite: 'bir film',
+                      plural_bare: 'filmler',   plural_definite: 'filmleri' },
+                pl: { bare: 'film',     definite: 'film',         indefinite: 'filmu',
+                      plural_bare: 'filmy',     plural_definite: 'filmy' },
+                ro: { bare: 'film',     definite: 'filmul',       indefinite: 'un film',
+                      plural_bare: 'filme',     plural_definite: 'filmele' } },
+    /* Turkish `oyuncu` is both an actor and a player, so the stadium takes
+       `futbolcu` above and the cinema takes `aktor` here — otherwise the two
+       venues would teach the same word for two different people. */
+    actor:    { tags: ['like'],
+                en: { bare: 'actor',    definite: 'the actor',    indefinite: 'an actor',
+                      plural_bare: 'actors',    plural_definite: 'the actors' },
+                es: { bare: 'actor',    definite: 'el actor',     indefinite: 'un actor',
+                      plural_bare: 'actores',   plural_definite: 'los actores' },
+                pt: { bare: 'ator',     definite: 'o ator',       indefinite: 'um ator',
+                      plural_bare: 'atores',    plural_definite: 'os atores' },
+                tr: { bare: 'aktör',    definite: 'aktörü',       indefinite: 'bir aktör',
+                      plural_bare: 'aktörler',  plural_definite: 'aktörleri' },
+                pl: { bare: 'aktor',    definite: 'aktora',       indefinite: 'aktora',
+                      plural_bare: 'aktorzy',   plural_definite: 'aktorów' },
+                ro: { bare: 'actor',    definite: 'actorul',      indefinite: 'un actor',
+                      plural_bare: 'actori',    plural_definite: 'actorii' } },
   };
 
   const FORMS = ['bare', 'definite', 'indefinite', 'plural_bare', 'plural_definite'];
@@ -313,105 +452,223 @@ window.QUEST = (function () {
                       tr: 'Teşekkürler.', pl: 'Dziękuję.',    ro: 'Mulțumesc.' },
   };
 
-  /* One activity, standing in for a row of quest_activities_nlt_prototype.
-     `order` is what Directus list order gives the real build, and the engine
-     uses it exactly as NJA-3136 says: first in list when mastery ties. */
-  const activity = {
-    id: 'dev_nlt_activity_gig',
-    title: 'Axel goes to a gig',
-    background: 'venue-bar',
-    /* accent: 'target' / 'native' rather than a language code, because the
-       pair is chosen per session. The person behind the counter speaks the
-       language you are here to learn; your pal speaks yours. Reverse the pair
-       and the two accents swap with it. */
-    actor: { id: 'bartender', name: 'Bartender', speaks: 'target', accent: 'target' },
-    /* NJA-3153 adds `prompt` to nlt_coach: "describes the personality of the
-       coach, and role (i.e. to provide hints to the user of what to say in
-       response to the actor's questions)". */
-    coach: {
-      id: 'axel', name: 'Coach',
-      /* accent: the voice this character always speaks with, whichever language
-         the line happens to be in. Without it Axel drifts into a Spanish
-         accent the moment his line carries a Spanish word. */
-      accent: 'native',
-      prompt: 'You are Axel — a cheeky rockstar, and the child\'s own pal. You have played a hundred gigs and you are showing them the ropes. You talk with attitude: quick, a bit cocky, never impressed by much, and funny about the world rather than about them. You are always on their side, you never talk down to them, and you are the only one here who explains anything.',
-    },
-    /* NJA-3153's nlt_scenario.prompt: "describes scenario and actor to agent" —
-       and NJA-3145 says to keep it to WHO they are, not what they should do:
-       the behaviour is the dev side's, in actorRules below.
+  /* ---------- the three venues ----------
+     NJA-3207. One night out, three places to have it. Every venue runs the
+     SAME nine constructions — that is the point of the choice: the child meets
+     the grammar again with a different set of nouns in it, which is a second
+     exposure that does not feel like a repeat.
 
-       The role matters more than it looks. Without "you have all of it and you
-       sell it", the actor answers "¿Tienes una entrada?" with "No, I don't" —
-       which is a perfectly good line and a dead end, because the child has
-       just been taught to ask for a thing and been told it does not exist.
-       He is a seller. He has stock. */
-    prompt: 'You are the one person behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
-    /* The three screens before the game. Copy lives here rather than in the
-       markup so it travels with the scenario — a different night out brings
-       its own title, its own pep talk and its own way of getting there. */
-    /* One copy block per HINT language. The hint language IS the native
-       language (NJA-3204), so this is the screen in the child's own tongue,
-       and {0} / {1} are the names of the language being learned and of their
-       own — filled by resolveIntro() below, so what reaches the UI is a flat
-       object exactly as before. Each version is written to read naturally
-       with the name in the slot, which is why the sentences differ in shape
-       rather than being one sentence translated six times. */
-    intro: {
-      en: {
-        title: 'GOING TO A GIG',
-        sub: 'Learn the {0} to get in, get a drink and tell someone you love the song.',
-        coach: "Tonight's gonna be unreal — but the band's {0}, the bar's {0}, and the fella on the door doesn't do {1}. Stick with me. I'll tell you what to say, you just say it.",
-        tap: 'Tap to continue',
-      },
-      es: {
-        title: 'VAMOS A UN CONCIERTO',
-        sub: 'Aprende el {0} para entrar, pedir una bebida y decir que te encanta la canción.',
-        coach: 'Esta noche va a ser brutal — pero la banda canta en {0}, en la barra hablan {0} y el de la puerta no habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
-        tap: 'Toca para continuar',
-      },
-      pt: {
-        title: 'VAMOS A UM CONCERTO',
-        sub: 'Aprende o {0} para entrares, pedires uma bebida e dizeres que adoras a música.',
-        coach: 'Esta noite vai ser do caraças — mas a banda canta em {0}, no bar falam {0} e o tipo da porta não fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
-        tap: 'Toca para continuar',
-      },
-      tr: {
-        title: 'KONSERE GİDİYORUZ',
-        sub: 'İçeri girmek, bir şeyler içmek ve şarkıyı sevdiğini söylemek için {0} öğren.',
-        coach: 'Bu gece efsane olacak — ama grup {0} söylüyor, barda {0} konuşuyorlar ve kapıdaki adam {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
-        tap: 'Devam etmek için dokun',
-      },
-      pl: {
-        title: 'IDZIEMY NA KONCERT',
-        sub: 'Poznaj {0} — wejdź do środka, zamów coś do picia i powiedz, że uwielbiasz tę piosenkę.',
-        coach: 'Dziś będzie czad — ale zespół, bar i facet przy wejściu mówią w jednym języku, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
-        tap: 'Dotknij, aby kontynuować',
-      },
-      ro: {
-        title: 'MERGEM LA UN CONCERT',
-        sub: 'Învață să vorbești {0} ca să intri, să ceri ceva de băut și să spui că îți place melodia.',
-        coach: 'Diseară o să fie nebunie — dar trupa cântă în {0}, la bar se vorbește {0}, iar tipul de la ușă nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
-        tap: 'Atinge pentru a continua',
+     What changes per venue: the nouns, the room, who is behind the counter,
+     and the copy. What never changes: the patterns, the coach, the engine and
+     the pass mark, so two nights are directly comparable.
+
+     Each venue is the shape the single `activity` used to be, plus a `name`
+     for the picker and an actor whose name is written in the child's own
+     language rather than in English at them. */
+
+  /* Axel is the same pal wherever you take him, so the coach is defined once.
+     His old prompt said "you have played a hundred gigs", which read oddly at
+     a cinema. */
+  const COACH = {
+    id: 'axel', name: 'Coach',
+    /* accent: the voice this character always speaks with, whichever language
+       the line happens to be in. Without it Axel drifts into a Spanish accent
+       the moment his line carries a Spanish word. */
+    accent: 'native',
+    prompt: 'You are Axel — a cheeky rockstar, and the child\'s own pal. You have been everywhere and you are showing them the ropes. You talk with attitude: quick, a bit cocky, never impressed by much, and funny about the world rather than about them. You are always on their side, you never talk down to them, and you are the only one here who explains anything.',
+  };
+
+  /* `there-is-no` is deliberately NOT in any venue. It is the actor's way of
+     saying she is out of something, and she is never out of anything —
+     leaving it in hands her the one line the rules forbid. `i-have` and
+     `i-dont-have` are out for the same sort of reason: they were written for
+     a door, and all three venues are a counter, where the actor sells and the
+     child buys. All three stay defined for a scenario where they are the
+     point. */
+  const PATTERNS = ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
+                    'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
+                    'thank-you'];
+
+  const VENUES = {
+    /* The original night, unchanged but for the person behind the counter. */
+    gig: {
+      id: 'dev_nlt_activity_gig',
+      venue: 'gig',
+      title: 'Axel goes to a gig',
+      background: 'venue-bar',
+      name: { en: 'A rock gig', es: 'Un concierto', pt: 'Um concerto',
+              tr: 'Bir rock konseri', pl: 'Koncert rockowy', ro: 'Un concert rock' },
+      /* accent: 'target' / 'native' rather than a language code, because the
+         pair is chosen per session. The person behind the counter speaks the
+         language you are here to learn; your pal speaks yours. Reverse the
+         pair and the two accents swap with it. */
+      actor: { id: 'bartender', speaks: 'target', accent: 'target',
+               name: { en: 'Bartender', es: 'Camarera', pt: 'Empregada',
+                       tr: 'Barmen', pl: 'Barmanka', ro: 'Barmaniță' } },
+      prompt: 'You are the one woman behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
+      objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
+      items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
+      patterns: PATTERNS,
+      intro: {
+        en: {
+          title: 'GOING TO A GIG',
+          sub: 'Learn the {0} to get in, get a drink and tell someone you love the song.',
+          coach: "Tonight's gonna be unreal — but the band's {0}, the bar's {0}, and the woman on the door doesn't do {1}. Stick with me. I'll tell you what to say, you just say it.",
+          tap: 'Tap to continue',
+        },
+        es: {
+          title: 'VAMOS A UN CONCIERTO',
+          sub: 'Aprende el {0} para entrar, pedir una bebida y decir que te encanta la canción.',
+          coach: 'Esta noche va a ser brutal — pero la banda canta en {0}, en la barra hablan {0} y la de la puerta no habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
+          tap: 'Toca para continuar',
+        },
+        pt: {
+          title: 'VAMOS A UM CONCERTO',
+          sub: 'Aprende o {0} para entrares, pedires uma bebida e dizeres que adoras a música.',
+          coach: 'Esta noite vai ser do caraças — mas a banda canta em {0}, no bar falam {0} e a rapariga da porta não fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
+          tap: 'Toca para continuar',
+        },
+        tr: {
+          title: 'KONSERE GİDİYORUZ',
+          sub: 'İçeri girmek, bir şeyler içmek ve şarkıyı sevdiğini söylemek için {0} öğren.',
+          coach: 'Bu gece efsane olacak — ama grup {0} söylüyor, barda {0} konuşuyorlar ve kapıdaki kadın {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
+          tap: 'Devam etmek için dokun',
+        },
+        pl: {
+          title: 'IDZIEMY NA KONCERT',
+          sub: 'Poznaj {0} — wejdź do środka, zamów coś do picia i powiedz, że uwielbiasz tę piosenkę.',
+          coach: 'Dziś będzie czad — ale zespół, bar i kobieta przy wejściu mówią w jednym języku, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
+          tap: 'Dotknij, aby kontynuować',
+        },
+        ro: {
+          title: 'MERGEM LA UN CONCERT',
+          sub: 'Învață să vorbești {0} ca să intri, să ceri ceva de băut și să spui că îți place melodia.',
+          coach: 'Diseară o să fie nebunie — dar trupa cântă în {0}, la bar se vorbește {0}, iar femeia de la ușă nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
+          tap: 'Atinge pentru a continua',
+        },
       },
     },
-    objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
-    /* `there-is-no` is deliberately NOT here. It is the actor's way of saying
-       he is out of something, and he is never out of anything — leaving it in
-       the scenario is handing him the one line the rules above forbid. The
-       pattern stays defined for a scenario where running out is the point. */
-    /* `i-have` and `i-dont-have` are NOT here. They were written for the door
-       — "Tengo una entrada" to the person asking whether you have a ticket —
-       and this scenario is the counter, where the actor sells and the child
-       buys. At a bar "I have a soda" is a sentence nobody says, so the actor
-       has to invent a reason to ask for it, and the exchange reads as the game
-       needing a turn rather than two people talking. Both stay defined: they
-       are the backbone of a door scenario, which is what NJA-3207's second
-       scenario would be. */
-    patterns: ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
-               'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
-               'thank-you'],
-    items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
+
+    football: {
+      id: 'dev_nlt_activity_football',
+      venue: 'football',
+      title: 'Axel goes to the football',
+      background: 'venue-stadium',
+      name: { en: 'A football game', es: 'Un partido de fútbol', pt: 'Um jogo de futebol',
+              tr: 'Bir futbol maçı', pl: 'Mecz piłkarski', ro: 'Un meci de fotbal' },
+      actor: { id: 'stadium_worker', speaks: 'target', accent: 'target',
+               name: { en: 'Vendor', es: 'Vendedora', pt: 'Vendedora',
+                       tr: 'Satıcı', pl: 'Sprzedawczyni', ro: 'Vânzătoare' } },
+      prompt: 'You are the one woman behind the kiosk at a football stadium. You sell the tickets, the drinks, the food and the club merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: brisk and cheerful, shouting over the crowd, half an eye on the pitch.',
+      objectives: ['get in', 'get something to drink', 'get some food', 'talk about the team'],
+      items: ['ticket', 'water', 'soda', 'hotdog', 'sandwich', 'scarf', 'tshirt', 'team', 'player'],
+      patterns: PATTERNS,
+      intro: {
+        en: {
+          title: 'GOING TO THE FOOTBALL',
+          sub: 'Learn the {0} to get in, get something to eat and tell someone your team is winning.',
+          coach: "Kick-off in ten — but the gate's {0}, the kiosk's {0}, and nobody in this stand does {1}. Stick with me. I'll tell you what to say, you just say it.",
+          tap: 'Tap to continue',
+        },
+        es: {
+          title: 'VAMOS AL FÚTBOL',
+          sub: 'Aprende el {0} para entrar, pedir algo de comer y decir que tu equipo va ganando.',
+          coach: 'Empieza en diez minutos — pero en la puerta hablan {0}, en el puesto hablan {0} y aquí nadie habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
+          tap: 'Toca para continuar',
+        },
+        pt: {
+          title: 'VAMOS AO FUTEBOL',
+          sub: 'Aprende o {0} para entrares, pedires algo para comer e dizeres que a tua equipa vai ganhar.',
+          coach: 'Começa daqui a dez — mas na entrada é {0}, na banca é {0} e aqui ninguém fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
+          tap: 'Toca para continuar',
+        },
+        tr: {
+          title: 'MAÇA GİDİYORUZ',
+          sub: 'İçeri girmek, bir şeyler yemek ve takımının kazandığını söylemek için {0} öğren.',
+          coach: 'Maça on dakika — ama kapıda {0} konuşuluyor, büfede {0} konuşuluyor ve bu tribünde kimse {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
+          tap: 'Devam etmek için dokun',
+        },
+        pl: {
+          title: 'IDZIEMY NA MECZ',
+          sub: 'Poznaj {0} — wejdź na stadion, kup coś do jedzenia i powiedz, że twoja drużyna wygrywa.',
+          coach: 'Za dziesięć minut gwizdek — ale przy bramce, w budce i na całej trybunie mówią w jednym języku, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
+          tap: 'Dotknij, aby kontynuować',
+        },
+        ro: {
+          title: 'MERGEM LA FOTBAL',
+          sub: 'Învață să vorbești {0} ca să intri, să îți iei ceva de mâncare și să spui că echipa ta câștigă.',
+          coach: 'Începe în zece minute — dar la poartă se vorbește {0}, la chioșc {0}, iar în tribuna asta nimeni nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
+          tap: 'Atinge pentru a continua',
+        },
+      },
+    },
+
+    cinema: {
+      id: 'dev_nlt_activity_cinema',
+      venue: 'cinema',
+      title: 'Axel goes to the cinema',
+      background: 'venue-cinema',
+      name: { en: 'The cinema', es: 'El cine', pt: 'O cinema',
+              tr: 'Sinema', pl: 'Kino', ro: 'Cinema' },
+      actor: { id: 'cinema_worker', speaks: 'target', accent: 'target',
+               name: { en: 'Attendant', es: 'Empleada', pt: 'Funcionária',
+                       tr: 'Görevli', pl: 'Bileterka', ro: 'Angajată' } },
+      prompt: 'You are the one woman behind the counter at a cinema. You sell the tickets, the drinks, the snacks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: friendly but hurrying, the film starts in five minutes and there is a queue.',
+      objectives: ['get in', 'get something to drink', 'get some snacks', 'talk about the film'],
+      /* `nachos` sits after `poster` on purpose. The walk gives the fifth item
+         to `do-you-like`, whose Spanish frame is a fixed singular "¿Te gusta
+         ...?" — and `nachos` is inherently plural, so that slot produced
+         "¿Te gusta los nachos?". Moving it one place along hands the slot a
+         singular noun and keeps the agreement right. */
+      items: ['ticket', 'water', 'soda', 'popcorn', 'poster', 'nachos', 'tshirt', 'film', 'actor'],
+      patterns: PATTERNS,
+      intro: {
+        en: {
+          title: 'GOING TO THE CINEMA',
+          sub: 'Learn the {0} to get in, get some popcorn and tell someone the film was great.',
+          coach: "Trailers have started — but the counter's {0}, the ticket's {0}, and the woman on the door doesn't do {1}. Stick with me. I'll tell you what to say, you just say it.",
+          tap: 'Tap to continue',
+        },
+        es: {
+          title: 'VAMOS AL CINE',
+          sub: 'Aprende el {0} para entrar, pedir palomitas y decir que la película te encantó.',
+          coach: 'Ya están los tráilers — pero en el mostrador hablan {0}, la entrada es en {0} y la de la puerta no habla {1}. Tú quédate conmigo. Yo te digo qué decir, tú solo lo dices.',
+          tap: 'Toca para continuar',
+        },
+        pt: {
+          title: 'VAMOS AO CINEMA',
+          sub: 'Aprende o {0} para entrares, pedires pipocas e dizeres que adoraste o filme.',
+          coach: 'Já vão nos trailers — mas no balcão é {0}, o bilhete é em {0} e a rapariga da porta não fala {1}. Fica comigo. Eu digo-te o que dizer, tu só tens de dizer.',
+          tap: 'Toca para continuar',
+        },
+        tr: {
+          title: 'SİNEMAYA GİDİYORUZ',
+          sub: 'İçeri girmek, patlamış mısır almak ve filmi sevdiğini söylemek için {0} öğren.',
+          coach: 'Fragmanlar başladı — ama gişede {0} konuşuluyor, bilet {0} ve kapıdaki kadın {1} bilmiyor. Sen bana yapış. Ne diyeceğini ben söylerim, sen sadece söyle.',
+          tap: 'Devam etmek için dokun',
+        },
+        pl: {
+          title: 'IDZIEMY DO KINA',
+          sub: 'Poznaj {0} — wejdź do sali, kup popcorn i powiedz, że film był świetny.',
+          coach: 'Zwiastuny już lecą — ale przy kasie, na bilecie i przy wejściu jest jeden język, i to nie jest {1}. To {0}. Trzymaj się mnie. Ja mówię, co powiedzieć, ty tylko to mówisz.',
+          tap: 'Dotknij, aby kontynuować',
+        },
+        ro: {
+          title: 'MERGEM LA CINEMA',
+          sub: 'Învață să vorbești {0} ca să intri, să îți iei popcorn și să spui că ți-a plăcut filmul.',
+          coach: 'Au început trailerele — dar la casă se vorbește {0}, biletul e în {0}, iar femeia de la ușă nu știe {1}. Stai lângă mine. Eu îți spun ce să zici, tu doar zici.',
+          tap: 'Atinge pentru a continua',
+        },
+      },
+    },
   };
+
+  const VENUE_IDS = Object.keys(VENUES);
+  const DEFAULT_VENUE = 'gig';
+  /* An unknown venue is the gig rather than a crash: the id can arrive from a
+     URL or from a half-written app config, and a night out is better than an
+     error screen. */
+  const venueOf = id => VENUES[id] || VENUES[DEFAULT_VENUE];
 
   /* ---------- the rules prompts ----------
      NJA-3150 AC 5.1 and NJA-3154 AC 2.1: a "rules prompt" per speaker, which
@@ -756,6 +1013,46 @@ Return JSON only.`,
     /* Said while a spoken answer is with the judge. An exact answer never
        shows it — that is settled on the device — so it appears only where
        there is a real wait to account for. */
+    /* ---------- the venue choice (NJA-3207) ----------
+       Asked in the child's own language, after the hint language is settled
+       and before the night starts, so every event of the session carries the
+       venue. */
+    'venue-pick-title': {
+      en: 'WHERE ARE WE GOING?', es: '¿ADÓNDE VAMOS?', pt: 'ONDE VAMOS?',
+      tr: 'NEREYE GİDİYORUZ?', pl: 'DOKĄD IDZIEMY?', ro: 'UNDE MERGEM?',
+    },
+    'venue-pick-sub': {
+      en: 'Axel is up for anything. Pick the night you want.',
+      es: 'Axel se apunta a todo. Elige el plan que quieras.',
+      pt: 'O Axel alinha em tudo. Escolhe o programa que quiseres.',
+      tr: 'Axel her şeye varım diyor. İstediğin geceyi seç.',
+      pl: 'Axel jest na wszystko gotowy. Wybierz, co robimy.',
+      ro: 'Axel e gata de orice. Alege unde mergem.',
+    },
+    /* The way out of choosing. It is a real option, not a dodge: some children
+       want the night rather than the menu, and the one who takes this is told
+       apart from the one who picked, so the split is not contaminated by
+       people who did not care. */
+    'venue-surprise': {
+      en: 'Surprise me', es: 'Sorpréndeme', pt: 'Surpreende-me',
+      tr: 'Sen seç', pl: 'Zaskocz mnie', ro: 'Surprinde-mă',
+    },
+    /* The end screen's offer, which is the whole of the replay experiment. */
+    'end-another-ask': {
+      en: 'Cool night out. Want to try another place?',
+      es: 'Menuda noche. ¿Probamos otro sitio?',
+      pt: 'Que noite. Queres experimentar outro sítio?',
+      tr: 'İyi geceydi. Başka bir yere gidelim mi?',
+      pl: 'Niezła noc. Chcesz sprawdzić inne miejsce?',
+      ro: 'Ce seară. Vrei să încercăm în altă parte?',
+    },
+    /* {0} is the place, in the child's own language — "Go to the cinema"
+       rather than a bare "Another place", because naming it is most of the
+       offer. */
+    'end-another-go': {
+      en: 'Go to {0}', es: 'Ir a {0}', pt: 'Ir a {0}',
+      tr: '{0} gidelim', pl: 'Idziemy na: {0}', ro: 'Mergem la {0}',
+    },
     'checking': {
       en: 'Checking…', es: 'Comprobando…', pt: 'A verificar…',
       tr: 'Kontrol ediyorum…', pl: 'Sprawdzam…', ro: 'Verific…',
@@ -815,12 +1112,15 @@ Return JSON only.`,
       pl: 'Tak, tak, za chwilę.',
       ro: 'Da, da, un moment.',
     },
+    /* "She", in the two languages that mark it: all three people behind the
+       three counters are women. Spanish, Portuguese and Romanian carry no
+       gender on the verb here, so only English and Polish needed changing. */
     'open-coach': {
-      en: 'He has not seen you. Tap the words to say “{0}”.',
+      en: 'She has not seen you. Tap the words to say “{0}”.',
       es: 'No te ha visto. Toca las palabras para decir “{0}”.',
       pt: 'Não te viu. Toca nas palavras para dizer “{0}”.',
       tr: 'Seni görmedi. Kelimelere dokunup “{0}” de.',
-      pl: 'Nie zauważył cię. Dotknij słów, żeby powiedzieć “{0}”.',
+      pl: 'Nie zauważyła cię. Dotknij słów, żeby powiedzieć “{0}”.',
       ro: 'Nu te-a văzut. Atinge cuvintele ca să spui “{0}”.',
     },
     /* The written fallbacks, for when the model is slow or unreachable. One
@@ -1076,7 +1376,7 @@ Return JSON only.`,
      language names filled in. Falls back to English copy for a hint language
      that has none yet, so adding a language to LANGUAGES never blanks the
      first screen. */
-  function resolveIntro(nativeCode, targetCode) {
+  function resolveIntro(activity, nativeCode, targetCode) {
     const all = activity.intro || {};
     const copy = all[nativeCode] || all.en || {};
     const names = LANG_NAMES[nativeCode] || LANG_NAMES.en;
@@ -1088,7 +1388,15 @@ Return JSON only.`,
     return out;
   }
 
-  function expand(nativeCode, targetCode) {
+  /* Names are authored per hint language and flattened here, so everything
+     downstream keeps reading activity.actor.name as the plain string it has
+     always been. A Spanish child met an actor called "Bartender" before
+     this. */
+  const nameIn = (obj, nativeCode) =>
+    (obj && (obj[nativeCode] || obj.en)) || '';
+
+  function expand(nativeCode, targetCode, venueId) {
+    const activity = venueOf(venueId);
     const LANGS = { native: nativeCode, target: targetCode };
     const q = {
       id: activity.id, title: activity.title,
@@ -1103,7 +1411,13 @@ Return JSON only.`,
          the UI keeps seeing a flat { title, sub, coach, loading, tap }. The
          shared `activity` is left alone — a second build() with another pair
          must not inherit the first one's screen. */
-      activity: Object.assign({}, activity, { intro: resolveIntro(LANGS.native, LANGS.target) }),
+      venue: activity.venue,
+      activity: Object.assign({}, activity, {
+        intro: resolveIntro(activity, LANGS.native, LANGS.target),
+        coach: COACH,
+        actor: Object.assign({}, activity.actor, { name: nameIn(activity.actor.name, LANGS.native) }),
+        name: nameIn(activity.name, LANGS.native),
+      }),
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
@@ -1321,16 +1635,18 @@ Return JSON only.`,
      fail loudly rather than quietly produce half a session, so the picker
      greys them out and build() refuses them with the ticket's own message. */
   function covered() {
-    return LANGUAGES.filter(l =>
+    const usable = (activity, code) =>
       activity.patterns.every(pid => {
         const pat = vocabPatterns[pid];
-        return pat && (pat.speaker === 'actor' || !!pat[l.code]);
+        return pat && (pat.speaker === 'actor' || !!pat[code]);
       }) &&
       activity.items.every(id => {
         const it = vocabItems[id];
-        return it && it[l.code] && FORMS.every(f => !!it[l.code][f]);
-      })
-    ).map(l => l.code);
+        return it && it[code] && FORMS.every(f => !!it[code][f]);
+      });
+    return LANGUAGES
+      .filter(l => VENUE_IDS.every(v => usable(VENUES[v], l.code)))
+      .map(l => l.code);
   }
 
   const CONTENT = {
@@ -1359,7 +1675,16 @@ Return JSON only.`,
     },
     /* NJA-3204: the pair is an input, and a pair this content does not hold
        is an error with the languages it DOES hold named in it. */
-    build(nativeCode, targetCode) {
+    /* Which nights out there are, named in the child's own language, for the
+       picker. The order is the order they are offered in. */
+    venues: VENUE_IDS,
+    defaultVenue: DEFAULT_VENUE,
+    venueList: nativeCode => VENUE_IDS.map(id => ({
+      id,
+      name: nameIn(VENUES[id].name, nativeCode),
+      background: VENUES[id].background,
+    })),
+    build(nativeCode, targetCode, venueId) {
       const have = CONTENT.covered;
       if (nativeCode === targetCode)
         throw new Error('Native and target language must differ');
@@ -1367,7 +1692,7 @@ Return JSON only.`,
         if (!have.includes(code))
           throw new Error('This scenario only supports ' +
             have.map(CONTENT.name).join(' and '));
-      return expand(nativeCode, targetCode);
+      return expand(nativeCode, targetCode, venueId);
     },
   };
 
