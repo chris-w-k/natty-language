@@ -976,14 +976,23 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
 /* backlit posters, up where they clear her head */
 #layer-bg[data-bg="venue-cinema"] .scene > .s-bottles{
   top:6%;height:15.5%;left:2%;right:2%;bottom:auto;
+  /* Six backlit one-sheets. The brass mats are the last six layers rather
+     than a pseudo-element: later layers paint BEHIND earlier ones, which is
+     exactly what a mount does, and a ::before would have covered the art. */
   background:
     linear-gradient(170deg,#f2c14e,#b5561f) 4%  50%/11% 92% no-repeat,
     linear-gradient(170deg,#56a7d8,#1d4a7a) 20% 50%/11% 92% no-repeat,
     linear-gradient(170deg,#e0657f,#7a1f3c) 36% 50%/11% 92% no-repeat,
     linear-gradient(170deg,#7fcf9b,#1f6340) 52% 50%/11% 92% no-repeat,
     linear-gradient(170deg,#c79bf0,#4a2673) 68% 50%/11% 92% no-repeat,
-    linear-gradient(170deg,#f2c14e,#b5561f) 84% 50%/11% 92% no-repeat;
-  filter:saturate(.92) brightness(.96);
+    linear-gradient(170deg,#f2c14e,#b5561f) 84% 50%/11% 92% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 2.73%  50%/13.4% 100% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 19.17% 50%/13.4% 100% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 35.61% 50%/13.4% 100% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 52.06% 50%/13.4% 100% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 68.50% 50%/13.4% 100% no-repeat,
+    linear-gradient(#e8c98a,#8a6a3a) 84.94% 50%/13.4% 100% no-repeat;
+  filter:saturate(.92) brightness(.96) drop-shadow(0 2px 5px rgba(0,0,0,.45));
 }
 /* ceiling downlights */
 #layer-bg[data-bg="venue-cinema"] .scene > .s-lamps{
@@ -1000,6 +1009,103 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
     linear-gradient(#5a2437 0%, #3a1526 45%, #1d0a12 100%);
   box-shadow:inset 0 2px 0 rgba(255,206,150,.3);
 }
+/* NJA-3213. The room was reading as a bar with the lights changed, and it was:
+   .s-bottles is the bar's bottle shelf, and its two pseudo-elements draw the
+   NECKS. Recolouring the bodies into "posters" left six bottles with poster
+   paint on them. The necks go first. */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-bottles::after{content:none;}
+/* ...and the slot the necks were in gets frames instead, because an unframed
+   rectangle of colour on a wall is a colour, and a framed one is a poster.
+   Six brass mats, each 1.2% wider than the poster it sits behind. */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-bottles::before{content:none;}
+
+/* ---------- the one-sheet ----------
+   One poster big enough to be a poster, in the dead wall to her left where
+   nothing was. Backlit, framed, and invented: a moon over a ridge, a title
+   bar and a credit block, which is the shape of a film poster read at arm's
+   length without being any particular film. */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-poster{
+  left:3.5%;width:22%;top:27%;height:26%;right:auto;bottom:auto;
+  background:
+    /* credit block — the unreadable small print along the bottom */
+    linear-gradient(rgba(226,214,230,.60) 0 0) 50% 95%/62% 1.6% no-repeat,
+    linear-gradient(rgba(226,214,230,.42) 0 0) 50% 91%/46% 1.4% no-repeat,
+    /* the title, as a weight rather than a word */
+    linear-gradient(rgba(255,228,170,.92) 0 0) 50% 82%/74% 5.5% no-repeat,
+    linear-gradient(rgba(255,228,170,.55) 0 0) 50% 75%/44% 2.4% no-repeat,
+    /* a ridge the figure of the art stands on. Lighter than it wants to be:
+       at #120c22 it was the same value as the wall and the poster looked like
+       it stopped halfway down its own frame. */
+    linear-gradient(#2b1f4a,#1a1230) 50% 100%/100% 24% no-repeat,
+    radial-gradient(52% 120% at 32% 100%, #3a2a5e 0 68%, rgba(58,42,94,0) 70%) 0 100%/100% 36% no-repeat,
+    /* the moon, and the sky it is in */
+    radial-gradient(circle at 62% 30%, #ffeab0 0 11%, rgba(255,234,176,.22) 13%, rgba(255,234,176,0) 26%),
+    linear-gradient(#20306a 0%, #4a2f72 48%, #180f2e 100%);
+  box-shadow:
+    inset 0 0 0 2px #e8c98a,            /* the brass frame */
+    inset 0 0 0 5px #2a1018,            /* ...and its dark reveal */
+    0 0 22px rgba(255,190,120,.28),     /* the lightbox behind it */
+    0 6px 14px rgba(0,0,0,.45);
+}
+
+/* ---------- the popcorn machine ----------
+   On the right, clear of her shoulder, standing on the floor rather than the
+   counter — the counter is where the chat sits, and a machine down there is a
+   machine nobody sees. Cabinet above the bubbles, cart below them. */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-popcorn{
+  left:auto;right:3%;width:26%;top:27%;height:32%;bottom:auto;
+  /* Built top-down in one background stack, and the bands have to MEET: the
+     first pass left a wall-coloured gap between the cabinet and the cart and
+     the machine read as two objects stacked by accident. Each band's position
+     is top/(100-height), which is what background-position actually means for
+     a layer smaller than its box. Earlier layers paint in front, so the glass
+     is listed after everything standing behind it. */
+  background:
+    /* canopy, 0-7% */
+    repeating-linear-gradient(90deg,#d8402f 0 11%,#f7ead9 11% 22%) 50% 0/100% 7% no-repeat,
+    /* brass rail, 7-9.5% */
+    linear-gradient(#f3c877,#9d6c2c) 50% 7.18%/96% 2.5% no-repeat,
+    /* the lit sign, 13-18% */
+    linear-gradient(#ffdc92,#e8a73f) 50% 13.68%/70% 5% no-repeat,
+    /* the kettle hanging in the top of the cabinet, 21-29% */
+    linear-gradient(#6b5038,#2e1f18) 50% 22.83%/24% 8% no-repeat,
+    /* The heap, 34-58%. Four rows, widest at the bottom and one on the peak,
+       because six in a scattered line read as six balls in a box rather than
+       as popcorn that has been filling up all evening. */
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 59.3% 37.8%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 37.0% 42.2%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 59.3% 42.2%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 81.5% 42.2%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 24.7% 47.8%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 46.9% 47.8%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 69.1% 47.8%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 91.4% 47.8%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 12.3% 53.3%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 34.6% 53.3%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 56.8% 53.3%/19% 10% no-repeat,
+    radial-gradient(circle,#fdf2d8 0 47%,rgba(253,242,216,0) 49%) 79.0% 53.3%/19% 10% no-repeat,
+    radial-gradient(circle,#fff9ec 0 47%,rgba(255,249,236,0) 49%) 99.0% 53.3%/19% 10% no-repeat,
+    /* the glass, 9.5-58% — lit from inside, with a highlight across the left
+       pane so it reads as glass rather than as a tan panel */
+    linear-gradient(104deg,rgba(255,255,255,.34) 0 11%,rgba(255,255,255,.10) 24%,rgba(255,255,255,0) 38%) 50% 18.45%/92% 48.5% no-repeat,
+    linear-gradient(180deg,rgba(255,232,186,.40),rgba(255,186,96,.20)) 50% 18.45%/92% 48.5% no-repeat,
+    /* its brass surround, a shade bigger and therefore listed behind it */
+    linear-gradient(#e8c98a,#8a6a3a) 50% 17.5%/97% 50.5% no-repeat,
+    /* the serving lip, 58-62.5% */
+    linear-gradient(#f3c877,#9d6c2c) 50% 60.73%/100% 4.5% no-repeat,
+    /* the cart, 62-96% */
+    linear-gradient(#cf4030 0%,#8c2419 68%,#5a160f 100%) 50% 93.9%/88% 34% no-repeat,
+    /* and the plinth it stands on, 96-100% */
+    linear-gradient(#17080c 0 0) 50% 100%/96% 4% no-repeat;
+  filter:drop-shadow(0 8px 16px rgba(0,0,0,.5));
+}
+/* the glow it throws on the wall behind it */
+#layer-bg[data-bg="venue-cinema"] .scene > .s-popcorn::before{
+  content:'';position:absolute;left:-28%;right:-14%;top:4%;height:62%;
+  background:radial-gradient(60% 60% at 50% 50%, rgba(255,186,96,.30), rgba(255,186,96,0) 70%);
+  mix-blend-mode:screen;z-index:-1;
+}
+
 #layer-bg[data-bg="venue-cinema"] .scene > .s-haze{
   background:radial-gradient(90% 60% at 50% 18%, rgba(255,190,130,.09), rgba(255,190,130,0) 70%);
 }
