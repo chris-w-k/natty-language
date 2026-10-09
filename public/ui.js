@@ -113,11 +113,22 @@
      pause button, shoulders running off both edges, torso continuing down
      behind the chat. */
   const CROP_DEFAULT = 0.56;
-  const CROP_BY = { bartender: 0.78, stadium_worker: 0.78, cinema_worker: 0.78 };
+  const CROP_BY = { bartender: 0.635, stadium_worker: 0.635, cinema_worker: 0.635 };
   const cropOf = character => CROP_BY[character] || CROP_DEFAULT;
   /* Scene left above the head. It is not decoration: the pause button and the
-     mastery pill sit in the top 50px, and at 4.5% the hair ran behind them. */
-  const SKY  = 0.105;
+     mastery pill sit in the top 50px, and at 4.5% the hair ran behind them.
+
+     NJA-3211. The three people behind a counter get far more of it than that.
+     The design stands them BACK in the room rather than pressing them against
+     the glass: a third of the stage is the room above their head — the lights,
+     the shelves, the screen — and the figure sits lower and reads bigger,
+     because the crop line moves up the body at the same time. Head high under
+     the HUD with no room above it was the old frame; it filled the stage with
+     a face and left nowhere for the venue to be. Axel keeps the old sky: he
+     has no room to stand in and is only ever a bust. */
+  const SKY_DEFAULT = 0.105;
+  const SKY_BY = { bartender: 0.34, stadium_worker: 0.34, cinema_worker: 0.34 };
+  const skyOf = character => SKY_BY[character] !== undefined ? SKY_BY[character] : SKY_DEFAULT;
 
   /* Place the rig so the head lands just below the top of the stage and the
      waist lands on the bottom of it, with the figure's own centre on the
@@ -137,7 +148,7 @@
     const y0  = top + f.y * s;                        // top of the head
     const y1  = top + (f.y + f.h * cropOf(character)) * s;   // where we cut the body
 
-    const want0 = SKY * H, want1 = H;
+    const want0 = skyOf(character) * H, want1 = H;
     const Z = Math.max(1, (want1 - want0) / Math.max(1, y1 - y0));
     let tx = W / 2 - cx * Z;
     const ty = want0 - y0 * Z;
@@ -220,6 +231,17 @@
       if (el && el.dataset.character) frameRig(el, el.dataset.character);
     }, 120);
   });
+
+  /* ---------- the room, heard ----------
+     NJA-3212. Each venue brings its own looping bed; the shared tone is what
+     plays until its own is cut, and what plays if a file is missing. Read
+     through Q rather than captured, because a venue switch rebuilds Q and the
+     second night must not keep the first one's room. */
+  const SHARED_BED = 'audio/loading.mp3';
+  const bedUrl = () => (Q.activity && Q.activity.bed) || SHARED_BED;
+  function roomBed(volume, fade) {
+    SFX.bed('room', bedUrl(), { volume, fade, fallback: SHARED_BED });
+  }
 
   function mountBackground(el, key) {
     /* The room is chosen by data attribute rather than by a class list, so the
@@ -536,11 +558,11 @@
     }
 
     const list = C.venueList(NL());
-    $('venue-title').textContent = t('venue-pick-title') || 'WHERE ARE WE GOING?';
-    $('venue-sub').textContent = t('venue-pick-sub') || '';
     $('venue-surprise').querySelector('span').textContent = t('venue-surprise') || 'Surprise me';
-    showPanel('intro-venue');
-    SCREEN.at('Venue');
+    /* The chooser lives on Axel's panel now, so there is no panel to show and
+       no screen to name: the child has been on 'Coach Intro' since he started
+       talking, and the venue question is part of that screen rather than the
+       next one. */
     AN('NovaPals.Nlt.VenueOffered', { options: list.length });
     const offeredAt = Date.now();
 
@@ -559,11 +581,27 @@
       $('venue-surprise').onclick = () =>
         choose(list[Math.floor(Math.random() * list.length)].id, 'random');
 
+      /* Now they exist, and now they arrive. The class is removed after the
+         row is built so the stagger animation runs on nodes that are already
+         in place — adding them to a visible container would start each one's
+         animation at a different moment. */
+      $('venue-pick').classList.remove('hidden');
+      /* ...and the tap hint goes: there is something specific to tap now, and
+         "tap to continue" over three buttons is an invitation to tap the
+         wrong thing. */
+      $('intro-tap-2').textContent = '';
+
       function choose(id, how) {
         setPair(Q.nativeLang, Q.targetLang, id);
         /* This tap is also the gesture the browser wants before any audio,
            the same job the language screen's START used to do alone. */
         V.unlock(); SFX.unlock();
+        /* The room now has a name, so it can have its own sound. This is the
+           earliest the bed can start: before the tap there was no venue, and
+           starting the shared tone first would mean crossing one room tone
+           into another on the way into the night. */
+        roomBed(0.30, 4000);
+        $('venue-pick').classList.add('hidden');
         AN('NovaPals.Nlt.VenueChosen',
            { venue: id, how, msToChoose: Date.now() - offeredAt });
         resolve({ venue: id, how });
@@ -603,7 +641,7 @@
         setPair(Q.nativeLang, Q.targetLang, v);
       }
       const ok = await probeServer();
-      SFX.bed('room', 'audio/loading.mp3', { volume: 0.12, fade: 1200 });
+      roomBed(0.12, 1200);
       return ok;
     }
 
@@ -616,18 +654,22 @@
     SCREEN.at('Hint Language');
     await pickLanguages();
 
-    /* ...and now where we are going. After the language because the question
-       is asked in it; before the title card because the title card is the
-       venue's own. */
-    await pickVenue();
+    /* Now the hint language is settled, so the screens can be written.
 
-    /* Now the hint language is settled, so the screens can be written. */
+       NJA-3211. The title card is the SCENARIO's, not the venue's — it is
+       shown before the venue is chosen, so it cannot name a place. Axel's
+       line is the scenario's too: he asks what the child wants to do, which
+       is a question only he can ask before the answer is known. The per-venue
+       `copy.title` / `copy.sub` / `copy.coach` are no longer read here; they
+       are still in content.js, and still the only written description each
+       venue has. */
     const copy = copyOf();
-    $('intro-title-text').textContent = copy.title || Q.title || '';
-    $('intro-sub').textContent = copy.sub || '';
+    $('intro-title-text').textContent = t('scenario-title') || 'A big night out!';
+    $('intro-sub').textContent = t('scenario-sub') || '';
     $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
     $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
-    $('intro-bubble').textContent = copy.coach || '';
+    $('intro-bubble').textContent = t('axel-open') || '';
+    $('venue-pick').classList.add('hidden');
 
     showPanel('intro-title');
     SCREEN.at('Title');
@@ -655,19 +697,36 @@
 
     showPanel('intro-coach');
     SCREEN.at('Coach Intro');
-    /* The room tone begins its climb here, under Axel, rather than waiting for
-       the taxi. By the time the ride starts it is already present, so the
-       cross on the loading screen finishes a fade rather than starting one —
-       the club is somewhere you are arriving at, not somewhere that switches
-       on when you get there. */
-    SFX.bed('room', 'audio/loading.mp3', { volume: 0.30, fade: 6000 });
     introAxel();
-    /* ...and his line waits for the probe, so it is his voice that says it.
-       Nothing else waits: the child can tap straight through, and V.stop()
-       below cuts him off mid-sentence the way a real person gets cut off. */
-    probe.then(() => V.say(copy.coach || '', { speaker: 'axel', lang: accentOf('axel') }));
-    await tapAnywhere(el);
+    /* The room tone does NOT start here any more. Until the venue is picked
+       there is no room to be the tone of, and this screen is a street-level
+       conversation with the street bed already under it. pickVenue() brings
+       the chosen room up on the tap.
+
+       His line waits for the probe, so it is his voice that says it. */
+    const said = probe.then(() =>
+      V.say(t('axel-open') || '', { speaker: 'axel', lang: accentOf('axel') }));
+
+    /* The buttons arrive when he has finished asking — or when the child taps
+       through him, or after a backstop, because a voice that never resolves
+       (no server, muted tab, a synth that drops its onend) must not leave the
+       night with no way out of it. */
+    const openedAt = Date.now();
+    let tapped = false;
+    const tap = tapAnywhere(el).then(() => { tapped = true; });
+    await Promise.race([said, tap, wait(11000)]);
+
+    /* A device with no voice at all answers say() in the same tick, which put
+       the buttons on screen in the same frame as the question and made the
+       line look like a label on a menu. A floor under the wait is not a delay
+       for its own sake: it is the time the question takes to be a question.
+       Skipped when the child tapped, because a tap means get on with it. */
+    const floor = 1300 - (Date.now() - openedAt);
+    if (!tapped && floor > 0) await wait(floor);
     V.stop();
+
+    /* ...and now the three places. This is the tap that starts the night. */
+    await pickVenue();
 
     /* No taxi ride. Five seconds of travelling was a nice beat once and a toll
        on every session after it, and in a quest it is five seconds of a child's
@@ -2544,6 +2603,10 @@
     hideGloss();
     $('chat-full').classList.add('hidden');
     mountBackground($('layer-bg'), Q.activity.background);
+    /* ...and the room it sounds like. SFX.bed() rebuilds on a changed url, so
+       this is a cross into the new venue's tone rather than the old one
+       playing on under a new picture. */
+    roomBed(0.12, 1400);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
     renderHud();
     SCREEN.at('Night');

@@ -181,26 +181,25 @@
          "Surprise me" is a real answer rather than a dodge — it is recorded
          separately, so children who wanted the night rather than the menu do
          not contaminate the split. -->
-    <section class="intro-panel hidden" id="intro-venue">
-      <div class="lang-card">
-        <h2 id="venue-title">WHERE ARE WE GOING?</h2>
-        <p class="lang-sub" id="venue-sub"></p>
-        <div class="venue-row" id="venue-row"></div>
-        <button class="btn wide" id="venue-surprise"><span></span></button>
-      </div>
-    </section>
-
     <section class="intro-panel hidden" id="intro-title">
       <div class="intro-copy">
-        <h1 id="intro-title-text">GOING TO A GIG</h1>
+        <h1 id="intro-title-text">A BIG NIGHT OUT!</h1>
         <p id="intro-sub"></p>
       </div>
       <span class="intro-tap" id="intro-tap-1"></span>
     </section>
 
+    <!-- NJA-3211. Axel asks the question and the answers are on his screen:
+         the venue chooser has no panel of its own any more. The buttons start
+         hidden and slide in under him when his line finishes, so the screen is
+         a character asking rather than a menu with a mascot on it. -->
     <section class="intro-panel hidden" id="intro-coach">
       <div class="intro-bubble" id="intro-bubble"></div>
       <div class="intro-axel" id="intro-axel"></div>
+      <div class="venue-pick hidden" id="venue-pick">
+        <div class="venue-row" id="venue-row"></div>
+        <button class="btn wide" id="venue-surprise"><span></span></button>
+      </div>
       <span class="intro-tap" id="intro-tap-2"></span>
     </section>
 

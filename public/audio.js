@@ -65,16 +65,41 @@ window.SFX = (function () {
      that is already playing just re-aims the fade, so the caller can be naive
      about whether a screen has been seen before. */
   function bed(name, url, opts = {}) {
-    const { volume = 0.5, fade = 800, loop = true } = opts;
+    const { volume = 0.5, fade = 800, loop = true, fallback = null } = opts;
     const c = ensure();
     let b = beds.get(name);
+
+    /* NJA-3212. A bed is identified by its NAME, so that callers can be naive
+       about whether a screen has been seen before — but 'room' now means a
+       different file in each venue, and the second night must not keep the
+       first one's tone. A changed url is a different bed under the same name:
+       stop the old element and build a new one. */
+    if (b && b.url !== url) {
+      try { b.el.pause(); } catch {}
+      if (b.timer) { clearInterval(b.timer); b.timer = null; }
+      beds.delete(name);
+      b = null;
+    }
 
     if (!b) {
       const el = new Audio(url);
       el.loop = loop;
       el.preload = 'auto';
       el.crossOrigin = 'anonymous';
-      b = { el, gain: null, target: volume };
+      /* NJA-3212. A venue names its own room tone, and a venue whose tone has
+         not been recorded yet names a file that is not there. The <audio>
+         element answers that with a silent error event, not an exception, so
+         the room would simply have no sound and nothing would say why. One
+         retry onto the shared tone keeps the night audible while the three
+         real beds are still being cut. */
+      if (fallback && fallback !== url) {
+        el.addEventListener('error', function once() {
+          el.removeEventListener('error', once);
+          console.warn('[SFX] no bed at ' + url + ' — falling back to ' + fallback);
+          try { el.src = fallback; el.load(); el.play().catch(() => {}); } catch {}
+        });
+      }
+      b = { el, url, gain: null, target: volume };
       if (c) {
         try {
           const src = c.createMediaElementSource(el);

@@ -711,6 +711,44 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
   border:10px solid transparent;border-top-color:#fff;border-bottom:0;
 }
 
+/* ---------- Axel's venue chooser (NJA-3211) ----------
+   The three places, on Axel's own screen, under his line. They are not there
+   when the panel opens: he asks first, and they arrive when he has finished
+   asking, so the child hears the question before being handed the answers.
+
+   Above the panel's dark foot and above Axel himself, because they are the
+   only thing on this screen that can be touched. */
+.venue-pick{
+  position:relative;z-index:4;width:100%;max-width:21em;
+  align-self:center;margin-top:auto;
+  /* .intro paints everything on it white, which was right while the only
+     things on these panels were a headline and a tap hint. The buttons are
+     var(--fill) — a near-white — so they inherited white text onto a white
+     face and read as four blank slabs. They carry the card's ink instead,
+     the same as they did inside .lang-card. */
+  color:var(--ink);
+}
+.venue-pick.hidden{display:none;}
+.venue-pick .venue-row > *,
+.venue-pick > .btn{
+  animation:venue-rise .42s cubic-bezier(.2,.75,.3,1) both;
+}
+/* Staggered, so they land as a hand of cards rather than a block. The last
+   one is the surprise button, which is why it waits longest. */
+.venue-pick .venue-row > *:nth-child(1){animation-delay:.00s;}
+.venue-pick .venue-row > *:nth-child(2){animation-delay:.07s;}
+.venue-pick .venue-row > *:nth-child(3){animation-delay:.14s;}
+.venue-pick > .btn{animation-delay:.21s;}
+@keyframes venue-rise{
+  from{opacity:0;transform:translateY(16px);}
+  to{opacity:1;transform:none;}
+}
+/* A child who has asked their phone to stop moving things gets them at once. */
+@media (prefers-reduced-motion:reduce){
+  .venue-pick .venue-row > *,
+  .venue-pick > .btn{animation:none;}
+}
+
 /* ---------- the room ----------
    A dingy club behind the bartender, drawn in CSS because there is no painted
    background yet. Keyed off [data-bg] on #layer-bg, which mountBackground()

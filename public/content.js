@@ -496,6 +496,11 @@ window.QUEST = (function () {
       venue: 'gig',
       title: 'Axel goes to a gig',
       background: 'venue-bar',
+      /* NJA-3212. The room, heard. One looping bed per venue, laid under the
+         whole night at the same level the shared tone used to sit at. The
+         file is named for the venue rather than the screen — `loading.mp3`
+         was named for where it first played and then outlived it. */
+      bed: 'audio/bed-gig.mp3',
       name: { en: 'A rock gig', es: 'Un concierto', pt: 'Um concerto',
               tr: 'Bir rock konseri', pl: 'Koncert rockowy', ro: 'Un concert rock' },
       /* accent: 'target' / 'native' rather than a language code, because the
@@ -554,6 +559,7 @@ window.QUEST = (function () {
       venue: 'football',
       title: 'Axel goes to the football',
       background: 'venue-stadium',
+      bed: 'audio/bed-football.mp3',
       name: { en: 'A football game', es: 'Un partido de fútbol', pt: 'Um jogo de futebol',
               tr: 'Bir futbol maçı', pl: 'Mecz piłkarski', ro: 'Un meci de fotbal' },
       actor: { id: 'stadium_worker', speaks: 'target', accent: 'target',
@@ -608,6 +614,7 @@ window.QUEST = (function () {
       venue: 'cinema',
       title: 'Axel goes to the cinema',
       background: 'venue-cinema',
+      bed: 'audio/bed-cinema.mp3',
       name: { en: 'The cinema', es: 'El cine', pt: 'O cinema',
               tr: 'Sinema', pl: 'Kino', ro: 'Cinema' },
       actor: { id: 'cinema_worker', speaks: 'target', accent: 'target',
@@ -1013,6 +1020,47 @@ Return JSON only.`,
     /* Said while a spoken answer is with the judge. An exact answer never
        shows it — that is settled on the device — so it appears only where
        there is a real wait to account for. */
+    /* ---------- the night itself (NJA-3211) ----------
+       One scenario, three places to have it. The title card is the SCENARIO's
+       now, not the venue's: it is shown before the venue is picked, so it
+       cannot name a place. The per-venue `intro.title` strings further up are
+       no longer read by the intro — left in place rather than deleted,
+       because they are the only written description each venue has. */
+    'scenario-title': {
+      en: 'A big night out!',
+      es: '¡Una gran noche!',
+      pt: 'Uma grande noite!',
+      tr: 'Muhteşem bir gece!',
+      pl: 'Wielki wieczór!',
+      ro: 'O seară pe cinste!',
+    },
+    /* Deliberately says nothing about WHICH language or WHICH place: it is
+       read before either is settled, and a sub that names the target language
+       needs a different grammatical form in four of these six. */
+    'scenario-sub': {
+      en: 'One night, three places to go. Axel is coming with you.',
+      es: 'Una noche, tres sitios. Axel va contigo.',
+      pt: 'Uma noite, três sítios. O Axel vai contigo.',
+      tr: 'Bir gece, üç mekân. Axel de seninle.',
+      pl: 'Jeden wieczór, trzy miejsca. Axel idzie z tobą.',
+      ro: 'O seară, trei locuri. Axel vine cu tine.',
+    },
+    /* Axel's opening line, and the question the venue buttons answer. Spoken
+       in his voice, so it is written to be heard rather than read.
+
+       "England" is hard-coded because `session.learning` is hard-coded to
+       'en'. If this prototype ever teaches a second language, this is one of
+       the strings that has to become a country rather than a constant. The
+       welcome avoids a gendered adjective in every language here — the child's
+       gender is not something this prototype knows. */
+    'axel-open': {
+      en: "Hey buddy, welcome to England! What do you wanna do tonight? Don't worry about knowing the language — I'll be by your side the whole time.",
+      es: '¡Hola, colega! Ya estamos en Inglaterra. ¿Qué te apetece hacer esta noche? No te preocupes por el idioma: voy a estar contigo todo el rato.',
+      pt: 'Olá! Já estamos em Inglaterra. O que queres fazer esta noite? Não te preocupes com a língua — vou estar contigo o tempo todo.',
+      tr: "Selam dostum, İngiltere'ye hoş geldin! Bu gece ne yapmak istersin? Dili bilmiyorsan dert etme — baştan sona yanındayım.",
+      pl: 'Hej, ziomek, witaj w Anglii! Na co masz dziś ochotę? Nie martw się językiem — cały czas będę przy tobie.',
+      ro: 'Salut, amice, bine ai venit în Anglia! Ce vrei să facem în seara asta? Nu-ți face griji cu limba — sunt lângă tine tot timpul.',
+    },
     /* ---------- the venue choice (NJA-3207) ----------
        Asked in the child's own language, after the hint language is settled
        and before the night starts, so every event of the session carries the

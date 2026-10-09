@@ -35,6 +35,26 @@ Build command: none. Start command: `node server.js`. There are no dependencies
 and no lockfile, so Render's `yarn` / `yarn start` defaults are wrong —
 `render.yaml` has the right ones if you create the service as a Blueprint.
 
+## Sound beds
+
+One looping bed per venue, under the whole night. Drop them in as:
+
+```
+public/audio/bed-gig.mp3
+public/audio/bed-football.mp3
+public/audio/bed-cinema.mp3
+```
+
+MP3 (LAME), mono, 96–128 kbps, 44.1 kHz, 20–45 s, looping. Keep each under
+~600 KB: a lot of the Android installs in Sentry are `device-class: low` on
+mobile data. Write them as ambience with no clear pulse — MP3 cannot loop
+perfectly gapless, and a bed with a beat in it makes the seam audible where a
+room tone hides it. `audio/loading.mp3` is the shared fallback and plays
+wherever a venue's own bed is missing, so the three can land one at a time.
+
+The names come from the venue ids in `content.js` (`gig`, `football`,
+`cinema`); a fourth venue adds a fourth file under the same pattern.
+
 ## Access code
 
 `ACCESS_CODE` gates `/api/evaluate`, `/api/turn` and `/api/tts`. The page asks
