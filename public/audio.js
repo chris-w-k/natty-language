@@ -65,7 +65,7 @@ window.SFX = (function () {
      that is already playing just re-aims the fade, so the caller can be naive
      about whether a screen has been seen before. */
   function bed(name, url, opts = {}) {
-    const { volume = 0.5, fade = 800, loop = true, fallback = null } = opts;
+    const { volume = 0.5, fade = 800, loop = true } = opts;
     const c = ensure();
     let b = beds.get(name);
 
@@ -89,16 +89,13 @@ window.SFX = (function () {
       /* NJA-3212. A venue names its own room tone, and a venue whose tone has
          not been recorded yet names a file that is not there. The <audio>
          element answers that with a silent error event, not an exception, so
-         the room would simply have no sound and nothing would say why. One
-         retry onto the shared tone keeps the night audible while the three
-         real beds are still being cut. */
-      if (fallback && fallback !== url) {
-        el.addEventListener('error', function once() {
-          el.removeEventListener('error', once);
-          console.warn('[SFX] no bed at ' + url + ' — falling back to ' + fallback);
-          try { el.src = fallback; el.load(); el.play().catch(() => {}); } catch {}
-        });
-      }
+         the room would have no sound and nothing would say why. There is
+         nothing to fall back to any more — every bed belongs to one venue —
+         so the room stays quiet and the console carries the reason. */
+      el.addEventListener('error', function once() {
+        el.removeEventListener('error', once);
+        console.warn('[SFX] no bed at ' + url + ' — this room will be silent');
+      });
       b = { el, url, gain: null, target: volume };
       if (c) {
         try {

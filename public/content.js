@@ -496,10 +496,11 @@ window.QUEST = (function () {
       venue: 'gig',
       title: 'Axel goes to a gig',
       background: 'venue-bar',
-      /* NJA-3212. The room, heard. One looping bed per venue, laid under the
-         whole night at the same level the shared tone used to sit at. The
-         file is named for the venue rather than the screen — `loading.mp3`
-         was named for where it first played and then outlived it. */
+      /* NJA-3212. The room, heard. One looping bed per venue, faded in when
+         the venue is chosen and laid under the whole night. The file is named
+         for the venue rather than for a screen: this recording spent its life
+         as `loading.mp3`, named for where it first played, which is how the
+         club's room tone came to sound like a property of loading. */
       bed: 'audio/bed-gig.mp3',
       name: { en: 'A rock gig', es: 'Un concierto', pt: 'Um concerto',
               tr: 'Bir rock konseri', pl: 'Koncert rockowy', ro: 'Un concert rock' },

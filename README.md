@@ -45,12 +45,17 @@ public/audio/bed-football.mp3
 public/audio/bed-cinema.mp3
 ```
 
-MP3 (LAME), mono, 96–128 kbps, 44.1 kHz, 20–45 s, looping. Keep each under
-~600 KB: a lot of the Android installs in Sentry are `device-class: low` on
-mobile data. Write them as ambience with no clear pulse — MP3 cannot loop
-perfectly gapless, and a bed with a beat in it makes the seam audible where a
-room tone hides it. `audio/loading.mp3` is the shared fallback and plays
-wherever a venue's own bed is missing, so the three can land one at a time.
+MP3 (LAME), 96–128 kbps, 44.1 kHz, 20–45 s, looping. Keep each under ~600 KB:
+a lot of the Android installs in Sentry are `device-class: low` on mobile
+data. Write them as ambience with no clear pulse — MP3 cannot loop perfectly
+gapless, and a bed with a beat in it makes the seam audible where a room tone
+hides it. Err long rather than short: a bed under ten seconds turns over often
+enough in one night to be heard doing it.
+
+There is no shared fallback. A venue whose bed is missing is silent and says
+so in the console, because the only recording general enough to stand in for
+the others was the club's own room tone, and that is `bed-gig.mp3` now. The
+sound of loading is whichever venue was chosen, fading in.
 
 The names come from the venue ids in `content.js` (`gig`, `football`,
 `cinema`); a fourth venue adds a fourth file under the same pattern.

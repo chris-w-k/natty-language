@@ -233,14 +233,23 @@
   });
 
   /* ---------- the room, heard ----------
-     NJA-3212. Each venue brings its own looping bed; the shared tone is what
-     plays until its own is cut, and what plays if a file is missing. Read
-     through Q rather than captured, because a venue switch rebuilds Q and the
-     second night must not keep the first one's room. */
-  const SHARED_BED = 'audio/loading.mp3';
-  const bedUrl = () => (Q.activity && Q.activity.bed) || SHARED_BED;
+     NJA-3212. Each venue brings its own looping bed, and there is no longer a
+     shared one behind them. `loading.mp3` is gone: it was the club's room tone
+     wearing the name of the screen it happened to debut on, and once the gig
+     had that recording under its own name there was nothing general left for
+     a fallback to be. The sound of loading is the chosen venue fading in —
+     which is the same thing as arriving somewhere, and the reason the fade is
+     long.
+
+     A venue with no bed is therefore silent rather than borrowing someone
+     else's room, and says so in the console. Read through Q rather than
+     captured, because a venue switch rebuilds Q and the second night must not
+     keep the first one's room. */
+  const bedUrl = () => (Q.activity && Q.activity.bed) || '';
   function roomBed(volume, fade) {
-    SFX.bed('room', bedUrl(), { volume, fade, fallback: SHARED_BED });
+    const url = bedUrl();
+    if (!url) return;
+    SFX.bed('room', url, { volume, fade });
   }
 
   function mountBackground(el, key) {
