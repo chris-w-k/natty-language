@@ -485,7 +485,17 @@ window.ENGINE = (function () {
       const inTarget = want.has(f.key);
       const item = pair.items.find(i => i.key === f.key);
       const text = item ? (inTarget ? item.target : item.native) : '___';
-      for (const w of words(text)) cells.push({ w, gap: inTarget, from: f.key });
+      /* A slot marked `^` hands its leading word back to the sentence: "Do
+         you have a ___?" rather than "Do you have ___ ___?". The article is
+         still the vocabulary's own, so this costs nothing in the languages
+         that inflect instead ("biletu") or in the words that take no article
+         ("water") — there is no leading word to give, and the gap is the
+         whole form as before. */
+      const ws = words(text);
+      const lead = (inTarget && f.givenLead && ws.length > 1) ? 1 : 0;
+      ws.forEach((w, i) => cells.push({
+        w, gap: inTarget && i >= lead, given: inTarget && i < lead, from: f.key,
+      }));
     }
 
     /* The sentence is rebuilt from the finished string so a token that spans
@@ -509,7 +519,11 @@ window.ENGINE = (function () {
         const { lead, tail, word } = split(token);
         merged.push({ w: word, lead, tail, gap: true, from: at.from });
       } else {
-        merged.push({ w: token, lead: '', tail: '', gap: false, from: at.from });
+        /* `given` marks a word the frame is handing over that BELONGS to the
+           gap's phrase — today the article of a `^` slot. It prints like any
+           other frame word, and the only thing that reads it is the spoken
+           answer, where "a ticket" has to be as acceptable as "ticket". */
+        merged.push({ w: token, lead: '', tail: '', gap: false, given: !!at.given, from: at.from });
       }
       if (!cell) continue;
       // a token can span several cells when a chunk boundary falls mid-word
@@ -633,8 +647,15 @@ window.ENGINE = (function () {
         /* Word by word, like the answer: "un refresco" offers "un" and
            "refresco". The article half is not padding — "un" against "una" is
            the gender distinction, which is exactly the kind of wrong answer
-           worth being able to make. */
-        for (const raw of words(item[lang][form])) add(bucket, split(raw).word);
+           worth being able to make.
+
+           Unless the frame is giving the article away (`^`), in which case it
+           is not a choice the child is being asked to make, and a loose "un"
+           on the tray is a pill that cannot be right — and in English, where
+           every indefinite starts "a", it would be on the tray every turn. */
+        const forms0 = words(item[lang][form]);
+        const offer = (sl.givenLead && forms0.length > 1) ? forms0.slice(1) : forms0;
+        for (const raw of offer) add(bucket, split(raw).word);
       }
     }
 

@@ -360,15 +360,21 @@ window.QUEST = (function () {
     'excuse-me':    { speaker: 'learner', opensOnly: true,
                       en: 'Excuse me.',   es: 'Perdona.',      pt: 'Desculpe.',
                       tr: 'Affedersiniz.', pl: 'Przepraszam.', ro: 'Scuzați-mă.' },
+    /* The article is given (`^`). This is the hardest construction in the
+       night — the three "do you have" rows sit at the top of the difficulty
+       table — and the reason is the extra blank, not the noun: an indefinite
+       slot asks for two pills where "Can I have ___" asks for one, and the
+       indefinite rows run 39% wrong against 25% for the bare ones. Handing
+       over the article leaves the gap where the learning is. */
     'do-you-have':  { speaker: 'either',
-                      en: 'Do you have {item:indefinite}?',
-                      es: '¿Tienes {item:indefinite}?',
-                      pt: 'Tens {item:indefinite}?',
+                      en: 'Do you have {item:indefinite^}?',
+                      es: '¿Tienes {item:indefinite^}?',
+                      pt: 'Tens {item:indefinite^}?',
                       /* Turkish puts the question particle at the end and does
                          not inflect the noun here, so the bare slot is right. */
-                      tr: '{item:indefinite} var mı?',
-                      pl: 'Masz {item:definite}?',
-                      ro: 'Ai {item:indefinite}?' },
+                      tr: '{item:indefinite^} var mı?',
+                      pl: 'Masz {item:definite^}?',
+                      ro: 'Ai {item:indefinite^}?' },
     /* Asking, and then asking politely, are two things to learn and so two
        stages. Taught as one, the child's first go at asking for anything is a
        five-word sentence with the courtesy welded on, and getting "por favor"
@@ -1342,7 +1348,15 @@ Return JSON only.`,
      the two stay distinguishable — which is the whole reason the number is in
      the syntax and the whole reason the old single-slot version could not
      handle "I like X and Y". */
-  const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z_|]+)\}/gi;
+  /* A form may carry a trailing `^`, which says the leading word of that form
+     is GIVEN — printed as part of the sentence rather than left as a gap. The
+     article is the case it exists for: "Do you have {item:indefinite^}?"
+     renders "Do you have a ticket?" and asks the child for "ticket" alone.
+     The article still comes from the vocabulary table rather than from the
+     frame text, so each language keeps its own ("bir bilet", "una entrada"),
+     and a form that is one word — Polish `biletu`, every language's `water` —
+     has no leading word to give and is untouched. */
+  const SLOT = /\{([a-z_]+)(?:#(\d+))?:([a-z_|]+)(\^?)\}/gi;
 
   function chunk(template) {
     const out = [];
@@ -1356,6 +1370,8 @@ Return JSON only.`,
         tag: m[1],
         // "a|b" means either article is acceptable; the first is what we render
         forms: m[3].split('|'),
+        // the article rides with the frame; only the noun is the child's
+        givenLead: m[4] === '^',
       });
       at = m.index + m[0].length;
     }

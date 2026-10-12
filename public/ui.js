@@ -823,10 +823,16 @@
 
   function spokenTargets(pl) {
     const gaps = (pl.expectedAnswerPills || []).map(p => p.label).join(' ').trim();
+    /* The gap words with any word the frame gave them back — the article of a
+       `^` slot. The screen reads "Do you have a ___?", and a child who says
+       "a ticket" has produced the thing being asked for exactly as much as one
+       who says "ticket". */
+    const phrase = (pl.cells || []).filter(c => c.gap || c.given)
+      .map(c => c.w).join(' ').trim();
     /* the gap words; the line as printed, which is usually mixed; and the line
        wholly in the language they are learning, which is what a child who has
        run ahead will say */
-    return [gaps, pl.expected, pl.pair && pl.pair.allTarget]
+    return [gaps, phrase, pl.expected, pl.pair && pl.pair.allTarget]
       .map(v => String(v || '').trim())
       .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i);
