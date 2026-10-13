@@ -379,37 +379,42 @@ window.QUEST = (function () {
        stages. Taught as one, the child's first go at asking for anything is a
        five-word sentence with the courtesy welded on, and getting "por favor"
        wrong costs them the ask as well. */
+    /* The article is given (`^`), as in `do-you-have`. That change took its
+       rows from 48.4% wrong to 30.0% at 11.9 sigma while the untouched
+       constructions sat still, so the same edit is applied to the three
+       remaining article frames. They now hold the hardest turns of the night:
+       with `do-you-have` fixed, question 5 is the peak. */
     'can-i-have':   { speaker: 'learner',
-                      en: 'Can I have {item:indefinite}?',
-                      es: '¿Me das {item:indefinite}?',
-                      pt: 'Dás-me {item:indefinite}?',
-                      tr: '{item:indefinite} alabilir miyim?',
+                      en: 'Can I have {item:indefinite^}?',
+                      es: '¿Me das {item:indefinite^}?',
+                      pt: 'Dás-me {item:indefinite^}?',
+                      tr: '{item:indefinite^} alabilir miyim?',
                       /* `prosić o` governs the accusative, which is what the
                          Polish `definite` slot holds. */
-                      pl: 'Mogę prosić o {item:definite}?',
-                      ro: 'Îmi dai {item:indefinite}?' },
+                      pl: 'Mogę prosić o {item:definite^}?',
+                      ro: 'Îmi dai {item:indefinite^}?' },
     'can-i-have-please': { speaker: 'learner',
-                      en: 'Can I have {item:indefinite}, please?',
-                      es: '¿Me das {item:indefinite}, por favor?',
-                      pt: 'Dás-me {item:indefinite}, por favor?',
-                      tr: '{item:indefinite} alabilir miyim, lütfen?',
-                      pl: 'Czy mogę prosić o {item:definite}, proszę?',
-                      ro: 'Îmi dai {item:indefinite}, te rog?' },
+                      en: 'Can I have {item:indefinite^}, please?',
+                      es: '¿Me das {item:indefinite^}, por favor?',
+                      pt: 'Dás-me {item:indefinite^}, por favor?',
+                      tr: '{item:indefinite^} alabilir miyim, lütfen?',
+                      pl: 'Czy mogę prosić o {item:definite^}, proszę?',
+                      ro: 'Îmi dai {item:indefinite^}, te rog?' },
     'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
     /* What you say to turn down what you have just been offered. The set had
        no way to decline at all, so the only near-miss the engine could reach
        for was the barman's own "there is no ___". */
     'i-dont-want':  { speaker: 'learner',
-                      en: "I don't want {item:indefinite}.",
-                      es: 'No quiero {item:indefinite}.',
-                      pt: 'Não quero {item:indefinite}.',
-                      tr: '{item:indefinite} istemiyorum.',
+                      en: "I don't want {item:indefinite^}.",
+                      es: 'No quiero {item:indefinite^}.',
+                      pt: 'Não quero {item:indefinite^}.',
+                      tr: '{item:indefinite^} istemiyorum.',
                       /* Polish negation takes the genitive, which is the one
                          thing the Polish `indefinite` slot is holding — see the
                          note on the Polish forms above. */
-                      pl: 'Nie chcę {item:indefinite}.',
-                      ro: 'Nu vreau {item:indefinite}.' },
+                      pl: 'Nie chcę {item:indefinite^}.',
+                      ro: 'Nu vreau {item:indefinite^}.' },
     'there-is-no':  { speaker: 'actor',   en: 'There is no {item:bare}.',             es: 'No hay {item:bare}.' },
     'do-you-like':  { speaker: 'either',
                       en: 'Do you like {like:definite}?',
