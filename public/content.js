@@ -496,9 +496,50 @@ window.QUEST = (function () {
      a door, and all three venues are a counter, where the actor sells and the
      child buys. All three stay defined for a scenario where they are the
      point. */
-  const PATTERNS = ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
-                    'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
-                    'thank-you'];
+  /* ---------- the order of the climb (NJA-3211) ----------
+     The ladder is walked in this order, and for most of the prototype's life
+     it was simply the order the patterns happened to be written in. That put
+     `do-you-have` — measurably the hardest ask we have — at questions two and
+     three, where 39% of answers to its second step were wrong and the night
+     had barely started. Nothing about it needs to be there: it is a question
+     form with an article in it, which is two new things at once.
+
+     So the constructions are ordered by what they ask of the child rather
+     than by the order they were written: the fixed phrase first, then the one
+     slot statements, then the questions, then the request and its politeness
+     tag, then the two-slot one, and `thank-you` to close. `can-i-have` stays
+     immediately before `can-i-have-please`, because "please" is only cheap
+     when it is one word added to a frame they just used, and `i-like` stays
+     before `i-like-two` for the same reason. */
+  const PATTERNS = ['excuse-me', 'i-like', 'i-dont-want', 'do-you-like',
+                    'can-i-have', 'can-i-have-please', 'do-you-have',
+                    'i-like-two', 'thank-you'];
+
+  /* ---------- the order the nouns are claimed ----------
+     syllabus() hands each stage the first noun nobody has had yet, so for as
+     long as there was one list, the order of the CLIMB decided the order of
+     the VOCABULARY. Reordering the climb therefore moved every noun: `entrada`
+     slid off the ask it belongs to and onto `i-like`, which says "I like the
+     ticket", and the cinema's `do-you-have` landed on `nachos`, a plural with
+     no article to give and so nothing left of NJA-3211's fix.
+
+     They are two different decisions — which construction is hard, and which
+     word belongs with which ask — so they are written as two lists. This one
+     is the original order and it is the vocabulary's; it changes when the
+     words change, not when the ladder does. */
+  const ITEM_ORDER = ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
+                      'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
+                      'thank-you'];
+
+  /* Two lists naming the same nine things is a typo waiting to happen, and the
+     typo would be silent: a name ITEM_ORDER misspells simply claims its noun
+     last, which moves a word onto a different ask and reads as a content
+     decision. So the two are checked against each other at load. */
+  (function () {
+    const a = PATTERNS.slice().sort().join(','),
+          b = ITEM_ORDER.slice().sort().join(',');
+    if (a !== b) throw new Error('PATTERNS and ITEM_ORDER name different patterns: ' + a + ' vs ' + b);
+  })();
 
   const VENUES = {
     /* The original night, unchanged but for the person behind the counter. */
@@ -1473,6 +1514,7 @@ Return JSON only.`,
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
+      itemOrder: ITEM_ORDER,
       groups: [], glossary: {}, chipGloss: {}, phrases: {},
     };
 

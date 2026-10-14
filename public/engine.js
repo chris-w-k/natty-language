@@ -99,9 +99,23 @@ window.ENGINE = (function () {
        the literal reading. */
     const walk = (quest.session && quest.session.stageItems) !== 'first';
     const used = new Set();
-    const out = [];
+    const fills = new Map();
 
-    for (const g of quest.groups) {
+    /* The claiming and the climbing are two different orders. Walking the
+       stages in ladder order would make "first noun nobody has had yet" mean
+       "first noun nobody EARLIER IN THE LADDER has had yet", so reordering the
+       ladder would silently move every word onto a different ask. The content
+       says which order the nouns are claimed in (`itemOrder`); anything it
+       does not name claims last, in ladder order, which is also what happens
+       when the content does not say at all. */
+    const order = quest.itemOrder || [];
+    const rank = g => { const i = order.indexOf(g.id); return i < 0 ? order.length : i; };
+    const claiming = quest.groups
+      .map((g, i) => ({ g, i }))
+      .sort((a, b) => (rank(a.g) - rank(b.g)) || (a.i - b.i))
+      .map(x => x.g);
+
+    for (const g of claiming) {
       const fill = {};
       for (const key of g.slotKeys) {
         const valid = g.slots[key];
@@ -112,6 +126,12 @@ window.ENGINE = (function () {
         fill[key] = pick;
         used.add(pick);
       }
+      fills.set(g.id, fill);
+    }
+
+    const out = [];
+    for (const g of quest.groups) {
+      const fill = fills.get(g.id);
       out.push(quest.pairFor ? quest.pairFor(g.id, fill) : quest.pairs.find(p => p.patternId === g.id));
     }
     return out;
