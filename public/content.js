@@ -952,6 +952,72 @@ Return JSON only.`,
       pt: 'PRATICA O QUE FALTA',   tr: 'KALANLARI ÇALIŞ',
       pl: 'POĆWICZ RESZTĘ',        ro: 'EXERSEAZĂ CE A RĂMAS',
     },
+    /* ---------- the spoken challenge (NJA-3213) ----------
+       Axel's dare, and the screen it opens. He is cocky about it on purpose:
+       this is offered only to a child who has just passed, so there is nothing
+       to protect them from and the tone can be a challenge rather than an
+       encouragement. Nothing here can cost them a mark. */
+    'speak-offer': {
+      en: 'SAY THEM OUT LOUD', es: 'DILAS EN VOZ ALTA', pt: 'DIZ-AS EM VOZ ALTA',
+      tr: 'SESLI SÖYLE', pl: 'POWIEDZ NA GŁOS', ro: 'SPUNE-LE CU VOCE TARE',
+    },
+    'speak-axel-dare': {
+      en: 'Too easy for you. Bet you can\u2019t say them out loud.',
+      es: 'Demasiado f\u00e1cil. A que no las dices en voz alta.',
+      pt: 'F\u00e1cil demais. Aposto que n\u00e3o as dizes em voz alta.',
+      tr: '\u00c7ok kolay geldi. Bahse girerim sesli s\u00f6yleyemezsin.',
+      pl: 'Za \u0142atwe. Za\u0142o\u017cymy si\u0119, \u017ce nie powiesz tego na g\u0142os?',
+      ro: 'Prea u\u0219or pentru tine. Pariez c\u0103 nu le spui cu voce tare.',
+    },
+    'speak-eyebrow': {
+      en: 'CHALLENGE', es: 'RETO', pt: 'DESAFIO',
+      tr: 'MEYDAN OKUMA', pl: 'WYZWANIE', ro: 'PROVOCARE',
+    },
+    'speak-title': {
+      en: 'Say it out loud', es: 'D\u00edlo en voz alta', pt: 'Di-lo em voz alta',
+      tr: 'Sesli s\u00f6yle', pl: 'Powiedz to na g\u0142os', ro: 'Spune cu voce tare',
+    },
+    'speak-tap': {
+      en: 'TAP AND SAY IT', es: 'TOCA Y D\u00cdLO', pt: 'TOCA E DI-LO',
+      tr: 'DOKUN VE S\u00d6YLE', pl: 'DOTKNIJ I POWIEDZ', ro: 'ATINGE \u0218I SPUNE',
+    },
+    'speak-stop': {
+      en: 'TAP WHEN YOU ARE DONE', es: 'TOCA CUANDO TERMINES', pt: 'TOCA QUANDO ACABARES',
+      tr: 'B\u0130T\u0130NCE DOKUN', pl: 'DOTKNIJ, GDY SKO\u0143CZYSZ', ro: 'ATINGE C\u00c2ND AI TERMINAT',
+    },
+    'speak-thinking': {
+      en: 'Listening\u2026', es: 'Escuchando\u2026', pt: 'A ouvir\u2026',
+      tr: 'Dinliyor\u2026', pl: 'S\u0142ucham\u2026', ro: 'Ascult\u0103\u2026',
+    },
+    'speak-again': {
+      en: 'Did not catch that \u2014 go again.', es: 'No te he o\u00eddo bien. Otra vez.',
+      pt: 'N\u00e3o apanhei. Outra vez.', tr: 'Duyamad\u0131m. Bir daha.',
+      pl: 'Nie dos\u0142ysza\u0142em. Jeszcze raz.', ro: 'Nu am auzit. \u00cenc\u0103 o dat\u0103.',
+    },
+    'speak-wrong': {
+      en: 'Not quite. One more go.', es: 'Casi. Un intento m\u00e1s.',
+      pt: 'Quase. Mais uma vez.', tr: 'Az kald\u0131. Bir deneme daha.',
+      pl: 'Prawie. Jeszcze jedna pr\u00f3ba.', ro: 'Aproape. \u00cenc\u0103 o \u00eencercare.',
+    },
+    'speak-right': {
+      en: 'That is it!', es: '\u00a1Eso es!', pt: '\u00c9 isso!',
+      tr: '\u0130\u015fte b\u00f6yle!', pl: 'O to chodzi!', ro: 'Exact a\u0219a!',
+    },
+    'speak-skip': {
+      en: 'SKIP THIS ONE', es: 'SALTAR ESTA', pt: 'SALTAR ESTA',
+      tr: 'BUNU GE\u00c7', pl: 'POMI\u0143 T\u0118', ro: 'SARI PESTE',
+    },
+    'speak-quit': {
+      en: 'THAT IS ENOUGH', es: 'YA EST\u00c1 BIEN', pt: 'J\u00c1 CHEGA',
+      tr: 'BU KADAR YETER', pl: 'WYSTARCZY', ro: 'AJUNGE',
+    },
+    /* {0} said out loud, {1} offered. A count rather than a share: a child
+       reading "3 of 5" knows what to do about it. */
+    'speak-result': {
+      en: 'Said out loud: {0} of {1}', es: 'Dichas en voz alta: {0} de {1}',
+      pt: 'Ditas em voz alta: {0} de {1}', tr: 'Sesli s\u00f6ylenen: {1} i\u00e7inden {0}',
+      pl: 'Powiedziane na g\u0142os: {0} z {1}', ro: 'Spuse cu voce tare: {0} din {1}',
+    },
     'end-replay-all': {
       en: 'PLAY AGAIN', es: 'JUGAR OTRA VEZ', pt: 'JOGAR OUTRA VEZ',
       tr: 'TEKRAR OYNA', pl: 'ZAGRAJ JESZCZE RAZ', ro: 'JOACĂ DIN NOU',

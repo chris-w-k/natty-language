@@ -1142,3 +1142,28 @@ body.dragging *{-webkit-user-select:none;user-select:none;}
 
 /* the end screen's invitation, above the button it belongs to */
 .end-ask{margin:14px 0 6px;text-align:center;font-weight:600;}
+
+/* ---------- the spoken challenge (NJA-3213) ----------
+   A modal over the end sheet. The sentence is the hero: they built it once
+   already, so it is shown whole and large, and the only thing to do is say
+   it. There is nothing to tap but the microphone. */
+.speak-eyebrow{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;
+  color:var(--ink-3);display:block;margin-bottom:4px;text-transform:uppercase;}
+.speak-dots{display:flex;gap:5px;margin:0 0 14px;}
+.speak-dots i{flex:1;height:4px;border-radius:2px;background:var(--line);}
+.speak-dots i.done{background:var(--good);}
+.speak-dots i.miss{background:var(--line);opacity:.45;}
+.speak-dots i.now{background:var(--accent);}
+.speak-line{display:flex;flex-direction:column;gap:4px;margin:0 0 12px;}
+.speak-target{font-size:21px;font-weight:600;line-height:1.3;letter-spacing:-.01em;}
+.speak-native{font-size:13.5px;color:var(--ink-3);}
+/* One reserved line between the sentence and the button, so a verdict
+   appearing does not shunt the microphone out from under a thumb already on
+   its way to it. One line, not three: the gap is dead space until it is not. */
+.speak-state{margin:0 0 2px;font-size:14px;min-height:20px;color:var(--ink-2);}
+.speak-state.good{color:var(--good);font-weight:600;}
+.speak-heard{margin:0 0 4px;font-size:13px;color:var(--ink-3);font-style:italic;}
+.speak-heard:empty{margin:0;}
+#speak-mic.listening{background:var(--good);border-color:var(--good);}
+.end-spoken{margin:10px 0 0;font-size:14px;font-weight:600;color:var(--good);text-align:center;}
+.end-spoken.hidden{display:none;}

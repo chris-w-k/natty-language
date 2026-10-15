@@ -273,6 +273,29 @@
     </div>
   </div>
 
+  <!-- ---------- the spoken challenge (NJA-3213) ----------
+       Offered on the end screen to a child who finished the night by tapping
+       and passed: the lines they already built, said out loud, with nothing to
+       tap. It is a modal over the end sheet rather than a screen of its own,
+       because FINISH is how a quest pays its gems and nothing may come between
+       a child and that button. Closing this puts them back where they were. -->
+  <div class="modal hidden" id="speak">
+    <div class="modal-card">
+      <span class="speak-eyebrow" id="speak-eyebrow"></span>
+      <h2 id="speak-title"></h2>
+      <div class="speak-dots" id="speak-dots"></div>
+      <div class="speak-line">
+        <span class="speak-target" id="speak-target"></span>
+        <span class="speak-native" id="speak-native"></span>
+      </div>
+      <p class="speak-state" id="speak-state"></p>
+      <p class="speak-heard" id="speak-heard"></p>
+      <button class="btn wide primary" id="speak-mic"><span></span></button>
+      <button class="btn wide" id="speak-skip"><span></span></button>
+      <button class="btn wide" id="speak-quit"><span></span></button>
+    </div>
+  </div>
+
   <!-- coach sheet -->
   <div class="sheet hidden" id="coach-sheet">
     <div class="head">
@@ -303,6 +326,12 @@
              generic: "Go to the cinema" is most of the invitation. -->
         <p class="end-ask" id="end-ask"></p>
         <button class="btn wide" id="btn-another"><span></span></button>
+        <!-- The spoken challenge. It stands in the place of "practise what is
+             left" rather than beside it: this screen already carries four ways
+             back in, and a fifth makes all five quieter. -->
+        <p class="end-ask hidden" id="end-axel"></p>
+        <button class="btn wide primary hidden" id="btn-speak"><span></span></button>
+        <p class="end-spoken hidden" id="end-spoken"></p>
         <button class="btn wide primary" id="btn-again"><span></span></button>
         <button class="btn wide" id="btn-restart"><span></span></button>
         <p class="end-note hidden" id="end-note"></p>

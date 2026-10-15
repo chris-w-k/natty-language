@@ -2343,6 +2343,9 @@
     if (busy || !current || submitted) return;
     busy = true;
     submitted = true;
+    /* The challenge is for a child who did the night on the pills. One spoken
+       answer and it is not a challenge any more, it is a repeat. */
+    if (mode === 'voice') voiceAnswers += 1;
     $('btn-say').disabled = true;
 
     /* What the child actually produced. A tapped answer is the sentence as the
@@ -2514,6 +2517,19 @@
      percentage answers neither — and "you got everything" was printed even for
      a child who had got nothing, because reaching the end of the list was the
      only thing it measured. */
+  /* The per-phrase list on the end screen. `said` is the set of patternIds a
+     child has since spoken out loud, which the challenge hands back so the
+     list can show what it cost them to earn. */
+  function renderEndList(rows, said) {
+    const label = { stuck: 'end-stuck-label', shaky: 'end-shaky-label', missed: 'end-missed-label' };
+    $('end-list').innerHTML = (rows || []).map(r =>
+      '<div class="end-row ' + r.verdict + '">' +
+        '<span class="ph">' + esc(r.target) + '<small>' + esc(r.native) + '</small></span>' +
+        '<span class="vd">' + esc(t(label[r.verdict])) +
+          (said && said.has(r.pair.patternId) ? ' \u2713' : '') + '</span>' +
+      '</div>').join('');
+  }
+
   function finish(reason) {
     state.finished = true;
     const score = E.overall(state, Q);
@@ -2541,12 +2557,8 @@
     $('end-fill').classList.toggle('pass', ok);
     $('end-mark').style.left = 'calc(' + Math.round(mark * 100) + '% - 1px)';
 
-    const label = { stuck: 'end-stuck-label', shaky: 'end-shaky-label', missed: 'end-missed-label' };
-    $('end-list').innerHTML = rows.map(r =>
-      '<div class="end-row ' + r.verdict + '">' +
-        '<span class="ph">' + esc(r.target) + '<small>' + esc(r.native) + '</small></span>' +
-        '<span class="vd">' + esc(t(label[r.verdict])) + '</span>' +
-      '</div>').join('');
+    endRows = rows;
+    renderEndList(rows, null);
 
     /* Three ways back in, and they are not the same offer: one goes somewhere
        new, one redrills only what did not stick, the other starts this night
@@ -2554,7 +2566,31 @@
     const some = $('btn-again'), all = $('btn-restart'), other = $('btn-another');
     some.querySelector('span').textContent = t('end-replay-some');
     all.querySelector('span').textContent = t('end-replay-all');
-    some.classList.toggle('hidden', left.length === 0);
+
+    /* ---------- the spoken challenge (NJA-3213) ----------
+       Offered to a child who finished the night, passed it, and did the whole
+       thing by tapping — someone with nothing left to prove on the pills. The
+       recorder and the server are both required: the browser's own speech
+       recognition does not exist in an iOS webview, and a dare that cannot be
+       answered is worse than no dare. Once a session, however many venues. */
+    const lines = speakLines(rows);
+    const dare = reason === 'complete' && ok && voiceAnswers === 0 && !speakOffered &&
+                 canRecord() && serverUp && lines.length >= 2;
+    const say = $('btn-speak');
+    say.classList.toggle('hidden', !dare);
+    $('end-axel').classList.toggle('hidden', !dare);
+    $('end-spoken').classList.add('hidden');
+    if (dare) {
+      speakOffered = true;
+      say.querySelector('span').textContent = t('speak-offer');
+      $('end-axel').textContent = t('speak-axel-dare');
+      say.onclick = () => openSpeak(lines);
+      AN('NovaPals.Nlt.SpeakChallengeOffered', {
+        venue, go: state.go, mastery: Math.round(score * 100), lines: lines.length,
+      });
+    }
+    /* It stands IN THE PLACE OF practise-what-is-left rather than beside it. */
+    some.classList.toggle('hidden', left.length === 0 || dare);
 
     /* Somewhere they have not been yet, by preference — a child who has done
        the gig twice is offered the cinema rather than a third gig. */
@@ -2602,6 +2638,7 @@
      first, so the events of the second night are filed under the second
      venue rather than the first. */
   async function goToVenue(id) {
+    voiceAnswers = 0;
     const from = venue;
     setPair(Q.nativeLang, Q.targetLang, id);
     if (played.indexOf(id) < 0) played.push(id);
@@ -2633,6 +2670,7 @@
 
   function replayLeftovers() {
     const next = E.replay(state, Q);
+    voiceAnswers = 0;
     $('end').classList.add('hidden');
     state = next;
     state.finished = false;
@@ -2644,6 +2682,197 @@
     $('chat-full').classList.add('hidden');
     renderHud();
     step();
+  }
+
+  /* ---------- the spoken challenge (NJA-3213) ----------
+     A child who finished the night by tapping, and passed, is dared to say
+     the same lines out loud. It is deliberately NOT a replay: the night is
+     five and a half minutes and nobody plays it again for a change of input
+     method. This is the handful of lines that stuck, spoken, in about a
+     minute.
+
+     Three rules hold it together:
+
+       It cannot cost them anything. They have already passed, and an offer
+       that can take a mark away is not an offer. Nothing here writes to
+       `best`, to mastery, to `passed`, or to anything Activity.End reported —
+       the score on the screen behind this card is final before it opens.
+
+       It cannot come between a child and FINISH. In a quest FINISH is what
+       pays the gems, so this is a modal over the end sheet and never a screen
+       that replaces it. Quitting, failing or crashing puts them back on the
+       end screen with that button exactly where it was.
+
+       It replaces an offer rather than joining them. The end screen already
+       carries FINISH, another venue, practise-what-is-left and start-over;
+       a fifth button makes all five quieter. This stands in the place of
+       practise-what-is-left, which a child who passed has least use for. */
+  const SPEAK_MAX = 6;        // about a minute; the night itself is five
+  let speak = null;           // the challenge in flight, or null
+  let endRows = [];           // the last report(), so the list can be redrawn
+  let voiceAnswers = 0;       // answers given by voice THIS go
+  let speakOffered = false;   // once a session, however many venues they do
+
+  /* Only what actually stuck. Challenging a child on a line they never got is
+     not a challenge, it is the thing they already failed, with the pills
+     taken away. */
+  const speakLines = rows => rows
+    .filter(r => r.verdict === 'stuck' && r.target)
+    .map(r => ({ patternId: r.pair.patternId, target: r.target, native: r.native }))
+    .slice(0, SPEAK_MAX);
+
+  /* judgeSpoken() reads a turn plan. There is no turn here, so this is the
+     smallest shape that answers the same questions: no pills and no cells, so
+     spokenTargets() falls through to the whole sentence, which is exactly what
+     is being asked for. */
+  const speakPlan = line => ({
+    expectedAnswerPills: [], cells: [], expected: line.target,
+    pair: { allTarget: line.target, allNative: line.native },
+  });
+
+  function renderSpeakDots() {
+    $('speak-dots').innerHTML = speak.lines.map((l, i) => {
+      const r = speak.results[i];
+      const cls = r === 'right' ? 'done' : r ? 'miss' : i === speak.at ? 'now' : '';
+      return '<i class="' + cls + '"></i>';
+    }).join('');
+  }
+
+  function renderSpeak() {
+    const line = speak.lines[speak.at];
+    $('speak-target').textContent = line.target;
+    $('speak-native').textContent = line.native || '';
+    $('speak-state').textContent = '';
+    $('speak-state').classList.remove('good');
+    renderSpeakDots();
+    speakMicLabel();
+    /* Axel says it before they do. Hearing the line once is not a hint here —
+       they built it themselves ten minutes ago — and it is what makes the
+       microphone feel answerable rather than blank. */
+    V.now(line.target, { speaker: 'actor', lang: TL() });
+  }
+
+  function speakMicLabel() {
+    const b = $('speak-mic');
+    b.querySelector('span').textContent =
+      micSending ? t('speak-thinking') : micOn ? t('speak-stop') : t('speak-tap');
+    b.classList.toggle('listening', !!micOn);
+    b.disabled = !!micSending;
+  }
+
+  function openSpeak(lines) {
+    speak = { lines, at: 0, open: true, right: 0, tries: 0, misheard: 0, results: [] };
+    AN('NovaPals.Nlt.SpeakChallengeTaken',
+       { venue, go: state.go, lines: lines.length });
+    SCREEN.at('Speak challenge');
+    $('speak-eyebrow').textContent = t('speak-eyebrow');
+    $('speak-title').textContent = t('speak-title');
+    $('speak-skip').querySelector('span').textContent = t('speak-skip');
+    $('speak-quit').querySelector('span').textContent = t('speak-quit');
+    $('speak-heard').textContent = '';
+    $('speak').classList.remove('hidden');
+    renderSpeak();
+  }
+
+  /* The microphone, on this card. It is the same recorder the night uses —
+     the same permission, the same primer card, the same transcriber — routed
+     to a different reader. */
+  async function speakMic() {
+    if (micSending) return;
+    if (micOn) { finishRecording(); return; }
+    V.stop();
+    $('speak-heard').textContent = '';
+    $('speak-state').textContent = '';
+    $('speak-state').classList.remove('good');
+    if (await micAgreed()) { startRecording(); return; }
+    askForMic();
+  }
+
+  async function speakHeard(said) {
+    if (!speak || !speak.open) return;
+    const line = speak.lines[speak.at];
+    speak.tries += 1;
+    $('speak-state').textContent = t('speak-thinking');
+    const j = await judgeSpoken(said, speakPlan(line));
+    if (!speak || !speak.open) return;           // they quit while it thought
+    /* A mishearing is not a wrong answer here either, and in a challenge there
+       is no attempt to spend — so it costs nothing at all, twice, before the
+       line is let go. A room with a band in it should not be able to tell a
+       child they cannot say a sentence they can say. */
+    const free = !j.target_produced && freeGo(j) && speak.misheard < 2;
+    AN('NovaPals.Nlt.SpeakAttempt', {
+      venue, go: state.go, patternId: line.patternId, index: speak.at,
+      attempt: speak.tries,
+      result: j.target_produced ? 'correct' : free ? 'misheard' : 'wrong',
+      judgedBy: j.judged, errorType: j.error_type,
+    });
+    if (j.target_produced) return speakAdvance('right');
+    if (free) {
+      speak.misheard += 1;
+      speak.tries -= 1;                          // the go was never theirs
+      $('speak-state').textContent = t('speak-again');
+      speakMicLabel();
+      return;
+    }
+    if (speak.tries < 2) {
+      $('speak-state').textContent = t('speak-wrong');
+      speakMicLabel();
+      return;
+    }
+    speakAdvance('wrong');
+  }
+
+  function speakAdvance(how) {
+    speak.results[speak.at] = how;
+    if (how === 'right') {
+      speak.right += 1;
+      $('speak-state').textContent = t('speak-right');
+      $('speak-state').classList.add('good');
+      SFX.play('right');
+    }
+    renderSpeakDots();
+    speakMicLabel();
+    setTimeout(() => {
+      if (!speak || !speak.open) return;
+      speak.at += 1; speak.tries = 0; speak.misheard = 0;
+      $('speak-heard').textContent = '';
+      if (speak.at >= speak.lines.length) return closeSpeak('complete');
+      renderSpeak();
+    }, how === 'right' ? 750 : 450);
+  }
+
+  function skipSpeakLine() {
+    if (!speak || !speak.open) return;
+    AN('NovaPals.Nlt.SpeakAttempt', {
+      venue, go: state.go, patternId: speak.lines[speak.at].patternId,
+      index: speak.at, attempt: speak.tries, result: 'skipped',
+    });
+    speakAdvance('skip');
+  }
+
+  function closeSpeak(reason) {
+    const done = speak || { lines: [], right: 0, at: 0 };
+    AN('NovaPals.Nlt.SpeakChallengeEnd', {
+      venue, go: state.go, lines: done.lines.length,
+      attempted: Math.min(done.at, done.lines.length), spoken: done.right, reason,
+    });
+    if (speak) speak.open = false;
+    if (micOn) setMic(false);
+    micSending = false;
+    $('speak').classList.add('hidden');
+    /* The tally, and a tick against every line they said. The end list is
+       redrawn rather than patched so there is one place that knows how a row
+       looks. */
+    const said = new Set(done.lines.filter((l, i) => done.results && done.results[i] === 'right')
+                                   .map(l => l.patternId));
+    renderEndList(endRows, said);
+    const note = $('end-spoken');
+    note.textContent = t('speak-result', done.right, done.lines.length);
+    note.classList.remove('hidden');
+    $('btn-speak').classList.add('hidden');
+    $('end-axel').classList.add('hidden');
+    SCREEN.at('End — Passed');
+    speak = null;
   }
 
   /* ---------- mic ----------
@@ -2683,14 +2912,20 @@
 
   function setMic(on) {
     micOn = on;
-    $('mic-panel').classList.toggle('hidden', !on);
-    $('tray').style.display = on ? 'none' : '';
-    $('slot').style.display = on ? 'none' : '';
-    $('slot-label').style.display = on ? 'none' : '';
-    $('btn-mic').classList.toggle('on', on);
-    $('btn-say').style.display = on ? 'none' : '';
-    $('btn-clear').style.display = on ? 'none' : '';
-    if (on) micLabels();
+    /* During the challenge the night is over and its dock is behind a card.
+       Touching the tray and the slot there would be rearranging furniture in
+       a room nobody is in, so the card shows its own state instead. */
+    if (speak && speak.open) { speakMicLabel(); }
+    else {
+      $('mic-panel').classList.toggle('hidden', !on);
+      $('tray').style.display = on ? 'none' : '';
+      $('slot').style.display = on ? 'none' : '';
+      $('slot-label').style.display = on ? 'none' : '';
+      $('btn-mic').classList.toggle('on', on);
+      $('btn-say').style.display = on ? 'none' : '';
+      $('btn-clear').style.display = on ? 'none' : '';
+      if (on) micLabels();
+    }
     if (!on) {
       micSending = false;
       if (recog) { try { recog.stop(); } catch {} recog = null; }
@@ -2801,7 +3036,7 @@
   function finishRecording() {
     if (!media) { setMic(false); return; }
     micSending = true;
-    micLabels();
+    if (speak && speak.open) speakMicLabel(); else micLabels();
     const m = media;
     const type = m.mimeType || micType() || 'audio/webm';
     media = null;
@@ -2814,7 +3049,12 @@
     if (micStream) { for (const tr of micStream.getTracks()) { try { tr.stop(); } catch {} } micStream = null; }
     const blob = new Blob(micChunks, { type });
     micChunks = [];
-    if (!blob.size) { setMic(false); $('verdict').textContent = t('mic-nothing'); return; }
+    if (!blob.size) {
+      setMic(false);
+      if (speak && speak.open) { $('speak-state').textContent = t('mic-nothing'); speakMicLabel(); }
+      else $('verdict').textContent = t('mic-nothing');
+      return;
+    }
     /* Both languages: what the line asks them to produce, and the one the
        rest of the line is in. The transcriber needs both to write down a
        mixed sentence as it was actually said. */
@@ -2823,9 +3063,12 @@
     setMic(false);
     const said = String((j && j.text) || '').trim();
     if (!said) {
-      $('verdict').textContent = t(j && j.fail ? 'mic-failed' : 'mic-nothing');
+      const why = t(j && j.fail ? 'mic-failed' : 'mic-nothing');
+      if (speak && speak.open) { $('speak-state').textContent = why; speakMicLabel(); }
+      else $('verdict').textContent = why;
       return;
     }
+    if (speak && speak.open) { $('speak-heard').textContent = said; speakHeard(said); return; }
     $('mic-heard').textContent = said;
     submit(said, 'voice');
   }
@@ -3046,6 +3289,12 @@
      real browser prompt, so the recording starts from inside the handler and
      iOS counts it as a tap. */
   $('mic-ask-go').addEventListener('click', () => { closeMicAsk(); startRecording(); });
+  /* The spoken challenge. "That is enough" is a way out, not a failure: a
+     child who stops halfway keeps whatever they said, and the end screen is
+     still behind this card with FINISH where they left it. */
+  $('speak-mic').addEventListener('click', speakMic);
+  $('speak-skip').addEventListener('click', skipSpeakLine);
+  $('speak-quit').addEventListener('click', () => closeSpeak('quit'));
   $('mic-ask-no').addEventListener('click', closeMicAsk);
   /* The pause sheet IS the pause: opening it stops the night, closing it
      starts it again, so those are the two events rather than a button that
@@ -3147,6 +3396,16 @@
     overall: () => E.overall(state, Q),
     finish: reason => finish(reason || 'debug'),
     replay: () => replayLeftovers(),
+    /* the spoken challenge, so a test can open it and read it without having
+       to hold a microphone up to a headless browser */
+    speak: () => speak,
+    /* why the dare did or did not appear, which is four booleans and saves
+       guessing at a hidden button */
+    speakWhy: () => ({ voiceAnswers, speakOffered, serverUp, canRecord: canRecord(),
+                       lines: state ? speakLines(E.report(state, Q)).length : 0 }),
+    speakOpen: () => openSpeak(speakLines(E.report(state, Q))),
+    speakHeard: said => speakHeard(said),
+    speakSkip: () => skipSpeakLine(),
     /* so a test can put a line to the guard without waiting for the model to
        write a bad one */
     mixedQuote: txt => mixedQuote(txt),
