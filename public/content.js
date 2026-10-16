@@ -52,7 +52,13 @@ window.QUEST = (function () {
     ro: { en: 'engleză',    es: 'spaniolă',    pt: 'portugheză',  tr: 'turcă',       pl: 'poloneză',    ro: 'română' },
   };
 
-  const slotTags = ['ticket', 'item', 'like'];
+  /* `topic` is what a venue is ABOUT — the band, the team, the film — as
+     opposed to `item`, which is what you can buy at its counter. They had to
+     be separated: `like` is carried by almost every noun, so "what do you like"
+     drew from the same pool as "what can I have", and the walk handed `i-like`
+     the beer at the gig and the ticket everywhere else. "I like the ticket" is
+     not a sentence anybody says. */
+  const slotTags = ['ticket', 'item', 'like', 'topic'];
 
   /* NJA-3152's five forms, per language. `bare` is the spelling the schema
      ticket uses — NJA-3204's fixtures write `base` for the same field, and
@@ -160,7 +166,7 @@ window.QUEST = (function () {
        carries `like` only and the engine will never pair it with "Can I have
        ___". That tag check is the whole point of NJA-3152's slot_tags: adding
        a noun is a tag, not an edit to seven patterns. */
-    band:     { tags: ['like'],
+    band:     { tags: ['like', 'topic'],
                 en: { bare: 'band',     definite: 'the band',     indefinite: 'a band',
                       plural_bare: 'bands',     plural_definite: 'the bands' },
                 es: { bare: 'grupo',    definite: 'el grupo',     indefinite: 'un grupo',
@@ -173,7 +179,7 @@ window.QUEST = (function () {
                       plural_bare: 'zespoły',   plural_definite: 'zespoły' },
                 ro: { bare: 'trupă',    definite: 'trupa',        indefinite: 'o trupă',
                       plural_bare: 'trupe',     plural_definite: 'trupele' } },
-    singer:   { tags: ['like'],
+    singer:   { tags: ['like', 'topic'],
                 en: { bare: 'singer',   definite: 'the singer',   indefinite: 'a singer',
                       plural_bare: 'singers',   plural_definite: 'the singers' },
                 es: { bare: 'cantante', definite: 'el cantante',  indefinite: 'un cantante',
@@ -270,7 +276,7 @@ window.QUEST = (function () {
                       plural_bare: 'plakaty',   plural_definite: 'plakaty' },
                 ro: { bare: 'poster',   definite: 'posterul',     indefinite: 'un poster',
                       plural_bare: 'postere',   plural_definite: 'posterele' } },
-    team:     { tags: ['like'],
+    team:     { tags: ['like', 'topic'],
                 en: { bare: 'team',     definite: 'the team',     indefinite: 'a team',
                       plural_bare: 'teams',     plural_definite: 'the teams' },
                 es: { bare: 'equipo',   definite: 'el equipo',    indefinite: 'un equipo',
@@ -285,7 +291,7 @@ window.QUEST = (function () {
                       plural_bare: 'echipe',    plural_definite: 'echipele' } },
     /* Animate masculine in Polish, like `singer` above, so the accusative is
        not the nominative. */
-    player:   { tags: ['like'],
+    player:   { tags: ['like', 'topic'],
                 en: { bare: 'player',   definite: 'the player',   indefinite: 'a player',
                       plural_bare: 'players',   plural_definite: 'the players' },
                 es: { bare: 'jugador',  definite: 'el jugador',   indefinite: 'un jugador',
@@ -298,7 +304,7 @@ window.QUEST = (function () {
                       plural_bare: 'piłkarze',  plural_definite: 'piłkarzy' },
                 ro: { bare: 'jucător',  definite: 'jucătorul',    indefinite: 'un jucător',
                       plural_bare: 'jucători',  plural_definite: 'jucătorii' } },
-    film:     { tags: ['like'],
+    film:     { tags: ['like', 'topic'],
                 en: { bare: 'film',     definite: 'the film',     indefinite: 'a film',
                       plural_bare: 'films',     plural_definite: 'the films' },
                 es: { bare: 'película', definite: 'la película',  indefinite: 'una película',
@@ -314,7 +320,7 @@ window.QUEST = (function () {
     /* Turkish `oyuncu` is both an actor and a player, so the stadium takes
        `futbolcu` above and the cinema takes `aktor` here — otherwise the two
        venues would teach the same word for two different people. */
-    actor:    { tags: ['like'],
+    actor:    { tags: ['like', 'topic'],
                 en: { bare: 'actor',    definite: 'the actor',    indefinite: 'an actor',
                       plural_bare: 'actors',    plural_definite: 'the actors' },
                 es: { bare: 'actor',    definite: 'el actor',     indefinite: 'un actor',
@@ -439,14 +445,14 @@ window.QUEST = (function () {
        keeps its article when it crosses into the English frame rather than
        arriving bare. */
     'i-like':       { speaker: 'either',
-                      en: 'I like {like:plural_bare}.',
-                      es: 'Me gusta {like:definite}.',
-                      pt: 'Gosto de {like:plural_bare}.',
-                      tr: '{like:plural_definite} seviyorum.',
-                      pl: 'Lubię {like:plural_definite}.',
+                      en: 'I like {topic:plural_bare}.',
+                      es: 'Me gusta {topic:definite}.',
+                      pt: 'Gosto de {topic:plural_bare}.',
+                      tr: '{topic:plural_definite} seviyorum.',
+                      pl: 'Lubię {topic:plural_definite}.',
                       /* `plac` rather than `place`: Romanian agrees the verb
                          with the thing liked, and this slot is plural. */
-                      ro: 'Îmi plac {like:plural_definite}.' },
+                      ro: 'Îmi plac {topic:plural_definite}.' },
     /* Two slots. NJA-3160's third unit test is a pattern of exactly this
        shape, and the engine used to refuse them outright — one slot per
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
@@ -496,49 +502,82 @@ window.QUEST = (function () {
      a door, and all three venues are a counter, where the actor sells and the
      child buys. All three stay defined for a scenario where they are the
      point. */
-  /* ---------- the order of the climb (NJA-3211) ----------
-     The ladder is walked in this order, and for most of the prototype's life
-     it was simply the order the patterns happened to be written in. That put
-     `do-you-have` — measurably the hardest ask we have — at questions two and
-     three, where 39% of answers to its second step were wrong and the night
-     had barely started. Nothing about it needs to be there: it is a question
-     form with an article in it, which is two new things at once.
+  /* ---------- the night, in three legs (NJA-3214) ----------
+     One venue was a six minute commitment with a single finish line seventeen
+     questions away, and 56% of children never reached it — so more than half
+     of everyone who started left having completed nothing at all. The losses
+     were never a wall at the front: 81% get past question three. They were
+     spread thin across the whole night, which is the signature of a thing that
+     is simply too long.
 
-     So the constructions are ordered by what they ask of the child rather
-     than by the order they were written: the fixed phrase first, then the one
-     slot statements, then the questions, then the request and its politeness
-     tag, then the two-slot one, and `thank-you` to close. `can-i-have` stays
-     immediately before `can-i-have-please`, because "please" is only cheap
-     when it is one word added to a frame they just used, and `i-like` stays
-     before `i-like-two` for the same reason. */
-  const PATTERNS = ['excuse-me', 'i-like', 'i-dont-want', 'do-you-like',
-                    'can-i-have', 'can-i-have-please', 'do-you-have',
-                    'i-like-two', 'thank-you'];
+     So a night is now three short legs in three different places. Each leg is
+     three or four questions and about a minute, each one ends in a win, and
+     Axel pulls them on to the next. The child chooses where to start, then
+     chooses between what is left; the last place is wherever they have not
+     been. The app hears nothing until the end of the third leg.
+
+     CONSTRUCTIONS BELONG TO THE LEG, NOT THE VENUE. The venue supplies the
+     room, the person behind the counter and the nouns; the leg supplies what
+     is taught. That is what lets any venue be first, second or third, and it
+     keeps the venue choice a motivational one rather than a syllabus one —
+     which also means a venue comparison is finally comparing like with like. */
+  const LEGS = [
+    /* Shortest first, and it opens on the one phrase with no gap in it at all.
+       The first win should land before a child has decided whether they are
+       enjoying this. */
+    { patterns: ['excuse-me', 'i-like'] },
+    /* `can-i-have` and `can-i-have-please` stay adjacent and in this order:
+       "please" is only cheap when it is one word added to a frame used thirty
+       seconds ago. Split them across legs and the second becomes a new thing. */
+    { patterns: ['can-i-have', 'can-i-have-please'] },
+    /* Closing on `thank-you`, which at 7.8% wrong is the easiest thing in the
+       activity. The last thing that happens should be a thing they can do. */
+    { patterns: ['i-dont-want', 'thank-you'] },
+  ];
+
+  /* ---------- the six that survived ----------
+     Three constructions were cut, on the difficulty we measured rather than on
+     taste:
+
+       `do-you-have`     the worst we ever recorded, 48.4% wrong, and still
+                         30.0% after the article moved into the frame. It is a
+                         question form AND an article: two new things at once.
+       `do-you-like`     the other construction the CHILD has to ask rather
+                         than answer. Cutting both means the child only ever
+                         answers, which is how the educator's script is built
+                         and what the error rates have been saying all week.
+       `i-like-two`      two slots and three steps, and among the worst
+                         wherever in the night it sat.
+
+     All three stay DEFINED above, like `there-is-no` and `i-have` before them,
+     because a scenario that wants them should find them written. They are
+     simply not in this night. */
+  const PATTERNS = LEGS.reduce((all, leg) => all.concat(leg.patterns), []);
 
   /* ---------- the order the nouns are claimed ----------
-     syllabus() hands each stage the first noun nobody has had yet, so for as
-     long as there was one list, the order of the CLIMB decided the order of
-     the VOCABULARY. Reordering the climb therefore moved every noun: `entrada`
-     slid off the ask it belongs to and onto `i-like`, which says "I like the
-     ticket", and the cinema's `do-you-have` landed on `nachos`, a plural with
-     no article to give and so nothing left of NJA-3211's fix.
+     syllabus() hands each stage the first noun nobody has had yet, so the
+     order of the CLIMB used to decide the order of the VOCABULARY, and
+     reordering one silently moved the other. They are two different decisions,
+     so they are two lists. This one is the vocabulary's and changes when the
+     words change, not when the ladder does.
 
-     They are two different decisions — which construction is hard, and which
-     word belongs with which ask — so they are written as two lists. This one
-     is the original order and it is the vocabulary's; it changes when the
-     words change, not when the ladder does. */
-  const ITEM_ORDER = ['excuse-me', 'do-you-have', 'can-i-have', 'can-i-have-please',
-                      'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
-                      'thank-you'];
+     It is also why every leg can run in every venue: each venue carries seven
+     nouns tagged `item` and at least seven tagged `like`, which is more than
+     any single leg can claim. */
+  const ITEM_ORDER = ['excuse-me', 'can-i-have', 'can-i-have-please',
+                      'i-dont-want', 'i-like', 'thank-you'];
 
-  /* Two lists naming the same nine things is a typo waiting to happen, and the
+  /* Two lists naming the same six things is a typo waiting to happen, and the
      typo would be silent: a name ITEM_ORDER misspells simply claims its noun
      last, which moves a word onto a different ask and reads as a content
-     decision. So the two are checked against each other at load. */
+     decision. So the two are checked against each other at load, and so is
+     every name a leg uses. */
   (function () {
     const a = PATTERNS.slice().sort().join(','),
           b = ITEM_ORDER.slice().sort().join(',');
     if (a !== b) throw new Error('PATTERNS and ITEM_ORDER name different patterns: ' + a + ' vs ' + b);
+    if (new Set(PATTERNS).size !== PATTERNS.length)
+      throw new Error('a pattern appears in more than one leg: ' + PATTERNS.join(','));
   })();
 
   const VENUES = {
@@ -1017,6 +1056,45 @@ Return JSON only.`,
       en: 'Said out loud: {0} of {1}', es: 'Dichas en voz alta: {0} de {1}',
       pt: 'Ditas em voz alta: {0} de {1}', tr: 'Sesli s\u00f6ylenen: {1} i\u00e7inden {0}',
       pl: 'Powiedziane na g\u0142os: {0} z {1}', ro: 'Spuse cu voce tare: {0} din {1}',
+    },
+    /* ---------- walking between places (NJA-3214) ----------
+       Axel's line at the door. It is the only thing carrying a child from one
+       room to the next, so it names the win and then names the reason to keep
+       going. {0} is where they are headed, when there is only one place left
+       and so nothing to ask. */
+    'leg-handoff': {
+      en: 'Nice one. Come on, I know somewhere else you will like.',
+      es: '\u00a1Muy bien! Venga, conozco otro sitio que te va a gustar.',
+      pt: 'Boa! Anda, conhe\u00e7o outro s\u00edtio de que vais gostar.',
+      tr: 'Harika. Hadi, ho\u015funa gidecek ba\u015fka bir yer biliyorum.',
+      pl: 'Nie\u017ale! Chod\u017a, znam jeszcze jedno miejsce, kt\u00f3re ci si\u0119 spodoba.',
+      ro: 'Bravo! Hai, mai \u0219tiu un loc care o s\u0103-\u021bi plac\u0103.',
+    },
+    'leg-handoff-named': {
+      en: 'Nice one. Last stop \u2014 {0}. Come on.',
+      es: '\u00a1Muy bien! \u00daltima parada: {0}. Vamos.',
+      pt: 'Boa! \u00daltima paragem: {0}. Anda.',
+      tr: 'Harika. Son durak: {0}. Hadi gidelim.',
+      pl: 'Nie\u017ale! Ostatni przystanek: {0}. Chod\u017a.',
+      ro: 'Bravo! Ultima oprire: {0}. Hai.',
+    },
+    /* The night's own pitch, replacing the single-venue one. Three places in
+       one evening is the offer, and the coaching is the reassurance. */
+    'night-title': {
+      en: 'A BIG NIGHT OUT', es: 'UNA GRAN NOCHE', pt: 'UMA GRANDE NOITE',
+      tr: 'B\u00dcY\u00dcK B\u0130R GECE', pl: 'WIELKI WYCZ\u00d3R', ro: 'O SEAR\u0102 PE CINSTE',
+    },
+    'night-pitch': {
+      en: 'Three of my favourite places in London, one night. I will coach you through the {0} \u2014 you just have to say it.',
+      es: 'Tres de mis sitios favoritos de Londres, en una noche. Yo te ayudo con el {0}; t\u00fa solo tienes que decirlo.',
+      pt: 'Tr\u00eas dos meus s\u00edtios favoritos de Londres, numa noite. Eu ajudo-te com o {0} \u2014 s\u00f3 tens de dizer.',
+      tr: 'Londra\u2019daki en sevdi\u011fim \u00fc\u00e7 mekan, tek gecede. {0} konusunda sana ben yard\u0131m ederim; sen sadece s\u00f6yle.',
+      pl: 'Trzy moje ulubione miejsca w Londynie, jednego wieczoru. Pomog\u0119 ci z {0} \u2014 ty masz tylko to powiedzie\u0107.',
+      ro: 'Trei dintre locurile mele preferate din Londra, \u00eentr-o singur\u0103 sear\u0103. Te ajut eu cu {0} \u2014 tu doar trebuie s-o spui.',
+    },
+    'night-first-stop': {
+      en: 'Where do we start?', es: '\u00bfPor d\u00f3nde empezamos?', pt: 'Por onde come\u00e7amos?',
+      tr: 'Nereden ba\u015flayal\u0131m?', pl: 'Od czego zaczynamy?', ro: 'De unde \u00eencepem?',
     },
     'end-replay-all': {
       en: 'PLAY AGAIN', es: 'JUGAR OTRA VEZ', pt: 'JOGAR OUTRA VEZ',
@@ -1580,7 +1658,7 @@ Return JSON only.`,
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
-      itemOrder: ITEM_ORDER,
+      itemOrder: ITEM_ORDER, legs: LEGS,
       groups: [], glossary: {}, chipGloss: {}, phrases: {},
     };
 

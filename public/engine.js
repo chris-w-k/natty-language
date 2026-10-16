@@ -163,14 +163,17 @@ window.ENGINE = (function () {
   }
   const frameAtStep = (pair, step) => step >= (pair.slotKeys || []).length;
 
-  function createState(quest) {
+  function createState(quest, startLegIndex) {
     const patterns = {}, items = {};
     for (const g of quest.groups || []) {
       patterns[g.id] = patterns[g.id] || blank();
       for (const key of g.slotKeys)
         for (const id of g.slots[key]) items[id] = items[id] || blank();
     }
-    const plan = allSteps(quest).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
+    /* On a night with legs the plan is this leg's steps only. The child has
+       not abandoned the rest — they are in another room. */
+    const leg = hasLegs(quest) ? (startLegIndex || 0) : 0;
+    const plan = legSteps(quest, leg).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
     return {
       patterns, items,
       turn: 0, coins: 0, finished: false,
@@ -180,6 +183,8 @@ window.ENGINE = (function () {
       /* The steps this go will drill, in order, and where we are in them. A
          first go holds every step; a replay holds only what did not stick. */
       plan, at: 0, go: 1,
+      /* which room of the night this is, and whether its plan is spent */
+      leg, legDone: false,
       /* The BEST each step has been answered, 0..1, keyed stage:step. Mastery
          is the sum of these over every step the syllabus has — so redrilling
          a step can raise the score but never lower it, which is what makes
@@ -204,6 +209,29 @@ window.ENGINE = (function () {
      out flat because everything about finishing a go — the score, what to
      redrill, what a replay carries — is per step rather than per pattern. */
   const stepKey = (stage, step) => stage + ':' + step;
+
+  /* ---------- legs (NJA-3214) ----------
+     A night is three short legs in three venues. The content declares which
+     constructions belong to which leg; the venue supplies only the room and
+     the nouns. Every venue builds the SAME six stages in the SAME order, so a
+     `stage:step` key means the same thing in all three and a child's mastery
+     survives walking out of one door and into another.
+
+     A quest with no `legs` is the one-venue night, and every function here
+     falls back to it. */
+  const hasLegs = quest => !!(quest && quest.legs && quest.legs.length);
+  const legCount = quest => (hasLegs(quest) ? quest.legs.length : 1);
+  const legOf = (quest, patternId) => (hasLegs(quest)
+    ? quest.legs.findIndex(l => (l.patterns || []).indexOf(patternId) >= 0)
+    : 0);
+  function legSteps(quest, leg) {
+    if (!hasLegs(quest)) return allSteps(quest);
+    return allSteps(quest).filter(s => legOf(quest, s.pair.patternId) === leg);
+  }
+  /* The room is finished and the night is not. Distinct from `done`, which is
+     the night, and from `makeup`, which only ever runs on the last leg. */
+  const legDone = state => !!state.legDone;
+  const lastLeg = (state, quest) => (state.leg || 0) >= legCount(quest) - 1;
   function allSteps(quest) {
     const out = [];
     stages(quest).forEach((pair, stage) => {
@@ -329,6 +357,12 @@ window.ENGINE = (function () {
     state.at += 1;
     const next = state.plan[state.at];
     if (next) { state.stage = next.stage; state.step = next.step; return; }
+    /* Out of steps. On any leg but the last that means the room is over and
+       the night goes on, so nothing is judged yet — no pass mark, and no
+       makeup. Makeup belongs to the end of the night: drilling a child's
+       weakest step before letting them leave the first bar is the opposite of
+       what three short legs are for. */
+    if (hasLegs(quest) && !lastLeg(state, quest)) { state.legDone = true; return; }
     retarget(state, quest);
   }
 
@@ -399,6 +433,28 @@ window.ENGINE = (function () {
      Patterns stay INTRODUCED and items do not: they know "Can I have ___?"
      and should not have it handed over again, but `popcorn` is a word they
      have never seen and the coach has to give it to them. */
+  /* ---------- the next room (NJA-3214) ----------
+     `quest` here is ALREADY rebuilt for the new venue, so its nouns and its
+     person behind the counter are the new ones. Everything the child has
+     earned comes with them: this is one lesson in three rooms, not three
+     lessons. Contrast switchVenue below, which deliberately drops the slotted
+     constructions because that IS a second go at the same material. */
+  function startLeg(state, quest, leg) {
+    const next = createState(quest, leg);
+    next.best = Object.assign({}, state.best);
+    next.drills = Object.assign({}, state.drills);
+    next.released = Object.assign({}, state.released);
+    next.coins = state.coins;
+    next.go = state.go || 1;
+    next.turn = state.turn || 0;
+    /* A word already met is not introduced twice, whichever room it was in. */
+    for (const k of Object.keys(next.patterns))
+      if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
+    for (const k of Object.keys(next.items))
+      if (state.items[k]) next.items[k].introduced = state.items[k].introduced;
+    return next;
+  }
+
   function switchVenue(state, quest) {
     const next = createState(quest);
     const bar = keepMark(quest);
@@ -845,6 +901,7 @@ window.ENGINE = (function () {
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
+    hasLegs, legCount, legOf, legSteps, legDone, lastLeg, startLeg,
     expected, gaps, tagOfPattern, norm, words,
   };
 })();

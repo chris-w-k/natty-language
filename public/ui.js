@@ -12,6 +12,10 @@
   /* Which night this is. Set before the quest starts and never changed inside
      a go — a venue switch rebuilds the whole content object through here. */
   let venue = C.defaultVenue;
+  /* Which room of the night is being chosen. The picker fires VenueChosen
+     itself, so this is how that event knows whether it is the first stop or
+     the third without the picker having to be told who called it. */
+  let legNo = 1;
   const played = [];
   function setPair(nativeCode, targetCode, venueId) {
     if (venueId) venue = venueId;
@@ -560,13 +564,20 @@
      with the children who could not be bothered is not a preference, it is a
      shrug with a bar chart on it. */
   function pickVenue() {
+    /* ?venue= names where the night STARTS, not where it spends all three
+       legs. Honouring it on every pick would walk a child out of a bar and
+       back into the same bar twice, which is also what a harness would then
+       quietly certify as working. */
     const forced = paramVenue();
-    if (forced) {
+    if (forced && played.indexOf(forced) < 0) {
       setPair(Q.nativeLang, Q.targetLang, forced);
       return Promise.resolve({ venue: forced, how: 'url' });
     }
 
-    const list = C.venueList(NL());
+    /* On a night with legs the child picks from what they have NOT been to
+       yet, so the third room needs no question asked. */
+    const left = C.venueList(NL()).filter(v => played.indexOf(v.id) < 0);
+    const list = left.length ? left : C.venueList(NL());
     $('venue-surprise').querySelector('span').textContent = t('venue-surprise') || 'Surprise me';
     /* The chooser lives on Axel's panel now, so there is no panel to show and
        no screen to name: the child has been on 'Coach Intro' since he started
@@ -612,7 +623,7 @@
         roomBed(0.30, 4000);
         $('venue-pick').classList.add('hidden');
         AN('NovaPals.Nlt.VenueChosen',
-           { venue: id, how, msToChoose: Date.now() - offeredAt });
+           { venue: id, how, leg: legNo, msToChoose: Date.now() - offeredAt });
         resolve({ venue: id, how });
       }
     });
@@ -2261,6 +2272,10 @@
   /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
+    /* Checked BEFORE sessionComplete: a finished leg is not a finished night,
+       and reading it the other way round would hand the app a completed quest
+       from the doorway of the first bar. */
+    if (E.legDone(state)) return leaveForNextVenue();
     if (E.sessionComplete(state, Q)) return finish('complete');
     if (state.turn >= Q.session.turnCap) return finish('turn-cap');
     const pair = E.pickNext(state, Q);
@@ -2664,6 +2679,75 @@
     roomBed(0.12, 1400);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
     renderHud();
+    SCREEN.at('Night');
+    step();
+  }
+
+  /* ---------- out of one door and into the next (NJA-3214) ----------
+     No end screen, no score, no message to the app: the night is not over.
+     Axel says where they are going, on his own panel, and the child picks from
+     the places they have not been to. When only one is left there is nothing
+     to ask, so he names it and they walk.
+
+     This reuses the intro's coach panel rather than inventing a screen. It is
+     already a character asking a question with the answers underneath him,
+     which is exactly what the doorway between two rooms is. */
+  async function leaveForNextVenue() {
+    const leg = (state.leg || 0) + 1;
+    const from = venue;
+    AN('NovaPals.Nlt.LegEnd', {
+      leg, venue: from, questions: state.plan.length,
+      mastery: Math.round(E.overall(state, Q) * 100), turns: state.turn,
+    });
+    inputLocked = true;
+    V.stop();
+
+    const left = C.venueList(NL()).filter(v => played.indexOf(v.id) < 0);
+    if (!left.length) return finish('complete');        // nowhere left; end it
+    const named = left.length === 1 ? left[0].name : '';
+    const line = t(named ? 'leg-handoff-named' : 'leg-handoff', named);
+
+    const el = $('intro');
+    $('intro-bubble').textContent = line;
+    $('venue-pick').classList.add('hidden');
+    $('intro-tap-2').textContent = '';
+    el.classList.remove('hidden');
+    showPanel('intro-coach');
+    SCREEN.at('Between places');
+    introAxel();
+    V.say(line, { speaker: 'axel', lang: accentOf('axel') });
+
+    let pick;
+    legNo = leg + 1;
+    if (left.length > 1) {
+      pick = await pickVenue();                          // fires VenueChosen itself
+    } else {
+      $('intro-tap-2').textContent = (Q.activity.intro || {}).tap || 'Tap to continue';
+      await tapAnywhere(el);
+      setPair(Q.nativeLang, Q.targetLang, left[0].id);
+      pick = { venue: left[0].id, how: 'last' };
+    }
+    el.classList.add('hidden');
+
+    if (played.indexOf(pick.venue) < 0) played.push(pick.venue);
+    SCREEN.register({ venue: pick.venue });
+    /* The forced last stop was never offered, so the picker did not report it. */
+    if (pick.how === 'last')
+      AN('NovaPals.Nlt.VenueChosen', { venue: pick.venue, how: 'last', leg: leg + 1 });
+
+    /* Q was rebuilt for the new room by setPair, so startLeg carries the
+       child's mastery into a quest whose nouns and counter staff are new. */
+    state = E.startLeg(state, Q, leg);
+    inputLocked = false;
+    chatLog.length = 0;
+    $('chat').innerHTML = '';
+    hideGloss();
+    $('chat-full').classList.add('hidden');
+    mountBackground($('layer-bg'), Q.activity.background);
+    roomBed(0.12, 1400);
+    mountCharacter($('character'), { character: ACTOR, state: 'idle' });
+    renderHud();
+    AN('NovaPals.Nlt.LegStart', { leg: leg + 1, venue: pick.venue, questions: state.plan.length });
     SCREEN.at('Night');
     step();
   }
@@ -3211,7 +3295,7 @@
       await probeServer();
     }
 
-    state = E.createState(Q);
+    state = E.createState(Q, 0);
     /* ?opener=0 turns off the taught first turn, so a harness about generated
        lines or wrong answers can reach one without playing through a turn that
        has neither. Same door as ?intro=0, and the same reason. */
@@ -3235,8 +3319,14 @@
     if (played.indexOf(venue) < 0) played.push(venue);
     AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL(),
                                  languageSource: langSource });
+    /* ONE Activity.Start for the whole night, however many rooms it visits.
+       The app is told at the start and at the end and at no point between:
+       three legs are one activity, and a child walking from a bar to a cinema
+       has not finished anything the app should hear about. */
     AN('NovaPals.Activity.Start', { nativeLanguage: NL(), targetLanguage: TL(),
-                                    stages: E.syllabus(Q).length, steps: E.allSteps(Q).length });
+                                    stages: E.syllabus(Q).length, steps: E.allSteps(Q).length,
+                                    legs: E.legCount(Q), venue });
+    if (E.hasLegs(Q)) AN('NovaPals.Nlt.LegStart', { leg: 1, venue, questions: state.plan.length });
     buildRail();
     $('t-mode').textContent = NL() + ' \u2192 ' + TL() + ' · ' + Q.pairs.length + ' pairs';
     $('btn-mic').style.opacity = micAvailable() ? '' : '.4';
