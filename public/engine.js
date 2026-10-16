@@ -224,9 +224,36 @@ window.ENGINE = (function () {
   const legOf = (quest, patternId) => (hasLegs(quest)
     ? quest.legs.findIndex(l => (l.patterns || []).indexOf(patternId) >= 0)
     : 0);
+  /* The steps of one leg, in the order they are asked. The GATE leads every
+     leg: taught on the first, with its full ramp, and cold on the rest — one
+     question, the whole sentence, no step up to it. Everything after it is
+     the leg's own constructions in content order. */
   function legSteps(quest, leg) {
     if (!hasLegs(quest)) return allSteps(quest);
-    return allSteps(quest).filter(s => legOf(quest, s.pair.patternId) === leg);
+    const all = allSteps(quest);
+    const spec = quest.legs[leg] || {};
+    const out = [];
+    if (quest.gate && spec.gate) {
+      const gate = all.filter(s => s.pair.patternId === quest.gate);
+      /* 'cold' is the LAST step of the gate, which is the one where the whole
+         frame crosses. Dropping the earlier steps is the scaffolding being
+         taken away, not a shortcut: the child is asked for the finished
+         sentence and nothing leads them to it. */
+      out.push.apply(out, spec.gate === 'cold' ? gate.slice(-1) : gate);
+    }
+    for (const pid of (spec.patterns || []))
+      out.push.apply(out, all.filter(s => s.pair.patternId === pid));
+    return out.length ? out : all.filter(s => legOf(quest, s.pair.patternId) === leg);
+  }
+
+  /* True when this turn is the gate being asked cold — the coach has a written
+     line for it, because a generated hint would quietly hand back the support
+     the cold ask exists to remove. */
+  function coldGate(state, quest, pair) {
+    if (!hasLegs(quest) || !quest.gate || !pair) return false;
+    if (pair.patternId !== quest.gate) return false;
+    const spec = quest.legs[state.leg || 0] || {};
+    return spec.gate === 'cold';
   }
   /* The room is finished and the night is not. Distinct from `done`, which is
      the night, and from `makeup`, which only ever runs on the last leg. */
@@ -901,7 +928,7 @@ window.ENGINE = (function () {
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
-    hasLegs, legCount, legOf, legSteps, legDone, lastLeg, startLeg,
+    hasLegs, legCount, legOf, legSteps, legDone, lastLeg, startLeg, coldGate,
     expected, gaps, tagOfPattern, norm, words,
   };
 })();

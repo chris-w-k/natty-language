@@ -1385,6 +1385,17 @@
      means: a construction they have never seen, named and translated. Vocab is
      the character's job, so the coach does not double up on it. */
   function coachCopy(plan, gen) {
+    /* The gate asked cold has a written line and takes no generated one. The
+       whole point of the cold ask is that nothing on screen leads them to the
+       sentence, and a model asked for a hint will lead them to it every time.
+       There is no new-word badge either: nothing here is new, that is the
+       point. */
+    if (state && E.coldGate(state, Q, plan.pair)) {
+      const lines = tList('coach-gate-cold');
+      const line = lines[((state.leg || 1) - 1) % lines.length] || lines[0] || '';
+      const frags = toFragments(line);
+      return { askText: line, html: fragmentsHTML(frags), fragments: frags };
+    }
     const fb = fallbackLines(plan);
     const ask = gen && gen.coachText ? gen.coachText : fb.coach_line;
     const frags = gen && gen.chatHistory && gen.chatHistory[0]

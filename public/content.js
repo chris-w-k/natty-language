@@ -458,12 +458,12 @@ window.QUEST = (function () {
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
        apart; both draw on the same tag. */
     'i-like-two':   { speaker: 'either',
-                      en: 'I like {like#1:definite} and {like#2:definite}.',
-                      es: 'Me gustan {like#1:definite} y {like#2:definite}.',
-                      pt: 'Gosto de {like#1:plural_bare} e de {like#2:plural_bare}.',
-                      tr: '{like#1:definite} ve {like#2:definite} seviyorum.',
-                      pl: 'Lubię {like#1:definite} i {like#2:definite}.',
-                      ro: 'Îmi plac {like#1:definite} și {like#2:definite}.' },
+                      en: 'I like {topic#1:definite} and {topic#2:definite}.',
+                      es: 'Me gustan {topic#1:definite} y {topic#2:definite}.',
+                      pt: 'Gosto de {topic#1:plural_bare} e de {topic#2:plural_bare}.',
+                      tr: '{topic#1:definite} ve {topic#2:definite} seviyorum.',
+                      pl: 'Lubię {topic#1:definite} i {topic#2:definite}.',
+                      ro: 'Îmi plac {topic#1:definite} și {topic#2:definite}.' },
     'thank-you':    { speaker: 'learner',
                       en: 'Thank you.',  es: 'Gracias.',      pt: 'Obrigado.',
                       tr: 'Teşekkürler.', pl: 'Dziękuję.',    ro: 'Mulțumesc.' },
@@ -503,81 +503,71 @@ window.QUEST = (function () {
      child buys. All three stay defined for a scenario where they are the
      point. */
   /* ---------- the night, in three legs (NJA-3214) ----------
-     One venue was a six minute commitment with a single finish line seventeen
-     questions away, and 56% of children never reached it — so more than half
-     of everyone who started left having completed nothing at all. The losses
-     were never a wall at the front: 81% get past question three. They were
-     spread thin across the whole night, which is the signature of a thing that
-     is simply too long.
+     One venue was seventeen questions behind a single finish line and 56% of
+     children never reached it, so more than half of everyone who started left
+     having completed nothing. A night is now three short rooms: the child
+     picks where to start, then picks from what is left, and the last place
+     needs no asking.
 
-     So a night is now three short legs in three different places. Each leg is
-     three or four questions and about a minute, each one ends in a win, and
-     Axel pulls them on to the next. The child chooses where to start, then
-     chooses between what is left; the last place is wherever they have not
-     been. The app hears nothing until the end of the third leg.
+     CONSTRUCTIONS BELONG TO THE LEG, NOT THE VENUE. The venue brings the room,
+     the person behind the counter and the nouns; the leg brings what is
+     taught. Any venue can be first, second or third — which also makes a
+     venue comparison a comparison of like with like for the first time. */
 
-     CONSTRUCTIONS BELONG TO THE LEG, NOT THE VENUE. The venue supplies the
-     room, the person behind the counter and the nouns; the leg supplies what
-     is taught. That is what lets any venue be first, second or third, and it
-     keeps the venue choice a motivational one rather than a syllabus one —
-     which also means a venue comparison is finally comparing like with like. */
+  /* ---------- the gate (NJA-3215) ----------
+     You cannot get into anywhere without a ticket, so asking for one is the
+     first thing that happens in all three rooms. It is TAUGHT in the first,
+     with the usual ramp — the noun crosses, then the whole frame — and then
+     asked COLD in the other two: one question, the whole sentence, no step up
+     to it.
+
+     That is a retrieval schedule rather than a repeat. The same sentence comes
+     back at widening intervals with the scaffolding taken away, which is the
+     one shape in this activity that asks a child to produce something from
+     memory rather than from the screen. Mastery counts it once, because the
+     engine keys a step by its stage and takes the best of it; `drills` is what
+     counts the three goes. */
+  const GATE = 'can-i-have';
+
   const LEGS = [
-    /* Shortest first, and it opens on the one phrase with no gap in it at all.
-       The first win should land before a child has decided whether they are
-       enjoying this. */
-    { patterns: ['excuse-me', 'i-like'] },
-    /* `can-i-have` and `can-i-have-please` stay adjacent and in this order:
-       "please" is only cheap when it is one word added to a frame used thirty
-       seconds ago. Split them across legs and the second becomes a new thing. */
-    { patterns: ['can-i-have', 'can-i-have-please'] },
-    /* Closing on `thank-you`, which at 7.8% wrong is the easiest thing in the
-       activity. The last thing that happens should be a thing they can do. */
-    { patterns: ['i-dont-want', 'thank-you'] },
+    /* The ramp, then the two easiest things we have. */
+    { gate: 'taught', patterns: ['excuse-me', 'i-like'] },
+    /* `can-i-have-please` lands one room after the gate it is built from, so
+       "please" is still one word added to a frame they have just used. */
+    { gate: 'cold', patterns: ['can-i-have-please', 'i-dont-want'] },
+    /* The hardest thing in the night, and then the easiest, so the last thing
+       that happens is still a thing they can do. */
+    { gate: 'cold', patterns: ['i-like-two', 'thank-you'] },
   ];
 
-  /* ---------- the six that survived ----------
-     Three constructions were cut, on the difficulty we measured rather than on
-     taste:
-
-       `do-you-have`     the worst we ever recorded, 48.4% wrong, and still
-                         30.0% after the article moved into the frame. It is a
-                         question form AND an article: two new things at once.
-       `do-you-like`     the other construction the CHILD has to ask rather
-                         than answer. Cutting both means the child only ever
-                         answers, which is how the educator's script is built
-                         and what the error rates have been saying all week.
-       `i-like-two`      two slots and three steps, and among the worst
-                         wherever in the night it sat.
-
-     All three stay DEFINED above, like `there-is-no` and `i-have` before them,
-     because a scenario that wants them should find them written. They are
-     simply not in this night. */
-  const PATTERNS = LEGS.reduce((all, leg) => all.concat(leg.patterns), []);
+  /* ---------- the seven ----------
+     `do-you-have` and `do-you-like` stay cut. They were the two the CHILD had
+     to ask rather than answer; do-you-have was the worst we ever recorded at
+     48.4% wrong and still 30.0% with the article in the frame, and cutting
+     both means the child only ever answers — which is how the educator's
+     script is built and what the error rates kept saying. Both stay DEFINED,
+     like `there-is-no` before them. They are simply not in this night. */
+  const PATTERNS = LEGS.reduce((all, leg) => all.concat(leg.patterns), [GATE]);
 
   /* ---------- the order the nouns are claimed ----------
-     syllabus() hands each stage the first noun nobody has had yet, so the
-     order of the CLIMB used to decide the order of the VOCABULARY, and
-     reordering one silently moved the other. They are two different decisions,
-     so they are two lists. This one is the vocabulary's and changes when the
-     words change, not when the ladder does.
+     Separate from the order of the climb, because the two are different
+     decisions and coupling them once moved every word onto a different ask.
+     The gate claims first so that `ticket` is the thing you ask for in every
+     room — the whole conceit depends on it being the same sentence. */
+  const ITEM_ORDER = [GATE, 'can-i-have-please', 'i-dont-want',
+                      'i-like', 'i-like-two', 'excuse-me', 'thank-you'];
 
-     It is also why every leg can run in every venue: each venue carries seven
-     nouns tagged `item` and at least seven tagged `like`, which is more than
-     any single leg can claim. */
-  const ITEM_ORDER = ['excuse-me', 'can-i-have', 'can-i-have-please',
-                      'i-dont-want', 'i-like', 'thank-you'];
-
-  /* Two lists naming the same six things is a typo waiting to happen, and the
-     typo would be silent: a name ITEM_ORDER misspells simply claims its noun
-     last, which moves a word onto a different ask and reads as a content
-     decision. So the two are checked against each other at load, and so is
-     every name a leg uses. */
   (function () {
     const a = PATTERNS.slice().sort().join(','),
           b = ITEM_ORDER.slice().sort().join(',');
     if (a !== b) throw new Error('PATTERNS and ITEM_ORDER name different patterns: ' + a + ' vs ' + b);
     if (new Set(PATTERNS).size !== PATTERNS.length)
-      throw new Error('a pattern appears in more than one leg: ' + PATTERNS.join(','));
+      throw new Error('a pattern appears twice: ' + PATTERNS.join(','));
+    if (PATTERNS.indexOf(GATE) !== 0)
+      throw new Error('the gate must be the first pattern, so it claims the ticket');
+    for (const leg of LEGS)
+      if (leg.patterns.indexOf(GATE) >= 0)
+        throw new Error('the gate is not a leg pattern; it is asked before them');
   })();
 
   const VENUES = {
@@ -1062,6 +1052,27 @@ Return JSON only.`,
        room to the next, so it names the win and then names the reason to keep
        going. {0} is where they are headed, when there is only one place left
        and so nothing to ask. */
+    /* ---------- the gate, asked cold (NJA-3215) ----------
+       Written rather than generated, and deliberately so: a model asked to
+       hint at a sentence the child already knows will hand back the very
+       support the cold ask exists to remove. Axel teases instead. The line
+       never contains the sentence, but it is unmistakable about what to do,
+       because a child who does not know what is being asked of them is not
+       being tested, they are being confused. One per room, in order. */
+    'coach-gate-cold': {
+      en: ['Same as the door back there \u2014 you know this one. Ask for a ticket.',
+           'Come on, you have done this twice. Ticket. Off you go.'],
+      es: ['Igual que en la puerta de antes: esta ya te la sabes. Pide una entrada.',
+           'Venga, que ya van dos veces. Una entrada. Dale.'],
+      pt: ['Igual \u00e0 porta de h\u00e1 bocado \u2014 esta j\u00e1 sabes. Pede um bilhete.',
+           'Vá l\u00e1, j\u00e1 fizeste isto duas vezes. Bilhete. For\u00e7a.'],
+      tr: ['Az \u00f6nceki kap\u0131yla ayn\u0131 \u2014 bunu biliyorsun. Bir bilet iste.',
+           'Hadi ama, bunu iki kez yapt\u0131n. Bilet. Ba\u015fla.'],
+      pl: ['Tak samo jak przy tamtych drzwiach \u2014 to ju\u017c znasz. Popro\u015b o bilet.',
+           'No dawaj, robi\u0142e\u015b to ju\u017c dwa razy. Bilet. \u015amia\u0142o.'],
+      ro: ['La fel ca la u\u0219a de dinainte \u2014 pe asta o \u0219tii. Cere un bilet.',
+           'Hai, ai f\u0103cut-o deja de dou\u0103 ori. Bilet. D\u0103-i drumul.'],
+    },
     'leg-handoff': {
       en: 'Nice one. Come on, I know somewhere else you will like.',
       es: '\u00a1Muy bien! Venga, conozco otro sitio que te va a gustar.',
@@ -1658,7 +1669,7 @@ Return JSON only.`,
       nativeLang: LANGS.native, targetLang: LANGS.target,
       languages: LANGUAGES, forms: FORMS,
       slotTags, vocabItems, vocabPatterns, session, prompts, uiStrings,
-      itemOrder: ITEM_ORDER, legs: LEGS,
+      itemOrder: ITEM_ORDER, legs: LEGS, gate: GATE,
       groups: [], glossary: {}, chipGloss: {}, phrases: {},
     };
 
