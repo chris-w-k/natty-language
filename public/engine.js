@@ -99,23 +99,9 @@ window.ENGINE = (function () {
        the literal reading. */
     const walk = (quest.session && quest.session.stageItems) !== 'first';
     const used = new Set();
-    const fills = new Map();
+    const out = [];
 
-    /* The claiming and the climbing are two different orders. Walking the
-       stages in ladder order would make "first noun nobody has had yet" mean
-       "first noun nobody EARLIER IN THE LADDER has had yet", so reordering the
-       ladder would silently move every word onto a different ask. The content
-       says which order the nouns are claimed in (`itemOrder`); anything it
-       does not name claims last, in ladder order, which is also what happens
-       when the content does not say at all. */
-    const order = quest.itemOrder || [];
-    const rank = g => { const i = order.indexOf(g.id); return i < 0 ? order.length : i; };
-    const claiming = quest.groups
-      .map((g, i) => ({ g, i }))
-      .sort((a, b) => (rank(a.g) - rank(b.g)) || (a.i - b.i))
-      .map(x => x.g);
-
-    for (const g of claiming) {
+    for (const g of quest.groups) {
       const fill = {};
       for (const key of g.slotKeys) {
         const valid = g.slots[key];
@@ -126,12 +112,6 @@ window.ENGINE = (function () {
         fill[key] = pick;
         used.add(pick);
       }
-      fills.set(g.id, fill);
-    }
-
-    const out = [];
-    for (const g of quest.groups) {
-      const fill = fills.get(g.id);
       out.push(quest.pairFor ? quest.pairFor(g.id, fill) : quest.pairs.find(p => p.patternId === g.id));
     }
     return out;
@@ -163,17 +143,14 @@ window.ENGINE = (function () {
   }
   const frameAtStep = (pair, step) => step >= (pair.slotKeys || []).length;
 
-  function createState(quest, startLegIndex) {
+  function createState(quest) {
     const patterns = {}, items = {};
     for (const g of quest.groups || []) {
       patterns[g.id] = patterns[g.id] || blank();
       for (const key of g.slotKeys)
         for (const id of g.slots[key]) items[id] = items[id] || blank();
     }
-    /* On a night with legs the plan is this leg's steps only. The child has
-       not abandoned the rest — they are in another room. */
-    const leg = hasLegs(quest) ? (startLegIndex || 0) : 0;
-    const plan = legSteps(quest, leg).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
+    const plan = allSteps(quest).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
     return {
       patterns, items,
       turn: 0, coins: 0, finished: false,
@@ -183,8 +160,6 @@ window.ENGINE = (function () {
       /* The steps this go will drill, in order, and where we are in them. A
          first go holds every step; a replay holds only what did not stick. */
       plan, at: 0, go: 1,
-      /* which room of the night this is, and whether its plan is spent */
-      leg, legDone: false,
       /* The BEST each step has been answered, 0..1, keyed stage:step. Mastery
          is the sum of these over every step the syllabus has — so redrilling
          a step can raise the score but never lower it, which is what makes
@@ -209,56 +184,6 @@ window.ENGINE = (function () {
      out flat because everything about finishing a go — the score, what to
      redrill, what a replay carries — is per step rather than per pattern. */
   const stepKey = (stage, step) => stage + ':' + step;
-
-  /* ---------- legs (NJA-3214) ----------
-     A night is three short legs in three venues. The content declares which
-     constructions belong to which leg; the venue supplies only the room and
-     the nouns. Every venue builds the SAME six stages in the SAME order, so a
-     `stage:step` key means the same thing in all three and a child's mastery
-     survives walking out of one door and into another.
-
-     A quest with no `legs` is the one-venue night, and every function here
-     falls back to it. */
-  const hasLegs = quest => !!(quest && quest.legs && quest.legs.length);
-  const legCount = quest => (hasLegs(quest) ? quest.legs.length : 1);
-  const legOf = (quest, patternId) => (hasLegs(quest)
-    ? quest.legs.findIndex(l => (l.patterns || []).indexOf(patternId) >= 0)
-    : 0);
-  /* The steps of one leg, in the order they are asked. The GATE leads every
-     leg: taught on the first, with its full ramp, and cold on the rest — one
-     question, the whole sentence, no step up to it. Everything after it is
-     the leg's own constructions in content order. */
-  function legSteps(quest, leg) {
-    if (!hasLegs(quest)) return allSteps(quest);
-    const all = allSteps(quest);
-    const spec = quest.legs[leg] || {};
-    const out = [];
-    if (quest.gate && spec.gate) {
-      const gate = all.filter(s => s.pair.patternId === quest.gate);
-      /* 'cold' is the LAST step of the gate, which is the one where the whole
-         frame crosses. Dropping the earlier steps is the scaffolding being
-         taken away, not a shortcut: the child is asked for the finished
-         sentence and nothing leads them to it. */
-      out.push.apply(out, spec.gate === 'cold' ? gate.slice(-1) : gate);
-    }
-    for (const pid of (spec.patterns || []))
-      out.push.apply(out, all.filter(s => s.pair.patternId === pid));
-    return out.length ? out : all.filter(s => legOf(quest, s.pair.patternId) === leg);
-  }
-
-  /* True when this turn is the gate being asked cold — the coach has a written
-     line for it, because a generated hint would quietly hand back the support
-     the cold ask exists to remove. */
-  function coldGate(state, quest, pair) {
-    if (!hasLegs(quest) || !quest.gate || !pair) return false;
-    if (pair.patternId !== quest.gate) return false;
-    const spec = quest.legs[state.leg || 0] || {};
-    return spec.gate === 'cold';
-  }
-  /* The room is finished and the night is not. Distinct from `done`, which is
-     the night, and from `makeup`, which only ever runs on the last leg. */
-  const legDone = state => !!state.legDone;
-  const lastLeg = (state, quest) => (state.leg || 0) >= legCount(quest) - 1;
   function allSteps(quest) {
     const out = [];
     stages(quest).forEach((pair, stage) => {
@@ -384,12 +309,6 @@ window.ENGINE = (function () {
     state.at += 1;
     const next = state.plan[state.at];
     if (next) { state.stage = next.stage; state.step = next.step; return; }
-    /* Out of steps. On any leg but the last that means the room is over and
-       the night goes on, so nothing is judged yet — no pass mark, and no
-       makeup. Makeup belongs to the end of the night: drilling a child's
-       weakest step before letting them leave the first bar is the opposite of
-       what three short legs are for. */
-    if (hasLegs(quest) && !lastLeg(state, quest)) { state.legDone = true; return; }
     retarget(state, quest);
   }
 
@@ -460,28 +379,6 @@ window.ENGINE = (function () {
      Patterns stay INTRODUCED and items do not: they know "Can I have ___?"
      and should not have it handed over again, but `popcorn` is a word they
      have never seen and the coach has to give it to them. */
-  /* ---------- the next room (NJA-3214) ----------
-     `quest` here is ALREADY rebuilt for the new venue, so its nouns and its
-     person behind the counter are the new ones. Everything the child has
-     earned comes with them: this is one lesson in three rooms, not three
-     lessons. Contrast switchVenue below, which deliberately drops the slotted
-     constructions because that IS a second go at the same material. */
-  function startLeg(state, quest, leg) {
-    const next = createState(quest, leg);
-    next.best = Object.assign({}, state.best);
-    next.drills = Object.assign({}, state.drills);
-    next.released = Object.assign({}, state.released);
-    next.coins = state.coins;
-    next.go = state.go || 1;
-    next.turn = state.turn || 0;
-    /* A word already met is not introduced twice, whichever room it was in. */
-    for (const k of Object.keys(next.patterns))
-      if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
-    for (const k of Object.keys(next.items))
-      if (state.items[k]) next.items[k].introduced = state.items[k].introduced;
-    return next;
-  }
-
   function switchVenue(state, quest) {
     const next = createState(quest);
     const bar = keepMark(quest);
@@ -928,7 +825,6 @@ window.ENGINE = (function () {
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
-    hasLegs, legCount, legOf, legSteps, legDone, lastLeg, startLeg, coldGate,
     expected, gaps, tagOfPattern, norm, words,
   };
 })();
