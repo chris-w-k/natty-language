@@ -410,6 +410,24 @@
   /* ?venue=cinema names the night, the way ?lang= names the pair — for a
      walkthrough, and for a headless test that needs a particular room. An
      unknown name is ignored rather than fatal. */
+  /* ---------- which door we came through (NJA-3216) ----------
+     The app tells this page nothing: no quest, no slug, no child, no language.
+     The one thing it CAN say without an app change is which URL it opened, so
+     each quest tile points at its own path and the path is the message.
+
+     `/` is the night as it has always been. Anything else is a pack name, kept
+     as-is and reported on every event, so a quest can be split out in PostHog
+     from the day the tiles are configured — before any content differs between
+     them, which is the point: the plumbing lands first and is proved by real
+     traffic, then the content behind each door can change one at a time. */
+  function packSlug() {
+    const raw = String(location.pathname || '/').replace(/^\/+|\/+$/g, '');
+    /* Defensive: a path is a label, not a lookup, and it ends up in analytics
+       and in a content key. Anything exotic is treated as the default night
+       rather than trusted. */
+    return /^[a-z0-9][a-z0-9-]{0,39}$/i.test(raw) ? raw.toLowerCase() : '';
+  }
+
   function paramVenue() {
     const v = (new URLSearchParams(location.search).get('venue') || '').toLowerCase();
     return C.venues.includes(v) ? v : '';
@@ -3325,8 +3343,11 @@
        every existing measure then splits by it without a single call site
        having to remember, and a question nobody thought to ask on the day can
        still be asked of the data afterwards. */
+    /* `pack` rides as a super-property for the same reason `build` and `venue`
+       do: every existing measure then splits by which tile the child came in
+       through, without a single call site having to remember. */
     SCREEN.register({ native_language: NL(), target_language: TL(),
-                      language_source: langSource, venue });
+                      language_source: langSource, venue, pack: packSlug() || 'default' });
     if (played.indexOf(venue) < 0) played.push(venue);
     AN('NovaPals.Quest.Start', { nativeLanguage: NL(), targetLanguage: TL(),
                                  languageSource: langSource });

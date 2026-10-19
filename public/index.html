@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- Every quest tile opens this page at its own path (/the-concert, and so
+       on), and every asset below is referenced relatively. Without this, a URL
+       that happens to carry a trailing slash would resolve `bridge.js` to
+       /the-concert/bridge.js and the night would not load at all. One line,
+       and the whole class of bug is gone. -->
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#8B7BF0">
 <title>Axel goes to a gig</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

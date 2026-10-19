@@ -508,9 +508,22 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
                    and not in Safari, which is the worst way for it to fail. */
                 '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4' };
 
+/* ---------- one page, many doors (NJA-3216) ----------
+   Each quest tile in the app points at its own URL — /the-concert, /the-match
+   — so the night behind each one can differ without the app knowing anything
+   about it. Render routes every path here already, so this is the whole of
+   the server side: a path with no file extension is a door, and every door
+   opens the same page. The page then reads its own path to know which door it
+   came through.
+
+   The extension test matters. Falling back for EVERYTHING would answer a
+   missing `audio/bed-gig.mp3` with a page of HTML, and an <audio> element
+   handed HTML fails in a way that looks like anything except a 404. Assets
+   keep their honest 404. */
 function serveStatic(req, res) {
   let rel = decodeURIComponent((req.url || '/').split('?')[0]);
   if (rel === '/') rel = '/index.html';
+  else if (!path.extname(rel)) rel = '/index.html';
   const file = path.join(ROOT, 'public', path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(path.join(ROOT, 'public'))) { res.writeHead(403).end('no'); return; }
   fs.readFile(file, (err, buf) => {
