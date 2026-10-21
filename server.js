@@ -379,11 +379,19 @@ function coachVars(b) {
   v.new_thing = !intro
     ? 'Nothing new is being introduced this exchange. Remind them what to say without giving the whole line.'
     : intro.by === 'coach'
-      /* This used to say "say it and say what it means", which is exactly what
-         NJA-3317 coach AC 3 forbids. The construction is new, so the child is
-         told what it is FOR; the words themselves are on the pills in front of
-         them, which is where they were always going to have to find them. */
-      ? `NEW THIS EXCHANGE: the child meets the construction "${intro.target}" for the first time. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write the construction out in ${b.targetLang}. The words are on screen for them to find.`
+      /* A WORD and a CONSTRUCTION are owed differently, and conflating them
+         is what left a child picking "entrada" out of four Spanish words
+         nobody had translated. Vocabulary is given — spelled out, with its
+         meaning — because guessing it teaches nothing. Grammar is earned: the
+         construction is named for what it LETS THEM ASK and the words are on
+         the pills, which is NJA-3317 coach AC 3.
+
+         The word reaches the coach only when the character's own line does not
+         carry it; when she says it, telling them what it means is the branch
+         below. */
+      ? (intro.kind === 'item'
+          ? `NEW THIS EXCHANGE: the child meets the ${b.targetLang} word "${intro.target}" ("${intro.means}") for the first time, and ${b.actor} has NOT said it — nothing she says this exchange contains it. Write it, in ${b.targetLang}, and say what it means. You are the only one who can, and a child guessing which word is which learns nothing.`
+          : `NEW THIS EXCHANGE: the child meets the construction "${intro.target}" for the first time. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write the construction out in ${b.targetLang}. The words are on screen for them to find.`)
       : `NEW THIS EXCHANGE: ${b.actor} has just used the new word "${intro.target}". Tell the child what it means, in ${b.nativeLang}.`;
   return v;
 }

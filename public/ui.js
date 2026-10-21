@@ -1102,12 +1102,39 @@
       const it = (plan.pair.items || []).find(i => i.key === plan.introKey)
               || (plan.pair.items || [])[0];
       if (!it) return null;
-      return { kind: 'item', by: 'actor', target: it.target, means: it.native };
+      /* Vocabulary is the character's to hand over (NJA-3136) — and it used
+         to be, unconditionally, because her line was written and the guard on
+         it threw away any line that left the word out.
+
+         Since NJA-3317 her line is a rendered pattern, and the pattern that
+         sets up a QUESTION about a thing cannot name the thing first:
+         "¿Qué quieres?" is exactly what makes "¿Tienes una entrada?" the
+         natural reply, and it does not contain "entrada". The word was then
+         introduced by nobody, and the child was left guessing which of four
+         Spanish words meant ticket.
+
+         So the job follows the line rather than being fixed: hers when she
+         says the word, the coach's when she does not. */
+      return { kind: 'item', by: cueCarries(it.id) ? 'actor' : 'coach',
+               target: it.target, means: it.native };
     }
     const pat = Q.vocabPatterns[plan.pair.patternId];
     return { kind: 'pattern', by: 'coach',
              target: pat[TL()].replace(/\{[^}]+\}/g, '___'),
              means: pat[NL()].replace(/\{[^}]+\}/g, '___') };
+  }
+
+  /* Any form of this item, anywhere in the line she is saying this turn. Any
+     form, because the slot she says it in is not the slot the child answers in
+     — she offers "una entrada" and they are asked for "la entrada", and both
+     are the child meeting the word. */
+  function cueCarries(itemId) {
+    if (!lastCue || !itemId) return false;
+    const rec = Q.vocabItems[itemId];
+    const forms = rec && rec[TL()];
+    if (!forms) return false;
+    const line = E.norm(lastCue.line);
+    return Q.forms.some(f => forms[f] && line.includes(E.norm(forms[f])));
   }
 
   /* Does the character's line actually contain the word it is introducing?
@@ -1291,14 +1318,19 @@
      yet. The lines are in content, in their own language, and the call that
      used to produce them is skipped rather than raced. */
   function openingLines(plan) {
-    /* NJA-3317: hers is an actor pattern like every other line of hers now,
-       so it comes out in the language she speaks. His quotes the MEANING of
-       the opener rather than the opener — coach AC 3 holds on turn one as
-       well as on the other sixteen. */
+    /* Turn one asks neither model, so both lines here are the whole of it.
+       Hers is an actor pattern like every other line of hers (NJA-3317), and
+       his therefore has to do what every other coach line does: say what she
+       just said before saying what to do about it. It used to quote the
+       child's own sentence back at them in their own language — "you want
+       «Excuse me»" — which was doing work only while the coach also handed
+       over the Spanish, and has been a tautology since it stopped. What the
+       construction is FOR is the useful half. */
     const cue = Q.actorSay ? Q.actorSay('in-a-minute', {}) : null;
     return {
       actor_line: cue ? cue.line : t('open-actor'),
-      coach_line: t('open-coach', plan.pair.allNative),
+      coach_line: cue ? t('open-coach', unstop(cue.line), unstop(cue.native))
+                      : t('open-coach-bare'),
     };
   }
 
@@ -1360,6 +1392,15 @@
      "translate anything new, don't re-translate", and this is what "new" is
      measured against: a word is new exactly once, the first time she says it. */
   const translated = new Set();
+  /* This turn's answer from `newTargetWords`, kept because asking twice would
+     answer no the second time — it marks as it reads. The floor needs the same
+     answer the model gets. */
+  let turnFresh = [];
+  /* A sentence about to be dropped inside quotation marks inside another
+     sentence. Its own full stop then lands next to the outer one —
+     “in a minute.”. — and reads as a typo. A question mark stays: it is part
+     of the Spanish and part of what the Spanish means. */
+  const unstop = str => String(str == null ? '' : str).replace(/\.\s*$/, '');
   function newTargetWords(line) {
     const all = new Set();
     for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) all.add(k); }
@@ -1494,7 +1535,19 @@
        a Spanish child to repeat Spanish. */
     const coachAsks = tList('fb-coach-ask');
     const ask = coachAsks[state.turn % coachAsks.length];
-    let coach = ask
+    /* What she said, before what to do about it. The model is told to do this
+       and does; the written floor could not, because it was written when she
+       spoke the child's own language and had nothing to translate. A child who
+       hits the floor on a slow turn was being handed a hint about a sentence
+       they cannot read.
+
+       Only when there is something new in her line — `turnFresh` is the same
+       list the coach is sent, so this falls silent on the second and third
+       step of a construction, where she repeats herself word for word. */
+    const heard = (lastCue && turnFresh.length)
+      ? t('fb-coach-heard', unstop(lastCue.line), unstop(lastCue.native)) + ' '
+      : '';
+    let coach = heard + ask
       .split('{0}').join(plan.pair.allNative)
       .split('{1}').join(Q.languageNames.target);
     /* The TARGET phrase, not the native one. "Here's how you say it" promises
@@ -1504,7 +1557,7 @@
        it in the wrong direction. Wrong both ways round; only visible once the
        pair could be reversed. */
     /* The MEANING, not the answer — NJA-3317 coach AC 3. */
-    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allNative);
+    if (intro && intro.kind === 'pattern') coach = heard + t('fb-coach-new', plan.pair.allNative);
     return { actor_line: actor, coach_line: coach };
   }
 
@@ -1540,7 +1593,11 @@
     /* ...and not at all when the line above already carries that meaning,
        which it does on the turn a zero-slot construction is introduced: the
        written floor names it, and the badge would say it twice. */
-    const whole = owed && intro.target.indexOf('___') < 0;
+    /* ...and `whole` is about a CONSTRUCTION said end to end. A word is not a
+       construction: "una entrada" is not an answer to anything, it is the
+       vocabulary the child is owed, and handing it over spelled out is the
+       whole point of owing it. */
+    const whole = owed && intro.kind === 'pattern' && intro.target.indexOf('___') < 0;
     if (whole && ask.toLowerCase().includes(String(intro.means).toLowerCase().replace(/[.?!]+$/, ''))) {
       return { askText: ask, html: fragmentsHTML(frags), fragments: frags };
     }
@@ -1869,16 +1926,18 @@
        lookup, so the spinner above comes down in the same frame it went up. */
     const cue = cueFor(plan);
     $('turn-loading').classList.add('hidden');
+    lastGenMs  = 0;
+    lastGenWhy = cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
+
+    /* Worked out HERE and nowhere else, because it has a side effect: a word
+       counts as new exactly once, and asking twice would answer no the second
+       time. Before `fallbackLines`, because the written floor reads it — a
+       turn's hint must not translate her line against last turn's answer. */
+    const fresh = turnFresh = cue ? newTargetWords(cue.line) : [];
 
     const fb = fallbackLines(plan);
     const actorLine   = cue ? cue.line   : fb.actor_line;
     const actorNative = cue ? cue.native : plan.pair.allNative;
-    lastGenMs  = 0;
-    lastGenWhy = cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
-    /* Worked out HERE and nowhere else, because it has a side effect: a word
-       counts as new exactly once, and asking twice would answer no the second
-       time. */
-    const fresh = newTargetWords(actorLine);
     const actorFrags = toFragments(actorLine, [actorLine], { allTarget: true });
     turnLine = actorLine;
 

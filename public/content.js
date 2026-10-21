@@ -1446,14 +1446,40 @@ Return JSON only.`,
     /* "She", in the two languages that mark it: all three people behind the
        three counters are women. Spanish, Portuguese and Romanian carry no
        gender on the verb here, so only English and Polish needed changing. */
-    /* {0} is the opener's MEANING, not the opener. Same reason as above. */
+    /* {0} is what she just said and {1} is what it means. Turn one asks no
+       model, so if this does not translate her line nothing does — which is
+       what a child learning Spanish met on the first screen of the night.
+       It no longer quotes the child's own sentence back at them: that was
+       useful while the coach also handed over the Spanish, and became a
+       tautology the moment it stopped. What the line is FOR is the half worth
+       saying. */
     'open-coach': {
-      en: 'She has not seen you. You want “{0}” — tap the words for it.',
-      es: 'No te ha visto. Quieres “{0}” — toca las palabras.',
-      pt: 'Não te viu. Queres “{0}” — toca nas palavras.',
-      tr: 'Seni görmedi. İstediğin şey “{0}” — kelimelere dokun.',
-      pl: 'Nie zauważyła cię. Chodzi o “{0}” — dotknij słów.',
-      ro: 'Nu te-a văzut. Vrei „{0}” — atinge cuvintele.',
+      en: '“{0}” means “{1}”. She has not even looked at you — get her attention.',
+      es: '“{0}” significa “{1}”. Ni te ha mirado — llama su atención.',
+      pt: '“{0}” significa “{1}”. Nem olhou para ti — chama a atenção dela.',
+      tr: '“{0}” demek “{1}”. Sana bakmadı bile — dikkatini çek.',
+      pl: '“{0}” znaczy “{1}”. Nawet na ciebie nie spojrzała — zwróć jej uwagę.',
+      ro: '„{0}” înseamnă „{1}”. Nici nu s-a uitat la tine — atrage-i atenția.',
+    },
+    /* The floor under the floor: no cue to translate, so no translation. */
+    'open-coach-bare': {
+      en: 'She has not even looked at you — get her attention.',
+      es: 'Ni te ha mirado — llama su atención.',
+      pt: 'Nem olhou para ti — chama a atenção dela.',
+      tr: 'Sana bakmadı bile — dikkatini çek.',
+      pl: 'Nawet na ciebie nie spojrzała — zwróć jej uwagę.',
+      ro: 'Nici nu s-a uitat la tine — atrage-i atenția.',
+    },
+    /* Prepended to the written floor on any turn where she has said something
+       the child has not met. One sentence, because the hint that follows it is
+       the rest of the budget (NJA-3317 coach AC 5). */
+    'fb-coach-heard': {
+      en: '“{0}” means “{1}”.',
+      es: '“{0}” significa “{1}”.',
+      pt: '“{0}” significa “{1}”.',
+      tr: '“{0}” demek “{1}”.',
+      pl: '“{0}” znaczy “{1}”.',
+      ro: '„{0}” înseamnă „{1}”.',
     },
     /* The written fallbacks, for when the model is slow or unreachable. One
        list per speaker so the line is not the same every turn. */
