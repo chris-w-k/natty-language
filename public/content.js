@@ -1590,6 +1590,14 @@ Return JSON only.`,
        flags carries it for anyone who cannot read this. */
     'lang-pick-title':   'WHICH LANGUAGE DO YOU SPEAK?',
     'lang-pick-sub':     'Axel will give you your hints in it. You will be learning English.',
+    /* The other way round. Only reachable from the arrow on the picker, and
+       the picker is only shown when nothing — not the URL, not the device —
+       could answer the question: in practice an English machine, which is us.
+       The grid is the same five either way; what the arrow decides is which
+       side of it English sits on. */
+    'lang-pick-title-x': 'WHICH LANGUAGE DO YOU WANT TO LEARN?',
+    'lang-pick-sub-x':   'Axel will give you your hints in English.',
+    'lang-pick-flip':    'Swap: learn this language instead of English',
     'lang-pick-go':      'START',
     'lang-pick-missing': 'No words yet for {0}.',
   };

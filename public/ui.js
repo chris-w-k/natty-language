@@ -504,19 +504,40 @@
       return Promise.resolve();
     }
 
-    $('lang-title').textContent = t('lang-pick-title') || 'HINT LANGUAGE';
-    $('lang-sub').textContent = t('lang-pick-sub') || '';
+    /* The heading and the sub are set in draw(), not here: they are a
+       statement about which way round the pair is, and since the arrow can
+       reverse that they have to be able to change with it. */
     /* The hint language opens on something real rather than nothing: a device
        we could not use still tells us the content's own default. */
     if (!C.hintable().includes(hint)) hint = C.defaultPair().native;
+
+    /* ---------- the other direction ----------
+       The picker asks which language you already speak, and English is not
+       among the answers — English is what the scenario teaches. That is right
+       for the children this is for, and useless for us: there is no way to sit
+       down at a desk in London and see the night in Spanish.
+
+       So the arrow between the two flags is a button. It does not add a
+       language or a screen; it decides which side of the arrow English sits
+       on, and the same five chips mean "the language you speak" one way round
+       and "the language you want to learn" the other.
+
+       It is reachable only from this screen, and this screen is only shown
+       when nothing could answer the question — not ?lang=, not the device. A
+       child on a Spanish phone never sees it. An English machine does, which
+       is us. The choice rides out as its own `language_source`, so a flipped
+       session is never pooled with a real one in PostHog. */
+    let flipped = false;
     $('lang-go').querySelector('span').textContent = t('lang-pick-go') || 'START';
 
     return new Promise(resolve => {
       draw();
       $('lang-go').addEventListener('click', () => {
         if (!C.covered.includes(hint)) return;
-        langSource = 'picker';
-        apply({ native: hint, target: C.learns() });
+        langSource = flipped ? 'picker-flipped' : 'picker';
+        apply(flipped
+          ? { native: C.learns(), target: hint }
+          : { native: hint, target: C.learns() });
         /* This click is the gesture the browser wants before any audio. */
         V.unlock(); SFX.unlock();
         resolve();
@@ -547,18 +568,37 @@
            who may not read it, so the sentence under the heading is the part
            they are least likely to get — the arrow is not. */
         const chosen = offer.find(l => l.code === hint);
+        const teaches = C.languages.find(l => l.code === C.learns()) || { name: 'English', flag: '🇬🇧' };
+        /* `from` is always the language you speak and `to` always the one you
+           are learning, whichever way round they are — the colours carry that
+           and would be lying if the two ends swapped meaning with the flip. */
+        const from = flipped ? teaches : chosen;
+        const to   = flipped ? chosen  : teaches;
         $('lang-way').innerHTML = chosen
-          ? '<span class="from">' + esc(chosen.flag || '') + ' ' + esc(chosen.name) + '</span>' +
-            '<span class="arrow" aria-hidden="true">→</span>' +
-            '<span class="to">🇬🇧 ' + esc(C.name(C.learns())) + '</span>'
+          ? '<span class="from">' + esc(from.flag || '') + ' ' + esc(from.name) + '</span>' +
+            '<button type="button" class="arrow" id="lang-flip" title="' + esc(t('lang-pick-flip') || 'Swap') +
+              '" aria-label="' + esc(t('lang-pick-flip') || 'Swap') + '">⇄</button>' +
+            '<span class="to">' + esc(to.flag || '') + ' ' + esc(to.name) + '</span>'
           : '';
+        const flip = $('lang-flip');
+        if (flip) flip.addEventListener('click', () => { flipped = !flipped; draw(); });
+
+        $('lang-title').textContent =
+          (flipped ? t('lang-pick-title-x') : t('lang-pick-title')) || 'WHICH LANGUAGE DO YOU SPEAK?';
+        $('lang-sub').textContent =
+          (flipped ? t('lang-pick-sub-x') : t('lang-pick-sub')) || '';
         const missing = C.languages.filter(l =>
           l.code !== C.learns() && !C.covered.includes(l.code));
         $('lang-note').textContent = missing.length
           ? (t('lang-pick-missing') || 'No words yet for {0}.')
               .split('{0}').join(missing.map(l => l.name).join(', '))
           : '';
-        $('lang-go').disabled = !C.hintable().includes(hint);
+        /* Flipped, the chip is the TARGET rather than the hint, so what it
+           has to be is covered — `hintable` would be the wrong list, and is
+           the same five anyway until English is teachable out of itself. */
+        $('lang-go').disabled = flipped
+          ? !C.covered.includes(hint)
+          : !C.hintable().includes(hint);
       }
     });
 

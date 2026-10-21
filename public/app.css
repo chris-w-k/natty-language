@@ -443,6 +443,18 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 .lang-way .from{color:var(--accent);}
 .lang-way .arrow{color:var(--ink-3);font-size:17px;}
 .lang-way .to{color:var(--ink-2);}
+/* The arrow is a control when the direction can be reversed, and it has to
+   look like one — an arrow that turns out to be a button is a feature nobody
+   finds. A ring and a hover state are enough; it sits between two flags and
+   anything louder would read as the answer rather than the swap. */
+.lang-way button.arrow{
+  width:34px;height:34px;border-radius:50%;flex:none;
+  border:1.5px solid var(--line);background:var(--paper);
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  transition:border-color .15s,color .15s,transform .15s;
+}
+.lang-way button.arrow:hover{border-color:var(--accent);color:var(--accent);}
+.lang-way button.arrow:active{transform:scale(.92);}
 .lang-note{min-height:16px;margin:12px 0 14px;font-size:12px;color:var(--ink-3);}
 .lang-note.warn{color:var(--warn);}
 
