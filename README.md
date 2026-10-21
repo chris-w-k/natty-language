@@ -84,9 +84,54 @@ public/vendor/         lottie_light.min.js, vendored so there is no CDN call
 public/app.css         all visual values as tokens on :root
 ```
 
+## The character speaks the target language (NJA-3317)
+
+Since NJA-3317 the person behind the counter does not improvise. Her line is
+an **actor pattern** — the same `{tag:form}` shape the child's answers are
+built from, authored in all six languages in `content.js` and rendered with
+the same `chunk`/`render` the learner side uses. `ACTOR_CUES` maps each
+construction the child is learning to the line that makes their answer the
+natural reply:
+
+```
+can-i-have   <= what-would-you-like   "¿Qué quieres?"
+i-dont-want  <= would-you-like-x      "¿Quieres una cerveza?"
+i-like       <= do-you-like-x         "¿Te gusta el disco?"
+thank-you    <= here-is-x             "Aquí tienes la camiseta."
+```
+
+Two consequences worth knowing:
+
+- **The ticket's seven actor rules hold by construction, not on average.** She
+  cannot use a word outside the vocabulary because there is no such word to
+  render; she cannot say the child's answer because `q.cue` refuses a line
+  that contains it; she cannot write two sentences because the pattern is one.
+- **She asks once per construction and stands there.** The two or three steps
+  of one construction are one exchange with more of the answer in the target
+  language each go, so the line does not change between them. It changes when
+  the construction does, and `avoid` compares the LINE rather than the pattern
+  — two constructions can both want `would-you-like-x` and still be two
+  different questions about two different things.
+
+Her reactions (`ok-then`, `say-again`) are actor patterns too, which is what
+replaced the third model call: that one wrote, by construction, a line in the
+child's own language.
+
+The coach's job changed underneath this. He used to be the only one explaining
+anything to a child who could read every word on screen; he is now the only
+one explaining anything to a child who cannot. He is handed what she said,
+what it meant, and which of its words are new — and he may not write the
+child's answer in the target language, checked at `generateCoachLine` rather
+than merely asked for in the prompt.
+
 ## Where Gemini is, and where it isn't
 
-Two calls per turn, the same split as the Turkish trainer this is modelled on:
+**One call per turn since NJA-3317** — the coach's. The character's line and
+her reaction are rendered, which took the only call that sat on the critical
+path (nothing could be drawn until it landed) off the front of every turn.
+`/api/turn` and `/api/react` are still served for a scenario that wants them.
+The split below is the original one and describes `/api/turn` as it still
+behaves when called:
 
 - **`/api/turn` — the generator.** Writes the scene line and the coach's ask
   fresh each turn, in character, at the support level the engine chose. This is
@@ -333,6 +378,12 @@ takes ~30s to wake, which is most of the wait on the very first turn of a
 session and nothing to do with any of the above.
 
 ## What the characters may say
+
+> Stale below this line for the character's half: NJA-3317 replaced
+> `scene_line` with rendered actor patterns, so the L0/L1 support levels and
+> the word caps no longer describe anything that runs. The coach half still
+> holds, with the extra rule that he may not write the answer. Kept because
+> the glossary-as-leash idea is still how the vocabulary is bounded.
 
 The generator writes two lines a turn and both are checked before they reach
 the screen, because a model drifts and a child cannot tell a hallucinated word

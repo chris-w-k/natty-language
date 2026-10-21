@@ -1213,6 +1213,12 @@
       learnerOnly: [...learnerOnlyWords()],
       // the ONE new thing, and whose job it is to hand it over
       introducing: newThing(plan),
+      /* NJA-3317. The character's line is in the target language now, so the
+         coach is told what it meant and which of its words are new — he is
+         the only one who can say either, and he cannot say what he is not
+         told. Filled in at the call site, where the line exists. */
+      actorLineNative: '',
+      newTargetWords: [],
       history: history.slice(-4),
     };
   }
@@ -1245,54 +1251,112 @@
      yet. The lines are in content, in their own language, and the call that
      used to produce them is skipped rather than raced. */
   function openingLines(plan) {
-    const target = plan.pair.allTarget;
+    /* NJA-3317: hers is an actor pattern like every other line of hers now,
+       so it comes out in the language she speaks. His quotes the MEANING of
+       the opener rather than the opener — coach AC 3 holds on turn one as
+       well as on the other sixteen. */
+    const cue = Q.actorSay ? Q.actorSay('in-a-minute', {}) : null;
     return {
-      actor_line: t('open-actor'),
-      coach_line: t('open-coach', target),
+      actor_line: cue ? cue.line : t('open-actor'),
+      coach_line: t('open-coach', plan.pair.allNative),
     };
   }
 
-  async function generateActorLine(plan) {
-    if (!serverUp) { lastGenWhy = 'no server'; return null; }
-    const t0 = Date.now();
-    const intro = newThing(plan);
-    const j = await post('/api/turn',
-      Object.assign(turnBody(plan), { recentActor: recentActor.slice(-6) }),
-      TURN_DEADLINE_MS);
-    lastGenMs = Date.now() - t0;
-    if (j.fail) { lastGenWhy = j.fail; return null; }
-    if (!j.actorText) { lastGenWhy = 'empty'; return null; }
+  /* ---------- NJA-3317: the character's line ----------
+     It is rendered from an actor pattern rather than asked for. What that
+     buys, in order of how much it matters:
 
-    const allowed = introducedWords();
-    if (intro) for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
-    const a = auditLine(j.actorText, allowed);
-    if (a.unglossable > 0) { lastGenWhy = 'unglossable word'; return null; }
-    if (a.over > 0)        { lastGenWhy = 'used words not yet introduced'; return null; }
-    const wrong = badPhrases(j.actorText);
-    if (wrong.length) { lastGenWhy = 'target language put together wrong: ' + wrong.join(' / '); return null; }
+       - she speaks the language the child came here to learn, which is the
+         whole ticket
+       - the seven actor acceptance criteria hold by construction instead of
+         on average, so the test the ticket asks for is a test of the renderer
+         rather than of a model's mood
+       - the first model call of every turn is gone. It sat on the critical
+         path — nothing could be drawn until it landed, cold instance, cold
+         model, child staring at a spinner — and it is now a string lookup.
 
-    /* And the line must not be the CHILD'S line said back at them. Asking the
-       prompt nicely is not enough here: "perdona" is on the introduced list,
-       so every other check passes it happily, and the bartender opens with
-       "Alright, perdona, what can I do for ya?" — the customer's own words,
-       in the server's mouth, used as filler. */
-    const stolen = stolenWords(j.actorText);
-    if (stolen.length) { lastGenWhy = "said the child's own line: " + stolen.join(', '); return null; }
-    /* And when the character is the one introducing a word, the word has to be
-       in their mouth. */
-    if (intro && intro.by === 'actor' && !carriesWord(j.actorText, intro.target)) {
-      lastGenWhy = 'new word missing'; return null;
+     `avoid` is last turn's pattern so the same question is not asked twice
+     running; `itemId` carries the previous turn's noun into a line that has a
+     slot but no answer of its own to take it from ("Here's the t-shirt." then
+     "Thank you."). */
+  let lastCue = null, lastItemId = null, lastPatternId = null;
+  function cueFor(plan) {
+    const want = plan.pair.itemId || lastItemId;
+    /* The two or three steps of one construction are ONE exchange, seen again
+       with more of it in the target language each go. So she asks once and
+       stands there: the same line, word for word, until the construction
+       changes. Re-choosing between steps would tell the child she had asked
+       them something new when all that moved was how much of the answer they
+       now have to find themselves.
+
+       The repeat guard therefore only fires on the turn the construction
+       changes, and it compares the LINE rather than the pattern — two
+       constructions running can both want `would-you-like-x` and still be two
+       different questions about two different things. */
+    const changed = plan.pair.patternId !== lastPatternId;
+    lastPatternId = plan.pair.patternId;
+    if (!changed && lastCue) return lastCue;
+    const c = Q.cue(plan.pair.patternId, {
+      itemId: want,
+      avoid: lastCue ? lastCue.line : null,
+      expected: [plan.expected, plan.pair.allTarget],
+    });
+    if (c) {
+      lastCue = c;
+      if (c.itemId) lastItemId = c.itemId;
+      for (const w of String(c.line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
     }
-    recentActor.push(j.actorText);
-    return j;
+    return c;
   }
 
+  /* Her words, once said, stay blue and tappable wherever they turn up again
+     — in the coach's bubble, in the transcript. Before NJA-3317 that fell out
+     of the engine's `introduced` flags, because everything she said in the
+     target language had been introduced by the engine. Now she introduces
+     things herself. */
+  const metWords = new Set();
+
+  /* Which of her words the child has been told the meaning of. Coach AC 1 is
+     "translate anything new, don't re-translate", and this is what "new" is
+     measured against: a word is new exactly once, the first time she says it. */
+  const translated = new Set();
+  function newTargetWords(line) {
+    const all = new Set();
+    for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) all.add(k); }
+    const out = [];
+    for (const f of F.fragments(String(line), all, Q.phrases, { allTarget: true })) {
+      if (f.type !== 'target') continue;
+      const text = String(f.text).trim();
+      const key = bare(text);
+      if (!key || translated.has(key)) continue;
+      translated.add(key);
+      const m = f.translation || gloss(text);
+      if (m && !/^\(part of/.test(m)) out.push(text + ' = ' + m);
+    }
+    return out;
+  }
+
+  /* NJA-3317 removed `generateActorLine`. The character's line is rendered
+     from an actor pattern by `cueFor` above, which is why the guards that used
+     to sit here — the introduced-word audit, the stolen-line check, the
+     half-translated-phrase check — are gone with it: a rendered line cannot
+     reach past the vocabulary it was rendered from, and cannot say the child's
+     own line back at them because `q.cue` refuses one that contains it.
+     `auditLine`, `stolenWords` and `badPhrases` stay; the coach still runs on
+     a model and still needs watching. */
+
   /* The coach's line, asked for only once the character's is settled. */
-  async function generateCoachLine(plan, actorLine) {
+  async function generateCoachLine(plan, actorLine, actorNative, fresh) {
     if (!serverUp) { lastCoachWhy = 'no server'; return null; }
     const t0 = Date.now();
     const j = await post('/api/coach',
-      Object.assign(turnBody(plan), { actorLine, recentCoach: recentCoach.slice(-6) }),
+      Object.assign(turnBody(plan), {
+        actorLine,
+        /* NJA-3317. He is the only one who can say what she meant. */
+        actorLineNative: actorNative || '',
+        newTargetWords: fresh || [],
+        recentCoach: recentCoach.slice(-6),
+      }),
       COACH_DEADLINE_MS);
     lastCoachMs = Date.now() - t0;
     if (j.fail) { lastCoachWhy = j.fail; return null; }
@@ -1303,9 +1367,23 @@
     const intro = newThing(plan);
     const allowed = introducedWords();
     if (intro && intro.by === 'coach') for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
+    /* NJA-3317 coach AC 1 asks him to say what her words mean, which he cannot
+       do without writing them. So the line she just said is allowed through
+       the audit — and nothing else is, which is the same rule as before with
+       one more source of legitimate target-language words in it. */
+    for (const w of String(actorLine || '').split(/\s+/)) { const k = bare(w); if (k) allowed.add(k); }
     if (auditLine(j.coachText, allowed).over > 0) { lastCoachWhy = 'wrote in the target language'; return null; }
     const mixed = mixedQuote(j.coachText);
     if (mixed) { lastCoachWhy = 'quoted a half-translated sentence: ' + mixed; return null; }
+    /* Coach AC 3, and the reason the prompt alone was never going to be
+       enough: the single most tempting thing for a coach to write is the
+       sentence the child is about to be marked on. Checked against both the
+       step's expected answer and the construction said whole, so wrapping it
+       in a native frame does not get it past. */
+    const answer = [plan.expected, plan.pair.allTarget].filter(Boolean);
+    if (answer.some(a => E.norm(j.coachText).includes(E.norm(a)))) {
+      lastCoachWhy = 'gave the answer away'; return null;
+    }
     lastCoachWhy = 'gemini';
     recentCoach.push(j.coachText);
     return j;
@@ -1316,10 +1394,16 @@
      `target` fragment renders highlighted. The server returns them for the two
      generated lines; these build the same shape for everything else — template
      lines, and the child's own answer — so one renderer serves the lot. */
-  function toFragments(text, extraAllowed) {
+  /* `opts.allTarget` for a line that is wholly in the target language — the
+     character's, since NJA-3317. */
+  function toFragments(text, extraAllowed, opts) {
     const allowed = introducedWords();
+    /* ...plus everything the character has actually said this session. Since
+       NJA-3317 she introduces target-language words herself, and a word she
+       has said is a word the child can tap. */
+    for (const w of metWords) allowed.add(w);
     for (const w of extraAllowed || []) for (const t of String(w).split(/\s+/)) allowed.add(bare(t));
-    return F.fragments(text, allowed, Q.phrases);
+    return F.fragments(text, allowed, Q.phrases, opts);
   }
 
   /* Render fragments to HTML. A `target` fragment is blue, bold, underlined
@@ -1357,9 +1441,13 @@
        opener. */
     if (E.isOpener(state)) return openingLines(plan);
     const intro = newThing(plan);
+    /* Only reached by a construction with no entry in ACTOR_CUES at all, which
+       is a content gap rather than a runtime failure. The floor under it is
+       still an actor pattern, so even the gap speaks the right language; the
+       hint-language strings below it are the floor under the floor. */
     const asks = tList('fb-actor-ask');
-    let actor = asks[(state.turn + plan.pair.id.length) % asks.length];
-    if (intro && intro.by === 'actor') actor = t('fb-actor-offer', intro.target);
+    let actor = ((Q.actorSay && Q.actorSay('what-would-you-like', {})) || {}).line
+             || asks[(state.turn + plan.pair.id.length) % asks.length];
 
     /* The native sentence is the MEANING, and the line says so by naming the
        language it has to come out in. Quoting it after a bare "repeat it" told
@@ -1375,7 +1463,8 @@
        told "Así se dice: «Perdona.»", which teaches them nothing and teaches
        it in the wrong direction. Wrong both ways round; only visible once the
        pair could be reversed. */
-    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allTarget);
+    /* The MEANING, not the answer — NJA-3317 coach AC 3. */
+    if (intro && intro.kind === 'pattern') coach = t('fb-coach-new', plan.pair.allNative);
     return { actor_line: actor, coach_line: coach };
   }
 
@@ -1401,14 +1490,32 @@
     const intro = newThing(plan);
     const owed = intro && intro.by === 'coach' &&
                  !ask.toLowerCase().includes(intro.target.replace(/_+/g, '').trim().toLowerCase());
-    const badge = owed
-      ? `<span class="newword">${fragmentsHTML(toFragments(intro.target, [intro.target]))} <i>${esc(intro.means)}</i></span>` : '';
+    /* NJA-3317 coach AC 3. The badge shows the construction with its slots
+       still blank — "¿Tienes ___?" is a shape, not an answer, and seeing it
+       is how a child learns there is a shape at all. But a construction with
+       no slot in it (`excuse-me`, `thank-you`) blanks to the whole sentence,
+       and printing that IS handing over the answer. For those the badge keeps
+       the meaning and drops the words: they are on the one pill in front of
+       the child, which taps for the gloss and the sound. */
+    /* ...and not at all when the line above already carries that meaning,
+       which it does on the turn a zero-slot construction is introduced: the
+       written floor names it, and the badge would say it twice. */
+    const whole = owed && intro.target.indexOf('___') < 0;
+    if (whole && ask.toLowerCase().includes(String(intro.means).toLowerCase().replace(/[.?!]+$/, ''))) {
+      return { askText: ask, html: fragmentsHTML(frags), fragments: frags };
+    }
+    const badge = !owed ? ''
+      : whole
+        ? `<span class="newword"><i>${esc(intro.means)}</i></span>`
+        : `<span class="newword">${fragmentsHTML(toFragments(intro.target, [intro.target]))} <i>${esc(intro.means)}</i></span>`;
+    const tail = whole ? ' — ' + intro.means : ' — ' + intro.target + ' — ' + intro.means;
     return {
-      askText: owed ? `${ask} — ${intro.target} — ${intro.means}` : ask,
+      askText: owed ? ask + tail : ask,
       html: fragmentsHTML(frags) + badge,
-      fragments: owed ? frags.concat(toFragments(' ' + intro.target, [intro.target]),
-                                     [{ type: 'text', text: ' — ' + intro.means }])
-                      : frags,
+      fragments: !owed ? frags
+        : whole ? frags.concat([{ type: 'text', text: ' — ' + intro.means }])
+        : frags.concat(toFragments(' ' + intro.target, [intro.target]),
+                       [{ type: 'text', text: ' — ' + intro.means }]),
     };
   }
 
@@ -1716,24 +1823,33 @@
        be fetched. */
     const written = E.isOpener(state);
 
-    /* Call one: the character. Nothing can be drawn until his line exists,
-       because everything else this turn is a reaction to it. */
-    const gen = written ? null : await generateActorLine(plan);
+    /* The character's line, rendered rather than asked for (NJA-3317). This
+       used to be the first of three model calls and the only one on the
+       critical path: nothing could be drawn until it landed. It is now a
+       lookup, so the spinner above comes down in the same frame it went up. */
+    const cue = cueFor(plan);
     $('turn-loading').classList.add('hidden');
-    if (written) { lastGenWhy = 'written opening'; lastCoachWhy = 'written opening'; }
 
     const fb = fallbackLines(plan);
-    const actorLine = gen ? gen.actorText : fb.actor_line;
-    const actorFrags = gen && gen.chatHistory && gen.chatHistory[0]
-      ? gen.chatHistory[0].messageFragments
-      : toFragments(actorLine, newThing(plan) && newThing(plan).by === 'actor'
-          ? [newThing(plan).target] : []);
+    const actorLine   = cue ? cue.line   : fb.actor_line;
+    const actorNative = cue ? cue.native : plan.pair.allNative;
+    lastGenMs  = 0;
+    lastGenWhy = cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
+    /* Worked out HERE and nowhere else, because it has a side effect: a word
+       counts as new exactly once, and asking twice would answer no the second
+       time. */
+    const fresh = newTargetWords(actorLine);
+    const actorFrags = toFragments(actorLine, [actorLine], { allTarget: true });
     turnLine = actorLine;
 
-    /* Call two: the coach, told what the character actually said. Fired now,
-       awaited later — it has until his audio finishes, which is when the coach
-       has always been allowed to speak. */
-    const coachPending = written ? Promise.resolve(null) : generateCoachLine(plan, actorLine);
+    /* The one model call left: the coach, told what she said, what it meant,
+       and which of its words the child is meeting for the first time. Fired
+       now, awaited later — it has until her audio finishes, which is when the
+       coach has always been allowed to speak. */
+    if (written) lastCoachWhy = 'written opening';
+    const coachPending = written
+      ? Promise.resolve(null)
+      : generateCoachLine(plan, actorLine, actorNative, fresh);
 
     mountBackground($('layer-bg'), Q.activity.background);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
@@ -1774,8 +1890,7 @@
       turnCoachHtml = coach.html;
       turnCoachFrags = coach.fragments;
       $('t-gen').textContent =
-        (gen ? 'actor: gemini ' + lastGenMs + 'ms' : 'actor: template (' + lastGenWhy + ')') +
-        ' · ' +
+        'actor: ' + lastGenWhy + ' · ' +
         (cg ? 'coach: gemini ' + lastCoachMs + 'ms' : 'coach: template (' + lastCoachWhy + ')');
       say('axel', coach.html, coach.askText, coach.fragments);
       /* Fired here rather than at the top of the turn: until the coach has
@@ -2327,34 +2442,27 @@
      said rather than to what they were meant to say. Guarded like the others —
      it may not reach past the introduced words, and it may not say the child's
      own line back at them. */
-  async function reactTo(said, wasCorrect) {
-    if (!serverUp) return null;
-    const j = await post('/api/react', Object.assign(turnBody(plan), {
-      reactRules: Q.prompts.reactRules,
-      actorLine: turnLine,
-      childSaid: said,
-      wasCorrect,
-    }), REACT_DEADLINE_MS);
-    if (j.fail || !j.actorText) return null;
-
-    const allowed = introducedWords();
-    if (auditLine(j.actorText, allowed).over > 0) return null;
-    if (stolenWords(j.actorText).length) return null;
-    if (badPhrases(j.actorText).length) return null;
-    /* And it must not hand over the answer, which is the one thing a reaction
-       to a wrong answer is most tempted to do. */
-    if (E.norm(j.actorText).includes(E.norm(plan.expected))) return null;
-    recentActor.push(j.actorText);
-    return j;
+  /* NJA-3317. The reaction used to be a third model call, and it was by
+     construction a line in the child's OWN language — which is the one thing
+     the ticket's first actor criterion forbids. Two zero-slot actor patterns
+     cover what it was for: she takes the order, or she did not catch that.
+     Short on purpose; the banner is already up and the next cue is the real
+     reply to what they said. */
+  function reactionLine(wasCorrect) {
+    const map = Q.actorReactions || { right: 'ok-then', wrong: 'say-again' };
+    const out = Q.actorSay(map[wasCorrect ? 'right' : 'wrong'], {
+      expected: [plan && plan.expected, plan && plan.pair && plan.pair.allTarget],
+    });
+    return out ? out.line : null;
   }
 
   async function sayReaction(said, wasCorrect) {
-    const r = await reactTo(said, wasCorrect);
-    if (!r) return;
-    const frags = (r.chatHistory && r.chatHistory[0] && r.chatHistory[0].messageFragments)
-      || toFragments(r.actorText);
-    say(ACTOR, fragmentsHTML(frags), r.actorText, frags);
-    await V.say(r.actorText, { speaker: ACTOR, lang: accentOf(ACTOR) });
+    const line = reactionLine(wasCorrect);
+    if (!line) return;
+    for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
+    const frags = toFragments(line, [line], { allTarget: true });
+    say(ACTOR, fragmentsHTML(frags), line, frags);
+    await V.say(line, { speaker: ACTOR, lang: accentOf(ACTOR) });
   }
 
   async function submit(text, mode) {

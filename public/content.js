@@ -52,7 +52,7 @@ window.QUEST = (function () {
     ro: { en: 'engleză',    es: 'spaniolă',    pt: 'portugheză',  tr: 'turcă',       pl: 'poloneză',    ro: 'română' },
   };
 
-  const slotTags = ['ticket', 'item', 'like'];
+  const slotTags = ['ticket', 'item', 'like', 'price'];
 
   /* NJA-3152's five forms, per language. `bare` is the spelling the schema
      ticket uses — NJA-3204's fixtures write `base` for the same field, and
@@ -327,6 +327,49 @@ window.QUEST = (function () {
                       plural_bare: 'aktorzy',   plural_definite: 'aktorów' },
                 ro: { bare: 'actor',    definite: 'actorul',      indefinite: 'un actor',
                       plural_bare: 'actori',    plural_definite: 'actorii' } },
+    /* NJA-3317. A price is a figure plus a currency word, and it is said one
+       way: the five forms are the same string because a price has no article
+       and no plural. They carry the `price` tag alone, so only the actor's
+       `thats-x` can reach them — a child is never asked to produce money. */
+    'ten-pounds': { tags: ['price'],
+                en: { bare: 'ten pounds', definite: 'ten pounds', indefinite: 'ten pounds',
+                      plural_bare: 'ten pounds', plural_definite: 'ten pounds' },
+                es: { bare: '10 libras', definite: '10 libras', indefinite: '10 libras',
+                      plural_bare: '10 libras', plural_definite: '10 libras' },
+                pt: { bare: '10 libras', definite: '10 libras', indefinite: '10 libras',
+                      plural_bare: '10 libras', plural_definite: '10 libras' },
+                tr: { bare: '10 sterlin', definite: '10 sterlin', indefinite: '10 sterlin',
+                      plural_bare: '10 sterlin', plural_definite: '10 sterlin' },
+                pl: { bare: '10 funtów', definite: '10 funtów', indefinite: '10 funtów',
+                      plural_bare: '10 funtów', plural_definite: '10 funtów' },
+                ro: { bare: '10 lire', definite: '10 lire', indefinite: '10 lire',
+                      plural_bare: '10 lire', plural_definite: '10 lire' } },
+    'three-pounds': { tags: ['price'],
+                en: { bare: 'three pounds', definite: 'three pounds', indefinite: 'three pounds',
+                      plural_bare: 'three pounds', plural_definite: 'three pounds' },
+                es: { bare: '3 libras', definite: '3 libras', indefinite: '3 libras',
+                      plural_bare: '3 libras', plural_definite: '3 libras' },
+                pt: { bare: '3 libras', definite: '3 libras', indefinite: '3 libras',
+                      plural_bare: '3 libras', plural_definite: '3 libras' },
+                tr: { bare: '3 sterlin', definite: '3 sterlin', indefinite: '3 sterlin',
+                      plural_bare: '3 sterlin', plural_definite: '3 sterlin' },
+                pl: { bare: '3 funty', definite: '3 funty', indefinite: '3 funty',
+                      plural_bare: '3 funty', plural_definite: '3 funty' },
+                ro: { bare: '3 lire', definite: '3 lire', indefinite: '3 lire',
+                      plural_bare: '3 lire', plural_definite: '3 lire' } },
+    'fifteen-pounds': { tags: ['price'],
+                en: { bare: 'fifteen pounds', definite: 'fifteen pounds', indefinite: 'fifteen pounds',
+                      plural_bare: 'fifteen pounds', plural_definite: 'fifteen pounds' },
+                es: { bare: '15 libras', definite: '15 libras', indefinite: '15 libras',
+                      plural_bare: '15 libras', plural_definite: '15 libras' },
+                pt: { bare: '15 libras', definite: '15 libras', indefinite: '15 libras',
+                      plural_bare: '15 libras', plural_definite: '15 libras' },
+                tr: { bare: '15 sterlin', definite: '15 sterlin', indefinite: '15 sterlin',
+                      plural_bare: '15 sterlin', plural_definite: '15 sterlin' },
+                pl: { bare: '15 funtów', definite: '15 funtów', indefinite: '15 funtów',
+                      plural_bare: '15 funtów', plural_definite: '15 funtów' },
+                ro: { bare: '15 lire', definite: '15 lire', indefinite: '15 lire',
+                      plural_bare: '15 lire', plural_definite: '15 lire' } },
   };
 
   const FORMS = ['bare', 'definite', 'indefinite', 'plural_bare', 'plural_definite'];
@@ -461,7 +504,147 @@ window.QUEST = (function () {
     'thank-you':    { speaker: 'learner',
                       en: 'Thank you.',  es: 'Gracias.',      pt: 'Obrigado.',
                       tr: 'Teşekkürler.', pl: 'Dziękuję.',    ro: 'Mulțumesc.' },
+
+    /* ---------- NJA-3317: the lines the actor says ----------
+       Until now the person behind the counter improvised, in the CHILD'S
+       language, with a word allowlist to stop her reaching past the
+       curriculum. That is the wrong way round for a scene set abroad: a
+       Spanish barmaid who speaks English at you is not a reason to learn
+       Spanish, and the model could only be asked nicely to stay inside the
+       vocabulary.
+
+       So her half of the dialogue becomes what the child's half already was —
+       a pattern, rendered. Every actor line below is written in all six
+       languages and filled from the same vocab table the child's answer is
+       filled from, which is what makes the ticket's actor acceptance criteria
+       1 to 6 true by construction rather than true on average:
+
+         1  it is in the target language because that is the only language it
+            is rendered in
+         2  exactly one pattern, its slot in that language's own form
+         3  no word outside the patterns and the vocab table exists to be said
+         6  it is never the child's expected answer, because `cueFor` refuses
+            a pattern whose line contains it
+
+       `speaker: 'actor'` already means "defined, but never drilled" — expand()
+       skips these when it builds the child's pairs, so none of them can become
+       a question. That is the field doing exactly the job it was written for.
+
+       The ticket's `have` and `thing` tags are the existing `item` and `like`
+       tags under other names; using those avoids retagging nineteen nouns to
+       express a distinction that does not exist in this vocabulary. */
+    /* The opener. She has not seen you yet — the one line that is not a cue. */
+    'in-a-minute':  { speaker: 'actor',
+                      en: 'Yeah yeah, in a minute.',  es: 'Sí, sí, un momento.',
+                      pt: 'Sim, sim, um momento.',    tr: 'Tamam tamam, bir dakika.',
+                      pl: 'Tak, tak, za chwilę.',     ro: 'Da, da, un moment.' },
+    /* No slot. The ticket flags zero-slot patterns as unsupported in the SSOT;
+       in this engine they always have been — `excuse-me` and `thank-you` are
+       zero-slot and have run every night since the first one. */
+    'anything-else': { speaker: 'actor',
+                      en: 'Anything else?',  es: '¿Algo más?',
+                      pt: 'Mais alguma coisa?', tr: 'Başka bir şey?',
+                      pl: 'Coś jeszcze?',  ro: 'Altceva?' },
+    'what-would-you-like': { speaker: 'actor',
+                      en: 'What would you like?',  es: '¿Qué quieres?',
+                      pt: 'O que queres?',         tr: 'Ne istersin?',
+                      pl: 'Czego chcesz?',         ro: 'Ce vrei?' },
+    'would-you-like-x': { speaker: 'actor',
+                      en: 'Would you like {item:indefinite}?',
+                      es: '¿Quieres {item:indefinite}?',
+                      pt: 'Queres {item:indefinite}?',
+                      tr: '{item:indefinite} ister misin?',
+                      pl: 'Chcesz {item:definite}?',
+                      ro: 'Vrei {item:indefinite}?' },
+    /* Mirrors `i-like`'s forms language by language, so the reply she is
+       fishing for is the one the child has been given the pills for. */
+    'do-you-like-x': { speaker: 'actor',
+                      en: 'Do you like {like:plural_bare}?',
+                      es: '¿Te gusta {like:definite}?',
+                      pt: 'Gostas de {like:plural_bare}?',
+                      tr: '{like:plural_definite} seviyor musun?',
+                      pl: 'Lubisz {like:plural_definite}?',
+                      ro: 'Îiți plac {like:plural_definite}?' },
+    /* Handing it over. Polish takes `Oto` rather than `Proszę`, which also
+       means please and would teach the courtesy word as a serving word. */
+    /* "Here is", not "Here's". fragments.js strips the apostrophe when it
+       keys a word and content.js does not, so a contraction in a line she says
+       is a word the child cannot tap — it misses the lookup on a character
+       the two sides disagree about. Spelling it out is also the clearer
+       English for a 7-10 year old meeting it as a foreign language. */
+    'here-is-x':    { speaker: 'actor',
+                      en: 'Here is {item:definite}.',
+                      es: 'Aquí tienes {item:definite}.',
+                      pt: 'Aqui tens {item:definite}.',
+                      tr: 'İşte {item:bare}.',
+                      pl: 'Oto {item:bare}.',
+                      ro: 'Poftim {item:definite}.' },
+    /* Defined, and deliberately not cued at any venue: the child is drilled on
+       `do-you-have`, so this is their own line in her mouth. It is here for a
+       scenario where the counter asks and the child answers. */
+    'do-you-have-x': { speaker: 'actor',
+                      en: 'Do you have {item:indefinite}?',
+                      es: '¿Tienes {item:bare}?',
+                      pt: 'Tens {item:bare}?',
+                      tr: '{item:bare} var mı?',
+                      pl: 'Masz {item:definite}?',
+                      ro: 'Ai {item:bare}?' },
+    /* The closing beat after `how-much-is-it`. Both are defined and neither is
+       in a venue yet: switching them on adds a tenth construction to a
+       curriculum whose order was settled by measurement, so that is a decision
+       to take on the data rather than inside this ticket. */
+    'thats-x':      { speaker: 'actor',
+                      en: 'That is {price:bare}.',
+                      es: 'Son {price:bare}.',
+                      pt: 'São {price:bare}.',
+                      tr: '{price:bare} eder.',
+                      pl: 'To {price:bare}.',
+                      ro: 'Costă {price:bare}.' },
+    /* Her two reactions. These replace a third model call whose line was, by
+       construction, in the wrong language. */
+    'ok-then':      { speaker: 'actor',
+                      en: 'Alright.', es: 'Vale.',     pt: 'Certo.',
+                      tr: 'Tamam.',   pl: 'Dobra.',    ro: 'Bine.' },
+    'say-again':    { speaker: 'actor',
+                      en: 'Sorry?',   es: '¿Cómo?',   pt: 'Como?',
+                      tr: 'Efendim?', pl: 'Słucham?',  ro: 'Poftim?' },
+    /* The learner half of the price exchange. Zero-slot, like `thank-you`. */
+    'how-much-is-it': { speaker: 'learner',
+                      en: 'How much is it?', es: '¿Cuánto es?',
+                      pt: 'Quanto é?',       tr: 'Ne kadar?',
+                      pl: 'Ile to kosztuje?', ro: 'Cât costă?' },
   };
+
+
+  /* ---------- NJA-3317: which line sets up which answer ----------
+     The ticket's pairings, read against the nine constructions this prototype
+     actually runs rather than against the SSOT's Scenario 1 list. Where the
+     ticket names a learner pattern this venue does not have — `i-have-x`,
+     `i-dont-have-x`, `please`, `i-like-the-x` — the nearest one here takes the
+     cue instead; `how-much-is-it` is defined and uncued because switching it
+     on would add a tenth construction to an order settled by measurement.
+
+     A list rather than a single id so the same cue is not asked twice running:
+     `cue()` takes the first entry that was not used last turn. The child's
+     opener is cued by nobody — she has not seen them yet, which is the whole
+     point of having to say "excuse me". */
+  const ACTOR_CUES = {
+    'excuse-me':         ['in-a-minute'],
+    'do-you-have':       ['what-would-you-like', 'anything-else'],
+    'can-i-have':        ['what-would-you-like', 'would-you-like-x'],
+    'can-i-have-please': ['would-you-like-x', 'what-would-you-like'],
+    'i-dont-want':       ['would-you-like-x', 'anything-else'],
+    'do-you-like':       ['here-is-x', 'anything-else'],
+    'i-like':            ['do-you-like-x', 'anything-else'],
+    'i-like-two':        ['do-you-like-x', 'anything-else'],
+    'thank-you':         ['here-is-x'],
+    'how-much-is-it':    ['thats-x'],
+  };
+
+  /* Her two answers to what the child actually said, as pattern ids. The third
+     model call that used to write this line is gone: it was, by construction,
+     a line in the wrong language. */
+  const ACTOR_REACTIONS = { right: 'ok-then', wrong: 'say-again' };
 
   /* ---------- the three venues ----------
      NJA-3207. One night out, three places to have it. Every venue runs the
@@ -791,33 +974,73 @@ No stage directions, no emoji, no praise, no questions to an adult. Vary your
 wording. Return JSON only.`,
 
     reactRules,
+    /* NJA-3317 rewrote this one. The character now speaks the target language,
+       so the coach's job changed shape underneath him: he used to be the only
+       one explaining anything to a child who could already understand every
+       word on screen, and he is now the only one explaining anything to a
+       child who cannot. So the line is no longer "here is what to say" — it
+       is "here is what she just said to you, and here is what you want back".
+
+       The ticket's coach criteria are the five rules below, in its order:
+         1  translate what is new, and only what is new
+         2  scene → meaning → what to ask for, in that order
+         3  never the answer in the target language, in any wrapper
+         4  no greeting, no two hints opening alike, `please` only when taught
+         5  four sentences with a translation in them, three without
+
+       Rule 3 is the one that costs something, and it is deliberate. Handing a
+       child the sentence and asking them to repeat it is the thing the
+       educator review called out: they produce it once, correctly, having
+       understood nothing. The pills carry the words; the coach carries the
+       intent. */
     coachRules: `You are the child's coach in a language game played by a 7-10
-year old. You speak only to them, never to the actor. Write ONE short line.
+year old. You speak only to them, never to {{actor_name}}. Write ONE short
+line, in {{native_language}}.
 
 {{coach_prompt}}
 
 The setting: {{scenario_prompt}}
 
-{{actor_name}} has just said: "{{actor_line}}"
+{{actor_name}} has just said, in {{target_language}}: "{{actor_line}}"
+What that means: {{actor_line_native}}
 
-Your job, in one short sentence in {{native_language}}: make sure they
-understood what was just said, and tell them what to say back — without handing
-over the whole answer. They are expected to reply: {{user_expected_answer}}
-(meaning: {{user_expected_answer_native}}).
+THE SHAPE OF YOUR LINE — these parts, in this order, and nothing else:
+
+  1. One short remark about what is happening in the scene. Not a greeting —
+     what she just did.
+
+  2. What the new {{target_language}} words mean. ONLY these ones, and only
+     because this is the first time the child has met them:
+     {{new_target_words}}
+     Say nothing about a word that is not on that list. They have already been
+     told, and telling them again says the first time did not count.
+
+  3. What they should say back — the MEANING of it, in {{native_language}}.
+     What they want, not the words they want it in.
+
+If part 2 has nothing in it, your line is two parts, not three.
+
+LENGTH: four sentences at the most when you are translating something, three
+at the most when you are not. Shorter is better than longer.
+
+WHAT YOU NEVER DO
+
+Never write the child's answer in {{target_language}}. Not the whole of it,
+not most of it, and not a {{native_language}} sentence with the
+{{target_language}} words dropped into it — "Di: «Me das water?»" is wrong in
+both languages, and a child who copies it has been taught something nobody
+meant to teach. They are expected to reply: {{user_expected_answer}} (meaning:
+{{user_expected_answer_native}}). That sentence is theirs to build out of the
+words in front of them. You point at it. You do not say it.
+
+Never open with a greeting or a filler. No "right then", "alright", "ok",
+"hey", "so", no name, no "mate" — start with the thing you have to say. And
+never open two hints in a row with the same three words.
+
+Never write "please", or {{target_language}}'s word for it, unless being
+polite is the thing being taught this exchange.
 
 {{new_thing}}
-
-Write in {{native_language}}. The only {{target_language}} you may write is a
-word or construction you are told you are introducing. Never translate the
-character's line word for word; say what they want.
-
-NEVER put a sentence in quotes and tell them to say it unless it is exactly
-{{user_expected_answer}}, word for word. In particular, never build a sentence
-out of {{native_language}} grammar with a {{target_language}} word dropped into
-it — "Di: «¿Me das water?»" is not a thing anyone says, and a child who copies
-it has been taught something that is wrong in both languages. If you want to
-remind them what they are aiming for, say it in {{native_language}} as a
-MEANING, with no "say this" in front of it.
 
 No stage directions, no emoji, no questions to an adult. Vary your wording.
 Return JSON only.`,
@@ -1223,13 +1446,14 @@ Return JSON only.`,
     /* "She", in the two languages that mark it: all three people behind the
        three counters are women. Spanish, Portuguese and Romanian carry no
        gender on the verb here, so only English and Polish needed changing. */
+    /* {0} is the opener's MEANING, not the opener. Same reason as above. */
     'open-coach': {
-      en: 'She has not seen you. Tap the words to say “{0}”.',
-      es: 'No te ha visto. Toca las palabras para decir “{0}”.',
-      pt: 'Não te viu. Toca nas palavras para dizer “{0}”.',
-      tr: 'Seni görmedi. Kelimelere dokunup “{0}” de.',
-      pl: 'Nie zauważyła cię. Dotknij słów, żeby powiedzieć “{0}”.',
-      ro: 'Nu te-a văzut. Atinge cuvintele ca să spui “{0}”.',
+      en: 'She has not seen you. You want “{0}” — tap the words for it.',
+      es: 'No te ha visto. Quieres “{0}” — toca las palabras.',
+      pt: 'Não te viu. Queres “{0}” — toca nas palavras.',
+      tr: 'Seni görmedi. İstediğin şey “{0}” — kelimelere dokun.',
+      pl: 'Nie zauważyła cię. Chodzi o “{0}” — dotknij słów.',
+      ro: 'Nu te-a văzut. Vrei „{0}” — atinge cuvintele.',
     },
     /* The written fallbacks, for when the model is slow or unreachable. One
        list per speaker so the line is not the same every turn. */
@@ -1252,30 +1476,42 @@ Return JSON only.`,
        sentence — "Repítelo. «¿Tienes una entrada?»" — which to a Spanish child
        learning English is an instruction to repeat Spanish. Every line here
        names the language, so the quote can only be read as the meaning. */
+    /* The floor under the coach's bubble. Three of them so two turns running
+       do not open with the same words (NJA-3317 coach AC 4), and all three
+       quote the MEANING rather than the answer (AC 3): {0} is the sentence in
+       the child's own language, which is the one thing it is always safe to
+       hand over. */
     'fb-coach-ask': {
-      en: ['You want to say: “{0}”. Now in {1}.',
-           'What you mean is “{0}”. Say it in {1}.',
-           'Your turn: “{0}” — in {1}.'],
-      es: ['Quieres decir: “{0}”. Ahora en {1}.',
-           'Lo que quieres decir es “{0}”. Dilo en {1}.',
-           'Te toca: “{0}” — en {1}.'],
-      pt: ['Queres dizer: “{0}”. Agora em {1}.',
-           'O que queres dizer é “{0}”. Di-lo em {1}.',
-           'É a tua vez: “{0}” — em {1}.'],
-      tr: ['Şunu demek istiyorsun: “{0}”. Şimdi {1}.',
-           'Demek istediğin “{0}”. Bunu {1} söyle.',
-           'Sıra sende: “{0}” — {1}.'],
-      pl: ['Chcesz powiedzieć: “{0}”. Teraz po angielsku.',
-           'Chodzi ci o “{0}”. Powiedz to po angielsku.',
-           'Twoja kolej: “{0}” — po angielsku.'],
-      ro: ['Vrei să spui: “{0}”. Acum în {1}.',
-           'Ce vrei să spui e “{0}”. Spune-o în {1}.',
-           'E rândul tău: “{0}” — în {1}.'],
+      en: ['She is waiting. What you want is “{0}” — build it in {1}.',
+           'Your turn now. The idea is “{0}”, said in {1}.',
+           'That is your cue: “{0}” — put it together in {1}.'],
+      es: ['Está esperando. Lo que quieres es “{0}” — constrúyelo en {1}.',
+           'Te toca a ti. La idea es “{0}”, dicha en {1}.',
+           'Esa es tu señal: “{0}” — móntalo en {1}.'],
+      pt: ['Ela está à espera. O que queres é “{0}” — monta isso em {1}.',
+           'É a tua vez. A ideia é “{0}”, dita em {1}.',
+           'Essa é a deixa: “{0}” — junta as palavras em {1}.'],
+      tr: ['Bekliyor. İstediğin şey “{0}” — bunu {1} kur.',
+           'Sıra sende. Fikir şu: “{0}”, {1} söylenmiş hâli.',
+           'İşte işaretin: “{0}” — kelimeleri {1} birleştir.'],
+      pl: ['Czeka na ciebie. Chodzi o “{0}” — złóż to po angielsku.',
+           'Twoja kolej. Pomysł jest taki: “{0}”, tylko po angielsku.',
+           'To twój znak: “{0}” — ułóż to z tych słów.'],
+      ro: ['Te așteaptă. Ce vrei să spui e “{0}” — construiește-o în {1}.',
+           'E rândul tău. Ideea e “{0}”, spusă în {1}.',
+           'Ăsta e semnalul: “{0}” — pune cuvintele cap la cap în {1}.'],
     },
+    /* This one used to print the answer in the target language, which is the
+       single thing NJA-3317 coach AC 3 forbids. {0} is now the MEANING: the
+       construction is new, the child is told what it is for, and the words
+       are on the pills in front of them to find. */
     'fb-coach-new': {
-      en: "Here's how you say it: “{0}”", es: 'Así se dice: “{0}”',
-      pt: 'Diz-se assim: “{0}”',          tr: 'Şöyle deniyor: “{0}”',
-      pl: 'Mówi się tak: “{0}”',          ro: 'Se spune așa: „{0}”',
+      en: 'This one is new — it means “{0}”. The words are there; tap them.',
+      es: 'Esta es nueva — quiere decir “{0}”. Las palabras están ahí; tócalas.',
+      pt: 'Esta é nova — quer dizer “{0}”. As palavras estão aí; toca nelas.',
+      tr: 'Bu yeni — anlamı “{0}”. Kelimeler orada; dokun onlara.',
+      pl: 'To coś nowego — znaczy “{0}”. Słowa są tuż obok; dotknij ich.',
+      ro: 'Asta e nouă — înseamnă „{0}”. Cuvintele sunt acolo; atinge-le.',
     },
     'end-eyebrow': {
       en: 'Session over', es: 'Se acabó', pt: 'Acabou',
@@ -1588,6 +1824,108 @@ Return JSON only.`,
 
     q.pairs = q.groups.map(g => makePair(g));
 
+    /* ---------- NJA-3317: the actor's half, chunked ----------
+       The same build as a learner group, for the patterns the loop above
+       skipped. They are never made into pairs — nothing may select one as a
+       question, which is what `speaker: 'actor'` has always meant — but they
+       are chunked here so her line can be RENDERED rather than written, and so
+       her words land in the glossary and the phrase table like everyone
+       else's. Without that last part every word she says is untappable, which
+       is the one thing a child needs when she stops speaking their language. */
+    q.actorGroups = [];
+    for (const [pid, pat] of Object.entries(vocabPatterns)) {
+      if (pat.speaker !== 'actor') continue;
+      if (!pat[LANGS.native] || !pat[LANGS.target]) continue;
+      const nativeFrames = chunk(pat[LANGS.native]);
+      const targetFrames = chunk(pat[LANGS.target]);
+      const slotKeys = slotsOf(nativeFrames).map(sl => sl.key);
+      if (slotKeys.join(',') !== slotsOf(targetFrames).map(sl => sl.key).join(',')) {
+        throw new Error('actor pattern slots differ between languages: ' + pid);
+      }
+      const slots = {};
+      let usable = true;
+      for (const sl of slotsOf(nativeFrames)) {
+        /* This venue's own nouns first. A tag no venue carries — a price —
+           falls back to the whole table rather than making the pattern
+           unusable, because money is not scenery that belongs to a room. */
+        const here = activity.items.filter(id => (vocabItems[id].tags || []).includes(sl.tag));
+        const any  = Object.keys(vocabItems).filter(id => (vocabItems[id].tags || []).includes(sl.tag));
+        slots[sl.key] = here.length ? here : any;
+        if (!slots[sl.key].length) usable = false;
+      }
+      if (!usable) continue;
+      const forms = {};
+      for (const code of LANGUAGES.map(l => l.code)) {
+        if (!pat[code]) continue;
+        for (const sl of slotsOf(chunk(pat[code])))
+          (forms[sl.key] = forms[sl.key] || {})[code] = sl.forms[0];
+      }
+      q.actorGroups.push({ id: pid, pattern: pat, nativeFrames, targetFrames,
+                           forms, langs: LANGS, slotKeys, slots });
+    }
+
+    q.actorCues = ACTOR_CUES;
+    q.actorReactions = ACTOR_REACTIONS;
+
+    /* ONE actor line, in the target language, its slot filled.
+
+       `itemId` is the noun the child's own answer is about, so the cue and the
+       reply are about the same thing rather than two unrelated nouns in a row.
+       `avoid` is the pattern used last turn, so "What would you like?" is not
+       asked twice running. `expected` is the child's answer, and a cue that
+       contains it is skipped rather than said — the ticket's actor AC 6,
+       enforced here instead of asked for in a prompt that may or may not
+       comply. */
+    /* One named actor pattern, rendered. `itemId` is the noun the line should
+       be about; anything it cannot fill is a null rather than a half sentence.
+       `expected` is the child's answer (or a list of ways of writing it) and a
+       line that contains it is refused — the ticket's actor AC 6, enforced
+       here instead of asked for in a prompt that may or may not comply. */
+    q.actorSay = (pid, opts) => {
+      const o = opts || {};
+      const g = q.actorGroups.find(x => x.id === pid);
+      if (!g) return null;
+      const fill = {};
+      for (const key of g.slotKeys) {
+        const pick = (o.itemId && g.slots[key].indexOf(o.itemId) >= 0)
+          ? o.itemId : g.slots[key][0];
+        if (!pick) return null;
+        fill[key] = pick;
+      }
+      const line   = render(g.targetFrames, LANGS, fill, new Set(g.slotKeys), g.forms);
+      const native = render(g.nativeFrames, LANGS, fill, new Set(), g.forms);
+      const banned = [].concat(o.expected || []).filter(Boolean);
+      for (const b of banned) {
+        if (phraseKey(line).indexOf(phraseKey(b)) >= 0) return null;
+      }
+      return { id: pid, line, native, itemId: fill[g.slotKeys[0]] || null };
+    };
+
+    /* The line that sets up THIS construction.
+
+       `avoid` is the LINE she said last turn, not the pattern she said it
+       with — which matters, because two constructions running can both want
+       `would-you-like-x` and still come out as two different questions about
+       two different things ("Would you like a soda?", "Would you like a
+       beer?"). Comparing patterns would throw the second one away for a
+       repetition that is not there. */
+    q.cue = (learnerPatternId, opts) => {
+      const o = opts || {};
+      const want = ACTOR_CUES[learnerPatternId] || [];
+      const avoid = phraseKey(o.avoid || '');
+      let floor = null;
+      for (const pid of want) {
+        const said = q.actorSay(pid, o);
+        if (!said) continue;
+        if (!floor) floor = said;
+        if (avoid && phraseKey(said.line) === avoid) continue;
+        return said;
+      }
+      /* Everything she could say here, she just said. Saying it again is
+         better than saying nothing. */
+      return floor;
+    };
+
     /* ---------- what a highlighted run means (NJA-3149) ----------
        The ticket's fixtures carry a `translation` on every target fragment:
        {type:'target', text:'una entrada', translation:'an entry ticket'}. So
@@ -1623,7 +1961,7 @@ Return JSON only.`,
       for (const form of FORMS) addPhrase(item[LANGS.target][form], item[LANGS.native][form]);
     }
 
-    for (const g of q.groups) {
+    for (const g of q.groups.concat(q.actorGroups)) {
       const T = g.targetFrames, N = g.nativeFrames;
       const sameShape = T.length === N.length && T.every((f, i) => f.type === N[i].type);
       if (sameShape) {
@@ -1656,7 +1994,7 @@ Return JSON only.`,
         for (const tok of t.split(/\s+/)) q.glossary[bare(tok)] = q.glossary[bare(tok)] || n;
       }
     }
-    for (const g of q.groups) {
+    for (const g of q.groups.concat(q.actorGroups)) {
       const blankT = render(g.targetFrames, LANGS, {}, null, g.forms).trim();
       const blankN = render(g.nativeFrames, LANGS, {}, null, g.forms).trim();
       for (const seg of blankT.split(/\s+/)) {

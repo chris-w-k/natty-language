@@ -38,7 +38,14 @@
 
   /* Is this token one of the target-language words the child has met?
      `allowed` is the engine's introduced list, bare-keyed. */
-  function isTarget(tok, allowed) {
+  /* `allTarget` is set for a line the caller KNOWS is wholly in the target
+     language — since NJA-3317 that is every line the character says, because
+     it is rendered from an actor pattern rather than written. The ambiguity
+     test below exists to stop an English "no" inside an English sentence being
+     painted as Spanish, and on a line with no English in it that test only
+     costs the child a word they cannot tap: "el", "la", "a" and the rest come
+     out as dead text in the middle of a highlighted run. */
+  function isTarget(tok, allowed, allTarget) {
     const w = bare(tok);
     if (!w) return false;
     /* A token with no letters in it is not a word in any language: the gap
@@ -46,6 +53,7 @@
        Spanish, and highlighting it offered a child a translation of a blank. */
     if (!/\p{L}/u.test(w)) return false;
     if (!allowed.has(w)) return false;
+    if (allTarget) return true;
     // "no" inside an English sentence is English, however Spanish it also is
     return looksForeign(tok) || !AMBIGUOUS.has(w);
   }
@@ -68,11 +76,12 @@
      falling back to single tokens where nothing matches. `phrases` is
      optional: without it this behaves as before, merging neighbours, which is
      what the fallback lines built in the client did before the table existed. */
-  function fragments(text, allowedWords, phrases) {
+  function fragments(text, allowedWords, phrases, opts) {
     const allowed = allowedWords instanceof Set
       ? allowedWords
       : new Set((allowedWords || []).map(bare));
     const table = phrases || null;
+    const whole = !!(opts && opts.allTarget);
     const out = [];
     const push = (type, text, translation) => {
       const last = out[out.length - 1];
@@ -94,7 +103,7 @@
         else out.push({ type: 'text', text: tok });
         continue;
       }
-      if (!isTarget(tok, allowed)) { push('text', tok); continue; }
+      if (!isTarget(tok, allowed, whole)) { push('text', tok); continue; }
 
       /* The longest run starting here that the content can translate, and
          whose every word has been introduced. */
@@ -105,7 +114,7 @@
           const t = toks[j];
           run += t;
           if (!t.trim()) continue;
-          if (!isTarget(t, allowed)) break;
+          if (!isTarget(t, allowed, whole)) break;
           const hit = table[phraseKey(run)];
           if (hit) best = { upto: j, text: run, translation: hit };
         }
