@@ -591,6 +591,34 @@ window.QUEST = (function () {
                       en: 'Anything else?',  es: '¿Algo más?',
                       pt: 'Mais alguma coisa?', tr: 'Başka bir şey?',
                       pl: 'Coś jeszcze?',  ro: 'Altceva?' },
+    /* Her offer, with no noun in it. It cannot have one: the child's answer
+       to it IS a question about a drink, and a question about a thing cannot
+       be set up by naming the thing first — she would be asking and answering
+       at once. So the drinks are the one group whose words the coach hands
+       over, and that is structural rather than an oversight. */
+    'would-you-like-something': { speaker: 'actor',
+                      en: 'Would you like something?', es: '¿Quieres algo?',
+                      pt: 'Queres alguma coisa?',      tr: 'Bir şey ister misin?',
+                      pl: 'Chcesz coś?',             ro: 'Vrei ceva?' },
+    /* What she has got, which is what the child then orders. The same
+       construction they learned to say at the door, now in her mouth — they
+       produced it, they were scored on it, and now they have to understand it
+       coming back. The old rule against her using a learner construction is
+       suspended here on purpose: that rule exists to stop her saying their
+       line BEFORE they do. */
+    'i-have-x':     { speaker: 'actor',
+                      /* The learner construction this IS, under another id.
+                         A child who has been taught "Tengo ___" at the door
+                         does not need telling again when she says it back at
+                         them — recognising it is the point, and a coach who
+                         re-explains it says the first time did not count. */
+                      twin: 'i-have',
+                      en: 'I have {item:indefinite}.',
+                      es: 'Tengo {item:indefinite}.',
+                      pt: 'Tenho {item:indefinite}.',
+                      tr: 'Bende {item:indefinite} var.',
+                      pl: 'Mam {item:definite}.',
+                      ro: 'Am {item:indefinite}.' },
     'what-would-you-like': { speaker: 'actor',
                       en: 'What would you like?',  es: '¿Qué quieres?',
                       pt: 'O que queres?',         tr: 'Ne istersin?',
@@ -701,16 +729,16 @@ window.QUEST = (function () {
      sentence here. Three questions recognised and three different kinds of
      sentence produced beats two of one kind. */
   const QA_GIG = [
-    /* Book-ends. No word to learn and no question to understand, so one
-       exchange each: the construction crosses and that is the whole of it.
-       They are here because a night that opens and closes like a conversation
-       is worth two exchanges of the seventeen. */
-    { id: 'open',  ask: 'in-a-minute',     answer: 'excuse-me', vocab: [] },
-    { id: 'door',  ask: 'do-you-have-x',   answer: 'i-have',    vocab: ['ticket', 'cash', 'card'] },
-    { id: 'bar',   ask: 'would-you-like-x', answer: 'can-i-have', vocab: ['beer', 'soda', 'water'] },
-    { id: 'merch', ask: 'do-you-like-x',   answer: 'i-like',    vocab: ['record', 'tshirt', 'band'] },
-    /* She hands over the thing they have just said they like. */
-    { id: 'close', ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [] },
+    { id: 'open',   ask: 'in-a-minute',              answer: 'excuse-me',   vocab: [] },
+    /* She asks what you have got, and you tell her. */
+    { id: 'door',   ask: 'do-you-have-x',            answer: 'i-have',      vocab: ['ticket', 'cash', 'card'] },
+    /* She offers, and you ask what is on — saying back the question she
+       asked you at the door. */
+    { id: 'drinks', ask: 'would-you-like-something', answer: 'do-you-have', vocab: ['water', 'soda', 'beer'] },
+    /* She tells you what she has got, in the construction YOU used at the
+       door, and you order. */
+    { id: 'order',  ask: 'i-have-x',                 answer: 'can-i-have',  vocab: ['record', 'tshirt', 'poster'] },
+    { id: 'close',  ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [] },
   ];
 
   /* ---------- NJA-3317: which line sets up which answer ----------
@@ -803,42 +831,42 @@ window.QUEST = (function () {
                name: { en: 'Bartender', es: 'Camarera', pt: 'Empregada',
                        tr: 'Barmen', pl: 'Barmanka', ro: 'Barmaniță' } },
       prompt: 'You are the one woman behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
-      objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
-      items: ['ticket', 'cash', 'card', 'beer', 'soda', 'water', 'record', 'tshirt', 'band'],
+      objectives: ['get in', 'find out what there is to drink', 'order something', 'buy some merch'],
+      items: ['ticket', 'cash', 'card', 'water', 'soda', 'beer', 'record', 'tshirt', 'poster'],
       /* The learner half of the groups below, which is now what `patterns`
          means: the constructions the child is asked to produce. The character's
          questions are actor patterns and are never drilled. */
-      patterns: ['excuse-me', 'i-have', 'can-i-have', 'i-like', 'thank-you'],
+      patterns: ['excuse-me', 'i-have', 'do-you-have', 'can-i-have', 'thank-you'],
       qa: QA_GIG,
       intro: {
         en: {
           title: 'GOING TO A GIG',
-          sub: 'Learn the {0} to get in, get a drink and tell someone you love the song.',
+          sub: 'Learn the {0} to get in, find out what there is and take something home.',
           tap: 'Tap to continue',
         },
         es: {
           title: 'VAMOS A UN CONCIERTO',
-          sub: 'Aprende el {0} para entrar, pedir una bebida y decir que te encanta la canción.',
+          sub: 'Aprende el {0} para entrar, enterarte de lo que hay y llevarte algo a casa.',
           tap: 'Toca para continuar',
         },
         pt: {
           title: 'VAMOS A UM CONCERTO',
-          sub: 'Aprende o {0} para entrares, pedires uma bebida e dizeres que adoras a música.',
+          sub: 'Aprende o {0} para entrares, saberes o que há e levares algo para casa.',
           tap: 'Toca para continuar',
         },
         tr: {
           title: 'KONSERE GİDİYORUZ',
-          sub: 'İçeri girmek, bir şeyler içmek ve şarkıyı sevdiğini söylemek için {0} öğren.',
+          sub: 'İçeri girmek, ne olduğunu öğrenmek ve eve bir şey götürmek için {0} öğren.',
           tap: 'Devam etmek için dokun',
         },
         pl: {
           title: 'IDZIEMY NA KONCERT',
-          sub: 'Poznaj {0} — wejdź do środka, zamów coś do picia i powiedz, że uwielbiasz tę piosenkę.',
+          sub: 'Poznaj {0} — wejdź do środka, dowiedz się, co jest, i weź coś do domu.',
           tap: 'Dotknij, aby kontynuować',
         },
         ro: {
           title: 'MERGEM LA UN CONCERT',
-          sub: 'Învață să vorbești {0} ca să intri, să ceri ceva de băut și să spui că îți place melodia.',
+          sub: 'Învață să vorbești {0} ca să intri, să afli ce este și să iei ceva acasă.',
           tap: 'Atinge pentru a continua',
         },
       },

@@ -70,7 +70,11 @@
      generator enough to talk about. Three rooms now, so three of her. */
   const ANIM = {
     axel:           { idle: 'anim/axel-idle.json',            speak: 'anim/axel-talk.json' },
-    bartender:      { idle: 'anim/bartender-idle.json',       speak: 'anim/bartender-talk.json' },
+    /* The gig's bartender wears the cinema worker's rig. Her id is
+       unchanged, so her name, her voice, her accent and every event already
+       filed under `bartender` stay where they are — this is the animation and
+       nothing else. */
+    bartender:      { idle: 'anim/cinema-worker-idle.json',   speak: 'anim/cinema-worker-talk.json' },
     stadium_worker: { idle: 'anim/stadium-worker-idle.json',  speak: 'anim/stadium-worker-talk.json' },
     cinema_worker:  { idle: 'anim/cinema-worker-idle.json',   speak: 'anim/cinema-worker-talk.json' },
   };
@@ -1691,7 +1695,13 @@
       : whole
         ? `<span class="newword"><i>${esc(intro.means)}</i></span>`
         : `<span class="newword">${fragmentsHTML(toFragments(intro.target, [intro.target]))} <i>${esc(intro.means)}</i></span>`;
-    const tail = whole ? ' — ' + intro.means : ' — ' + intro.target + ' — ' + intro.means;
+    /* Only when something IS owed. This was computed unconditionally and
+       read `intro.target` off a null the moment an exchange had nothing new
+       in it — which no exchange did until her question could be a
+       construction the child already owns. */
+    const tail = !owed ? ''
+      : whole ? ' — ' + intro.means
+      : ' — ' + intro.target + ' — ' + intro.means;
     return {
       askText: owed ? ask + tail : ask,
       html: fragmentsHTML(frags) + badge,

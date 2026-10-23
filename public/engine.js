@@ -127,6 +127,9 @@ window.ENGINE = (function () {
 
       out.push({
         id: g.id, askId: g.askId, askItem: g.askItem || null, answerId: g.answerId,
+        /* The learner construction her question IS, when it is one of
+           theirs under another id. */
+        twin: ((quest.vocabPatterns || {})[g.askId] || {}).twin || null,
         vocab: g.vocab.slice(), steps,
         /* What the results screen names this group by: the sentence with all
            of it across, which is where the group was always heading. */
@@ -528,8 +531,17 @@ window.ENGINE = (function () {
     } else if (st.want === 'question') {
       const ask = state.asks[stage.askId];
       /* Hers to say and the coach's to translate — she cannot tell them what
-         her own question means without stepping out of the scene. */
-      if (ask && !ask.introduced) { introducing = 'question'; introducedBy = 'coach'; }
+         her own question means without stepping out of the scene.
+
+         Unless it is a construction they already own. `twin` names the
+         learner pattern her question is, and when the child has been taught
+         that one already, her saying it is RECOGNITION rather than a new
+         thing — which is the whole reason for her saying it. Re-translating
+         it would undo the point. */
+      const twin = stage.twin;
+      const known = twin && state.patterns[twin] && state.patterns[twin].introduced;
+      if (ask && !ask.introduced && !known) { introducing = 'question'; introducedBy = 'coach'; }
+      if (ask && known) ask.introduced = true;
     }
 
     return {
@@ -540,6 +552,12 @@ window.ENGINE = (function () {
       askId: stage.askId,
       askItem: st.fill || stage.askItem || null,
       askTarget: !!st.askTarget,
+      /* The words this group is about, for the tray. A decoy drawn from the
+         whole venue put `tarjetas` and `entradas` — door words, in plural
+         forms that never appeared — next to a merch answer, which is a wrong
+         answer the child had no way of knowing was wrong AND a reminder of a
+         part of the night that is over. */
+      pool: stage.vocab.length ? stage.vocab.slice() : null,
       frameTarget: st.frameTarget, targetSlots,
       itemTarget: targetSlots.length > 0,
       expected: expected(pair, st.frameTarget, targetSlots),
@@ -577,7 +595,7 @@ window.ENGINE = (function () {
       introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null,
       /* No group, so no question of hers to cross: the UI falls back to the
          cue map, which is what the other two venues still run on. */
-      group: null, askId: null, askItem: null, askTarget: true,
+      group: null, askId: null, askItem: null, askTarget: true, pool: null,
       frameTarget, targetSlots,
       // kept for everything that still thinks in terms of one word
       itemTarget: targetSlots.length > 0,
@@ -689,6 +707,29 @@ window.ENGINE = (function () {
     return (list && list.length) ? list : Object.keys(quest.vocabItems);
   }
 
+  /* Where a decoy may come from. The group's own words first — those are the
+     ones this exchange is actually choosing between, and they are the only
+     ones on screen a child can reason about. Then everything they have
+     already met, so a group of three words still fills a tray. The venue's
+     whole list is the floor, for the two venues that have no groups. */
+  function decoyItems(quest, state, plan) {
+    const all = venueItems(quest);
+    if (!plan.pool || !plan.pool.length) return all;
+    const met = all.filter(id => state.items[id] && state.items[id].introduced);
+    /* Deliberately NOT falling back to the rest of the venue when those two
+       run out. A decoy the child has never seen is rejected for the wrong
+       reason — they do not know what it means, so it is not a choice about
+       meaning — and a three-word group always has two real decoys in it,
+       which is a choice. Fewer pills beats a free one. */
+    const out = [], seen = new Set();
+    for (const id of plan.pool.concat(met)) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }
+
   /* ---------- 6. answer pills ----------
      "split expected answer by word, introduce red herrings i.e. words that
      don't work in a valid combination". The red herrings are drawn from items
@@ -768,7 +809,7 @@ window.ENGINE = (function () {
          knowing was wrong. The activity's own list is the scenario's
          vocabulary, which is what a decoy has to come from to be a fair
          mistake. */
-      for (const iid of venueItems(quest)) {
+      for (const iid of decoyItems(quest, state, plan)) {
         const item = quest.vocabItems[iid];
         if (!item || iid === mine) continue;
         const bucket = (item.tags || []).includes(sl.tag) ? valid : invalid;
