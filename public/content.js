@@ -821,8 +821,11 @@ window.QUEST = (function () {
          as `loading.mp3`, named for where it first played, which is how the
          club's room tone came to sound like a property of loading. */
       bed: 'audio/bed-gig.mp3',
-      name: { en: 'A rock gig', es: 'Un concierto', pt: 'Um concerto',
-              tr: 'Bir rock konseri', pl: 'Koncert rockowy', ro: 'Un concert rock' },
+      /* The id stays `gig`. It is in every event already filed, in the quest
+         slug, and in the sound bed's filename; renaming it would break the
+         funnel to change a label. This is the label. */
+      name: { en: 'Night club', es: 'La discoteca', pt: 'A discoteca',
+              tr: 'Gece kulübü', pl: 'Klub nocny', ro: 'Clubul de noapte' },
       /* accent: 'target' / 'native' rather than a language code, because the
          pair is chosen per session. The person behind the counter speaks the
          language you are here to learn; your pal speaks yours. Reverse the
@@ -830,7 +833,7 @@ window.QUEST = (function () {
       actor: { id: 'bartender', speaks: 'target', accent: 'target',
                name: { en: 'Bartender', es: 'Camarera', pt: 'Empregada',
                        tr: 'Barmen', pl: 'Barmanka', ro: 'Barmaniță' } },
-      prompt: 'You are the one woman behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
+      prompt: 'You are the one woman behind the counter at a night club. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
       objectives: ['get in', 'find out what there is to drink', 'order something', 'buy some merch'],
       items: ['ticket', 'cash', 'card', 'water', 'soda', 'beer', 'record', 'tshirt', 'poster'],
       /* The learner half of the groups below, which is now what `patterns`
@@ -840,32 +843,32 @@ window.QUEST = (function () {
       qa: QA_GIG,
       intro: {
         en: {
-          title: 'GOING TO A GIG',
+          title: 'A NIGHT AT THE CLUB',
           sub: 'Learn the {0} to get in, find out what there is and take something home.',
           tap: 'Tap to continue',
         },
         es: {
-          title: 'VAMOS A UN CONCIERTO',
+          title: 'NOCHE EN LA DISCOTECA',
           sub: 'Aprende el {0} para entrar, enterarte de lo que hay y llevarte algo a casa.',
           tap: 'Toca para continuar',
         },
         pt: {
-          title: 'VAMOS A UM CONCERTO',
+          title: 'NOITE NA DISCOTECA',
           sub: 'Aprende o {0} para entrares, saberes o que há e levares algo para casa.',
           tap: 'Toca para continuar',
         },
         tr: {
-          title: 'KONSERE GİDİYORUZ',
+          title: 'GECE KULÜBÜNDE BİR GECE',
           sub: 'İçeri girmek, ne olduğunu öğrenmek ve eve bir şey götürmek için {0} öğren.',
           tap: 'Devam etmek için dokun',
         },
         pl: {
-          title: 'IDZIEMY NA KONCERT',
+          title: 'NOC W KLUBIE',
           sub: 'Poznaj {0} — wejdź do środka, dowiedz się, co jest, i weź coś do domu.',
           tap: 'Dotknij, aby kontynuować',
         },
         ro: {
-          title: 'MERGEM LA UN CONCERT',
+          title: 'O NOAPTE ÎN CLUB',
           sub: 'Învață să vorbești {0} ca să intri, să afli ce este și să iei ceva acasă.',
           tap: 'Atinge pentru a continua',
         },
@@ -978,6 +981,15 @@ window.QUEST = (function () {
 
   const VENUE_IDS = Object.keys(VENUES);
   const DEFAULT_VENUE = 'gig';
+  /* The venues a child is ever OFFERED. The other two are still built, still
+     reachable by ?venue=, and still run the pre-group ladder — which is what
+     makes them worth keeping: they are the control the gig's new shape is
+     measured against. They are just not a choice any more. Three rooms was a
+     replayability experiment; the question now is whether the night itself
+     teaches, and a child picking between rooms before the first word is a
+     decision they have no way to make and one more screen before anything
+     happens. */
+  const PICKABLE = ['gig'];
   /* An unknown venue is the gig rather than a crash: the id can arrive from a
      URL or from a half-written app config, and a night out is better than an
      error screen. */
@@ -1435,6 +1447,17 @@ Return JSON only.`,
        cannot name a place. The per-venue `intro.title` strings further up are
        no longer read by the intro — left in place rather than deleted,
        because they are the only written description each venue has. */
+    /* The revision round, announced once. It has to be announced: five
+       exchanges that look like the night starting again, with no explanation,
+       read as a bug rather than as a last look at the hard ones. */
+    'revision-axel': {
+      en: "Right — a few of those didn't stick. One more go at them and we're done.",
+      es: 'Venga — unas cuantas no te salieron. Otra vuelta a esas y listo.',
+      pt: 'Vamos lá — algumas não ficaram. Mais uma vez a essas e acabámos.',
+      tr: 'Hadi bakalım — birkaçı aklında kalmadı. Bir kez daha deneyelim, sonra bitti.',
+      pl: 'Dobra — kilka nie weszło. Jeszcze raz je przerobimy i koniec.',
+      ro: 'Hai — câteva nu ți-au rămas. Încă o dată pe ele și am terminat.',
+    },
     'scenario-title': {
       en: 'A big night out!',
       es: '¡Una gran noche!',
@@ -1447,12 +1470,12 @@ Return JSON only.`,
        read before either is settled, and a sub that names the target language
        needs a different grammatical form in four of these six. */
     'scenario-sub': {
-      en: 'One night, three places to go. Axel is coming with you.',
-      es: 'Una noche, tres sitios. Axel va contigo.',
-      pt: 'Uma noite, três sítios. O Axel vai contigo.',
-      tr: 'Bir gece, üç mekân. Axel de seninle.',
-      pl: 'Jeden wieczór, trzy miejsca. Axel idzie z tobą.',
-      ro: 'O seară, trei locuri. Axel vine cu tine.',
+      en: 'One night at the club. Axel is coming with you.',
+      es: 'Una noche en la discoteca. Axel va contigo.',
+      pt: 'Uma noite na discoteca. O Axel vai contigo.',
+      tr: 'Gece kulübünde bir gece. Axel de seninle.',
+      pl: 'Jeden wieczór w klubie. Axel idzie z tobą.',
+      ro: 'O seară în club. Axel vine cu tine.',
     },
     /* Axel's opening line, and the question the venue buttons answer. Spoken
        in his voice, so it is written to be heard rather than read.
@@ -1462,13 +1485,17 @@ Return JSON only.`,
        the strings that has to become a country rather than a constant. The
        welcome avoids a gendered adjective in every language here — the child's
        gender is not something this prototype knows. */
+    /* He used to ask which of three places they fancied. There is one night
+       out now, so the question is gone and the line does what it always
+       really did: say where they are, say what is about to happen, and
+       promise he is not going anywhere. */
     'axel-open': {
-      en: "Hey buddy, welcome to England! What do you wanna do tonight? Don't worry about knowing the language — I'll be by your side the whole time.",
-      es: '¡Hola, colega! Ya estamos en Inglaterra. ¿Qué te apetece hacer esta noche? No te preocupes por el idioma: voy a estar contigo todo el rato.',
-      pt: 'Olá! Já estamos em Inglaterra. O que queres fazer esta noite? Não te preocupes com a língua — vou estar contigo o tempo todo.',
-      tr: "Selam dostum, İngiltere'ye hoş geldin! Bu gece ne yapmak istersin? Dili bilmiyorsan dert etme — baştan sona yanındayım.",
-      pl: 'Hej, ziomek, witaj w Anglii! Na co masz dziś ochotę? Nie martw się językiem — cały czas będę przy tobie.',
-      ro: 'Salut, amice, bine ai venit în Anglia! Ce vrei să facem în seara asta? Nu-ți face griji cu limba — sunt lângă tine tot timpul.',
+      en: "Hey buddy, welcome to England! There's a club open tonight and we're going in. Don't worry about knowing the language — I'll be by your side the whole time.",
+      es: '¡Hola, colega! Ya estamos en Inglaterra. Esta noche hay discoteca y vamos a entrar. No te preocupes por el idioma: voy a estar contigo todo el rato.',
+      pt: 'Olá! Já estamos em Inglaterra. Esta noite há discoteca e nós vamos entrar. Não te preocupes com a língua — vou estar contigo o tempo todo.',
+      tr: "Selam dostum, İngiltere'ye hoş geldin! Bu gece bir kulüp açık, giriyoruz. Dili bilmiyorsan dert etme — baştan sona yanındayım.",
+      pl: 'Hej, ziomek, witaj w Anglii! Dziś otwarty jest klub i wchodzimy. Nie martw się językiem — cały czas będę przy tobie.',
+      ro: 'Salut, amice, bine ai venit în Anglia! În seara asta e deschis un club și intrăm. Nu-ți face griji cu limba — sunt lângă tine tot timpul.',
     },
     /* ---------- the venue choice (NJA-3207) ----------
        Asked in the child's own language, after the hint language is settled
@@ -2313,7 +2340,10 @@ Return JSON only.`,
        picker. The order is the order they are offered in. */
     venues: VENUE_IDS,
     defaultVenue: DEFAULT_VENUE,
-    venueList: nativeCode => VENUE_IDS.map(id => ({
+    /* What the pickers read — the intro's, and the end screen's "somewhere
+       you have not been". With one entry the end screen's offer hides itself,
+       which is where that button's own `!nextVenue` guard was always going. */
+    venueList: nativeCode => PICKABLE.map(id => ({
       id,
       name: nameIn(VENUES[id].name, nativeCode),
       background: VENUES[id].background,

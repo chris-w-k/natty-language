@@ -236,6 +236,11 @@ window.ENGINE = (function () {
          this go: a child who has been shown a line and still cannot say it
          needs the night to move, not that same line a fourth time. */
       released: {},
+      /* Steps they did not have first time. The revision round is made of
+         these, and nothing else. */
+      missed: {},
+      revised: false,       // the revision round has been offered and taken
+      revision: false,      // ...and we are in it now
       makeup: false,        // past the syllabus, drilling to reach the pass mark
       done: false,
       /* kept so applying an outcome can move the syllabus on without every
@@ -387,7 +392,38 @@ window.ENGINE = (function () {
 
   /* The planned steps are behind us. Either the pass mark is in hand and the
      night is over, or the weakest step comes round again. */
+  /* How many of them. Brief is the point: this is a last look at the things
+     that did not land, not a second night. Five is about forty seconds. */
+  const REVISION_MAX = 5;
+
   function retarget(state, quest) {
+    /* ---------- the revision round ----------
+       The planned exchanges are behind them. Before the night can end, one
+       short round of whatever they got wrong the first time — whether or not
+       they cleared the pass mark, which is the difference between this and
+       the makeup loop below. A child who scraped through at 86% has still got
+       three things they could not do, and the old ending congratulated them
+       and showed them the door.
+
+       It runs once. `revised` is set even when there is nothing to revise, so
+       a night where everything landed first time ends exactly as it did. */
+    if (!state.revised) {
+      state.revised = true;
+      const again = allSteps(quest)
+        .filter(st => state.missed[st.key] && !state.released[st.key])
+        .slice(0, REVISION_MAX);
+      if (again.length) {
+        state.revision = true;
+        state.makeup = false;
+        state.plan = again.map(st => ({ stage: st.stage, step: st.step, key: st.key }));
+        state.at = 0;
+        state.stage = again[0].stage;
+        state.step = again[0].step;
+        track(state, 'revision_start', { steps: again.length });
+        return;
+      }
+    }
+    state.revision = false;
     if (passed(state, quest)) { state.makeup = false; state.done = true; return; }
     const w = weakest(state, quest);
     if (!w) { state.makeup = false; state.done = true; return; }
@@ -425,6 +461,8 @@ window.ENGINE = (function () {
       .map(s => ({ stage: s.stage, step: s.step, key: s.key }));
     next.go = (state.go || 1) + 1;
     next.coins = state.coins;
+    /* A replay earns its own revision round, from its own mistakes. */
+    next.revised = false;
     /* Everything already met stays met: a replay must not re-introduce a word
        the child has already been given. */
     for (const k of Object.keys(next.patterns))
@@ -552,6 +590,7 @@ window.ENGINE = (function () {
       askId: stage.askId,
       askItem: st.fill || stage.askItem || null,
       askTarget: !!st.askTarget,
+      revision: !!state.revision,
       /* The words this group is about, for the tray. A decoy drawn from the
          whole venue put `tarjetas` and `entradas` — door words, in plural
          forms that never appeared — next to a merch answer, which is a wrong
@@ -596,6 +635,7 @@ window.ENGINE = (function () {
       /* No group, so no question of hers to cross: the UI falls back to the
          cue map, which is what the other two venues still run on. */
       group: null, askId: null, askItem: null, askTarget: true, pool: null,
+      revision: !!state.revision,
       frameTarget, targetSlots,
       // kept for everything that still thinks in terms of one word
       itemTarget: targetSlots.length > 0,
@@ -951,6 +991,12 @@ window.ENGINE = (function () {
   function applyWrong(state, plan) {
     const { pattern, item } = recOf(state, plan.pair);
     if (state.attempts === 0) for (const r of [pattern, item]) { if (r) r.incorrect += 1; }
+    /* The first wrong answer at a step marks it for the revision round, and
+       only the first: what matters is whether they had it when it was new,
+       not how many goes it took afterwards. A step they later get right still
+       comes back — getting it right on the second attempt with the words in
+       front of you is not the same as knowing it. */
+    if (state.attempts === 0) state.missed[stepKey(state.stage, state.step)] = true;
     state.attempts += 1;
     track(state, 'answer', { pair: plan.pair.id, correct: false, attempt: state.attempts });
     return { attempts: state.attempts };
@@ -977,6 +1023,7 @@ window.ENGINE = (function () {
        A step they have been shown and still cannot say is not the one with the
        most to gain. It is the one they have proved they cannot do today. */
     state.released[stepKey(state.stage, state.step)] = true;
+    state.missed[stepKey(state.stage, state.step)] = true;
     state.turn += 1;
     state.attempts = 0;
     bank(state, STEP_SCORE.mercy);

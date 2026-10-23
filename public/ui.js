@@ -621,63 +621,23 @@
      `how: 'random'` — because a venue split that pools the children who chose
      with the children who could not be bothered is not a preference, it is a
      shrug with a bar chart on it. */
+  /* There is one night out now, so there is nothing to ask. What is left of
+     this is the work the chooser's tap used to do on the way past: name the
+     room, unlock the audio, and bring the room's own tone up under the street.
+
+     `NovaPals.Nlt.VenueChosen` still fires, with `how: 'only'`. The event is
+     load-bearing in PostHog — it is what says a session reached the night —
+     and an event that stops arriving looks exactly like a funnel falling off
+     a cliff. One value in a property is a thing you can read; a missing event
+     is not. */
   function pickVenue() {
     const forced = paramVenue();
-    if (forced) {
-      setPair(Q.nativeLang, Q.targetLang, forced);
-      return Promise.resolve({ venue: forced, how: 'url' });
-    }
-
-    const list = C.venueList(NL());
-    $('venue-surprise').querySelector('span').textContent = t('venue-surprise') || 'Surprise me';
-    /* The chooser lives on Axel's panel now, so there is no panel to show and
-       no screen to name: the child has been on 'Coach Intro' since he started
-       talking, and the venue question is part of that screen rather than the
-       next one. */
-    AN('NovaPals.Nlt.VenueOffered', { options: list.length });
-    const offeredAt = Date.now();
-
-    return new Promise(resolve => {
-      const row = $('venue-row');
-      row.innerHTML = '';
-      for (const v of list) {
-        const b = document.createElement('button');
-        b.className = 'btn wide venue-btn';
-        b.dataset.venue = v.id;
-        b.dataset.bg = v.background;
-        b.innerHTML = '<span>' + esc(v.name) + '</span>';
-        b.addEventListener('click', () => choose(v.id, 'picked'));
-        row.appendChild(b);
-      }
-      $('venue-surprise').onclick = () =>
-        choose(list[Math.floor(Math.random() * list.length)].id, 'random');
-
-      /* Now they exist, and now they arrive. The class is removed after the
-         row is built so the stagger animation runs on nodes that are already
-         in place — adding them to a visible container would start each one's
-         animation at a different moment. */
-      $('venue-pick').classList.remove('hidden');
-      /* ...and the tap hint goes: there is something specific to tap now, and
-         "tap to continue" over three buttons is an invitation to tap the
-         wrong thing. */
-      $('intro-tap-2').textContent = '';
-
-      function choose(id, how) {
-        setPair(Q.nativeLang, Q.targetLang, id);
-        /* This tap is also the gesture the browser wants before any audio,
-           the same job the language screen's START used to do alone. */
-        V.unlock(); SFX.unlock();
-        /* The room now has a name, so it can have its own sound. This is the
-           earliest the bed can start: before the tap there was no venue, and
-           starting the shared tone first would mean crossing one room tone
-           into another on the way into the night. */
-        roomBed(0.30, 4000);
-        $('venue-pick').classList.add('hidden');
-        AN('NovaPals.Nlt.VenueChosen',
-           { venue: id, how, msToChoose: Date.now() - offeredAt });
-        resolve({ venue: id, how });
-      }
-    });
+    const id = forced || C.defaultVenue;
+    setPair(Q.nativeLang, Q.targetLang, id);
+    V.unlock(); SFX.unlock();
+    roomBed(0.30, 4000);
+    AN('NovaPals.Nlt.VenueChosen', { venue: id, how: forced ? 'url' : 'only', msToChoose: 0 });
+    return Promise.resolve({ venue: id, how: forced ? 'url' : 'only' });
   }
 
   /* Returns whatever probeServer() resolved to, because boot needs it and the
@@ -743,7 +703,6 @@
     $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
     $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
     $('intro-bubble').textContent = t('axel-open') || '';
-    $('venue-pick').classList.add('hidden');
 
     showPanel('intro-title');
     SCREEN.at('Title');
@@ -799,7 +758,13 @@
     if (!tapped && floor > 0) await wait(floor);
     V.stop();
 
-    /* ...and now the three places. This is the tap that starts the night. */
+    /* The tap that starts the night. It used to be a button on a menu of
+       three places; with one night out there is nothing to choose, so the
+       gesture is the same one every other intro screen takes. It still has to
+       BE a gesture: it is what the browser wants before any audio, and
+       without it the bartender's first line arrives silent. */
+    $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
+    await tapAnywhere(el);
     await pickVenue();
 
     /* No taxi ride. Five seconds of travelling was a nice beat once and a toll
@@ -1367,6 +1332,7 @@
      running; `itemId` carries the previous turn's noun into a line that has a
      slot but no answer of its own to take it from ("Here's the t-shirt." then
      "Thank you."). */
+  let revisionSaid = false;
   let lastCue = null, lastItemId = null, lastPatternId = null;
   function cueFor(plan) {
     /* NJA-3317 v2. On a venue that runs question-answer groups the engine
@@ -2022,6 +1988,19 @@
        lookup, so the spinner above comes down in the same frame it went up. */
     const cue = cueFor(plan);
     $('turn-loading').classList.add('hidden');
+
+    /* The revision round, announced once and by Axel rather than by a banner.
+       Five exchanges that look like the night starting over, with nothing
+       said, read as a bug; one line from him makes them the point. */
+    if (plan.revision && !revisionSaid) {
+      revisionSaid = true;
+      const line = t('revision-axel') || '';
+      if (line) {
+        const rf = toFragments(line);
+        say('axel', fragmentsHTML(rf), line, rf);
+        AN('NovaPals.Nlt.RevisionStart', { steps: (state.plan || []).length, venue });
+      }
+    }
     lastGenMs  = 0;
     lastGenWhy = cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
 
@@ -2976,6 +2955,7 @@
     AN('NovaPals.Nlt.AnotherPlaceTaken', { from, to: id, go: (state.go || 1) + 1 });
 
     state = E.switchVenue(state, Q);
+    revisionSaid = false;
     state.finished = false;
     $('end').classList.add('hidden');
     E.track(state, 'session_start', { activity: Q.activity.id, venue: id, go: state.go });
@@ -3001,6 +2981,9 @@
   function replayLeftovers() {
     const next = E.replay(state, Q);
     voiceAnswers = 0;
+    /* A second go earns its own revision round, so the line that announces it
+       has to be sayable again. */
+    revisionSaid = false;
     $('end').classList.add('hidden');
     state = next;
     state.finished = false;
