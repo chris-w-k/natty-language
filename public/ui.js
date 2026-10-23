@@ -2571,7 +2571,23 @@
     patternId: pl.pair.patternId,
     questionText: turnLine || '',
     hintText: turnAsk || '',
+    /* The engine's position in the CURRENT plan. Kept as it was so the old
+       dashboards still read, but it is no longer a position in the night:
+       the revision round replaces the plan and starts again at 0, so an
+       index of 2 can be the third question or the third thing they are being
+       shown again. The three below are what a report should group on. */
     questionIndex: state ? state.at : 0,
+    /* 'night' | 'revision' | 'makeup' — which of the three parts this
+       exchange belongs to. */
+    phase: pl.phase || 'night',
+    /* 0..16, this exchange's fixed place in the night, whatever phase it is
+       being met in. Null on a venue with no groups. */
+    nightIndex: pl.nightIndex == null ? undefined : pl.nightIndex,
+    /* "1:3" — the canonical identity of an exchange: which group, which rung.
+       Stable across phases, across replays and across venues. */
+    stepKey: pl.stepKey || '',
+    /* open | door | drinks | order | close */
+    groupId: pl.group || '',
   });
 
   /* ---------- the turn loop ---------- */

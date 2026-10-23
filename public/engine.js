@@ -104,6 +104,7 @@ window.ENGINE = (function () {
      exposing and the thing this engine had no way to express before. */
   function qaStages(quest) {
     const out = [];
+    let index = 0;
     for (const g of quest.qa || []) {
       const grp = (quest.groups || []).find(x => x.id === g.answerId);
       if (!grp) continue;
@@ -124,6 +125,12 @@ window.ENGINE = (function () {
         steps.push({ fill: null, frameTarget: true, askTarget: true, want: 'pattern' });
       }
       for (const st of steps) { st.pair = pairOf(st.fill); st.slotKey = slotKey; }
+      /* Where each exchange sits in the night, 0..16, fixed at build time.
+         `state.at` cannot answer this: it is the engine's position in the
+         CURRENT plan, and the revision round replaces that plan and resets it
+         to 0 — so without this every revision exchange would report itself as
+         one of the first five questions of the night. */
+      for (const st of steps) st.index = index++;
 
       out.push({
         id: g.id, askId: g.askId, askItem: g.askItem || null, answerId: g.answerId,
@@ -591,6 +598,12 @@ window.ENGINE = (function () {
       askItem: st.fill || stage.askItem || null,
       askTarget: !!st.askTarget,
       revision: !!state.revision,
+      /* For the analytics, which cannot otherwise tell the three phases
+         apart: the planned night, the revision round, and the makeup loop
+         all report positions in whatever plan is current. */
+      phase: state.revision ? 'revision' : state.makeup ? 'makeup' : 'night',
+      nightIndex: st.index,
+      stepKey: stepKey(state.stage, state.step),
       /* The words this group is about, for the tray. A decoy drawn from the
          whole venue put `tarjetas` and `entradas` — door words, in plural
          forms that never appeared — next to a merch answer, which is a wrong
@@ -636,6 +649,9 @@ window.ENGINE = (function () {
          cue map, which is what the other two venues still run on. */
       group: null, askId: null, askItem: null, askTarget: true, pool: null,
       revision: !!state.revision,
+      phase: state.revision ? 'revision' : state.makeup ? 'makeup' : 'night',
+      nightIndex: null,
+      stepKey: stepKey(state.stage, state.step),
       frameTarget, targetSlots,
       // kept for everything that still thinks in terms of one word
       itemTarget: targetSlots.length > 0,
