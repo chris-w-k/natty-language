@@ -124,5 +124,56 @@ window.ANALYTICS = (function () {
     send('$screen', { $screen_name: name });
   }
 
-  return { init, event, register, screen, isOn: () => enabled, isReady: () => ready };
+  /* ---------- a crash is a thing that happened ----------
+     This page reports nothing to Sentry. Sentry watches the APP, and the
+     webview is a different document on a different origin — so until now an
+     exception in here was invisible everywhere: no error anybody could see,
+     just a child looking at a screen that had stopped, and a session that
+     started and never ended. The only trace was a shape in the funnel, found
+     days later.
+
+     So errors become an event. The event queue above already survives boot,
+     which is exactly when a bad deploy breaks: a script that throws before
+     init has answered still gets its error reported once init lands.
+
+     Throttled hard. A throw inside a render loop fires hundreds of times a
+     second, and a page that is already broken must not also bury the project
+     in events — three is enough to know, and `errors` carries the real count
+     on the third one so the throttle is visible rather than silent.
+
+     The message is sent and the stack is not. A message says which bug; a
+     stack is unbounded text from a minified file, and this is a child's
+     session, not a crash reporter. */
+  const ERROR_CAP = 3;
+  let errors = 0;
+  function reportError(kind, message, where) {
+    errors += 1;
+    if (errors > ERROR_CAP) return;
+    event('NovaPals.Nlt.ClientError', {
+      kind,
+      message: String(message == null ? '' : message).slice(0, 300),
+      where: String(where == null ? '' : where).slice(0, 200),
+      errors,
+      /* True on the last one we will send, so a reader knows the count below
+         is a floor rather than the total. */
+      capped: errors === ERROR_CAP,
+    });
+  }
+
+  try {
+    window.addEventListener('error', e => {
+      /* A failed <img> or <audio> also fires this, on the element rather than
+         the window, and a missing mp3 is not a crash. */
+      if (e && e.target && e.target !== window) return;
+      reportError('error', e && e.message,
+        e && e.filename ? (e.filename.split('/').pop() + ':' + e.lineno) : '');
+    });
+    window.addEventListener('unhandledrejection', e => {
+      const r = e && e.reason;
+      reportError('unhandledrejection', (r && (r.message || r)) || 'unknown', '');
+    });
+  } catch {}
+
+  return { init, event, register, screen, reportError,
+           isOn: () => enabled, isReady: () => ready };
 })();
