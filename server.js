@@ -389,7 +389,13 @@ function coachVars(b) {
          The word reaches the coach only when the character's own line does not
          carry it; when she says it, telling them what it means is the branch
          below. */
-      ? (intro.kind === 'item'
+      ? (intro.kind === 'question'
+          /* NJA-3317 v2's third kind. She has just asked in {{target_language}}
+             for the first time; nobody else can say what she meant. The
+             child's answer is a sentence they can already build, so the hint
+             is WHICH one, not how. */
+          ? `NEW THIS EXCHANGE: ${b.actor} has asked her question in ${b.targetLang} for the first time: "${intro.target}" means "${intro.means}". Tell the child what she is asking. They already know how to answer — point them at WHAT to answer, not at how to say it.`
+        : intro.kind === 'item'
           ? `NEW THIS EXCHANGE: the child meets the ${b.targetLang} word "${intro.target}" ("${intro.means}") for the first time, and ${b.actor} has NOT said it — nothing she says this exchange contains it. Write it, in ${b.targetLang}, and say what it means. You are the only one who can, and a child guessing which word is which learns nothing.`
           : `NEW THIS EXCHANGE: the child meets the construction "${intro.target}" for the first time. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write the construction out in ${b.targetLang}. The words are on screen for them to find.`)
       : `NEW THIS EXCHANGE: ${b.actor} has just used the new word "${intro.target}". Tell the child what it means, in ${b.nativeLang}.`;

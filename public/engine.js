@@ -88,7 +88,63 @@ window.ENGINE = (function () {
      This replaces picking by lowest mastery. That rule kept every one of the
      55 pairs in play at once, so a child met nine constructions and nine nouns
      interleaved and finished none of them. A syllabus is a line, not a pool. */
+  /* ---------- NJA-3317 v2: a stage is a question-answer group ----------
+     A stage used to be one construction and its rungs were "how much of this
+     sentence is in the target language". Both still exist, but they are no
+     longer the whole ladder: the CHARACTER'S question crosses too, and it
+     crosses last.
+
+     So a group of three words is five exchanges — one per word, then the
+     child's sentence, then her question — and a step is "which one thing is
+     new". A group with no words (the book-ends) is one exchange.
+
+     The last exchange of a group is the only one that asks nothing new of the
+     child: they answer with a sentence they can already build. What is new is
+     that they understood the question, which is the thing the ticket wanted
+     exposing and the thing this engine had no way to express before. */
+  function qaStages(quest) {
+    const out = [];
+    for (const g of quest.qa || []) {
+      const grp = (quest.groups || []).find(x => x.id === g.answerId);
+      if (!grp) continue;
+      const slotKey = (grp.slotKeys || [])[0] || null;
+      const pairOf = id => quest.pairFor(g.answerId, slotKey && id ? { [slotKey]: id } : {});
+
+      const steps = [];
+      /* One exchange per word. Her question is in the child's language with
+         the word in the target one; so is their answer. */
+      for (const id of g.vocab) steps.push({ fill: id, frameTarget: false, askTarget: false, want: 'item' });
+      if (g.vocab.length) {
+        /* Their sentence crosses, on the first word they met. */
+        steps.push({ fill: g.vocab[0], frameTarget: true, askTarget: false, want: 'pattern' });
+        /* Her question crosses, on a different word — so the exchange is not
+           the previous one with a new coat of paint. */
+        steps.push({ fill: g.vocab[1] || g.vocab[0], frameTarget: true, askTarget: true, want: 'question' });
+      } else {
+        steps.push({ fill: null, frameTarget: true, askTarget: true, want: 'pattern' });
+      }
+      for (const st of steps) { st.pair = pairOf(st.fill); st.slotKey = slotKey; }
+
+      out.push({
+        id: g.id, askId: g.askId, askItem: g.askItem || null, answerId: g.answerId,
+        vocab: g.vocab.slice(), steps,
+        /* What the results screen names this group by: the sentence with all
+           of it across, which is where the group was always heading. */
+        pair: steps[steps.length - 1].pair,
+      });
+    }
+    return out;
+  }
+
+  /* The pre-group ladder, for a venue that declares no groups. Football and
+     the cinema still run it, which is what makes the gig's new shape readable
+     against something. */
   function syllabus(quest) {
+    if ((quest.qa || []).length) return qaStages(quest);
+    return legacySyllabus(quest);
+  }
+
+  function legacySyllabus(quest) {
     /* Which noun each slot of each stage gets. "First matching" read literally
        gives every stage the same one — `ticket` is valid everywhere — and a
        night of nine constructions all about a ticket teaches one word and
@@ -132,7 +188,9 @@ window.ENGINE = (function () {
      INSTEAD of translating the current pattern" — and only when every slot has
      crossed does the frame itself cross. So a two-slot pattern is three turns,
      not two, and a pattern with no slot at all ("Perdona.") is one. */
-  const stepsIn = pair => (pair ? (pair.slotCount || 0) + 1 : 1);
+  const stepsIn = stage => stage
+    ? (stage.steps ? stage.steps.length : (stage.slotCount || 0) + 1)
+    : 1;
 
   /* Which slots are in the target language at a given step. Step 0 crosses the
      first, step 1 the first two, and the last step crosses the frame with all
@@ -144,15 +202,20 @@ window.ENGINE = (function () {
   const frameAtStep = (pair, step) => step >= (pair.slotKeys || []).length;
 
   function createState(quest) {
-    const patterns = {}, items = {};
+    const patterns = {}, items = {}, asks = {};
     for (const g of quest.groups || []) {
       patterns[g.id] = patterns[g.id] || blank();
       for (const key of g.slotKeys)
         for (const id of g.slots[key]) items[id] = items[id] || blank();
     }
+    /* The character's questions get a ledger of their own. They are never
+       drilled — nothing can select one as a question to answer — but they are
+       introduced exactly once, and without somewhere to record that, a makeup
+       loop would hand the child the same translation twice. */
+    for (const g of quest.qa || []) if (g.askId) asks[g.askId] = asks[g.askId] || blank();
     const plan = allSteps(quest).map(s => ({ stage: s.stage, step: s.step, key: s.key }));
     return {
-      patterns, items,
+      patterns, items, asks,
       turn: 0, coins: 0, finished: false,
       attempts: 0,          // tries at the CURRENT pair, for the retry loop
       stage: plan.length ? plan[0].stage : 0,   // which pattern of the syllabus we are on
@@ -186,9 +249,16 @@ window.ENGINE = (function () {
   const stepKey = (stage, step) => stage + ':' + step;
   function allSteps(quest) {
     const out = [];
-    stages(quest).forEach((pair, stage) => {
-      for (let step = 0; step < stepsIn(pair); step++)
-        out.push({ stage, step, pair, key: stepKey(stage, step) });
+    stages(quest).forEach((st, stage) => {
+      for (let step = 0; step < stepsIn(st); step++)
+        out.push({
+          stage, step, key: stepKey(stage, step),
+          /* Each exchange of a group is about a different word, so the pair is
+             the step's rather than the stage's. Everything that reads
+             `s.pair` — the replay filter, the venue switch, the results — wants
+             the one the child actually answered. */
+          pair: st.steps ? st.steps[step].pair : st,
+        });
     });
     return out;
   }
@@ -358,6 +428,8 @@ window.ENGINE = (function () {
       if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
     for (const k of Object.keys(next.items))
       if (state.items[k]) next.items[k].introduced = state.items[k].introduced;
+    for (const k of Object.keys(next.asks || {}))
+      if (state.asks && state.asks[k]) next.asks[k].introduced = state.asks[k].introduced;
     if (next.plan.length) { next.stage = next.plan[0].stage; next.step = next.plan[0].step; }
     else retarget(next, quest);
     return next;
@@ -393,6 +465,12 @@ window.ENGINE = (function () {
     next.coins = state.coins;
     for (const k of Object.keys(next.patterns))
       if (state.patterns[k]) next.patterns[k].introduced = state.patterns[k].introduced;
+    /* Her questions carry over for the same reason her constructions do: the
+       child has understood "¿Tienes...?" and a second venue must not pretend
+       otherwise. The WORDS behind them do not — that is the whole point of a
+       second venue. */
+    for (const k of Object.keys(next.asks || {}))
+      if (state.asks && state.asks[k]) next.asks[k].introduced = state.asks[k].introduced;
     if (next.plan.length) { next.stage = next.plan[0].stage; next.step = next.plan[0].step; }
     else retarget(next, quest);
     return next;
@@ -401,7 +479,8 @@ window.ENGINE = (function () {
   /* How each pattern of the syllabus came out, for the results screen: the
      mean of its steps' best scores. */
   function report(state, quest) {
-    return stages(quest).map((pair, stage) => {
+    return stages(quest).map((st, stage) => {
+      const pair = st.steps ? st.pair : st;
       const mine = allSteps(quest).filter(s => s.stage === stage);
       const score = mine.reduce((n, s) => n + (state.best[s.key] || 0), 0) / (mine.length || 1);
       return {
@@ -422,7 +501,53 @@ window.ENGINE = (function () {
      word as part of the same exchange." And once introduced, a thing stays in
      the target language for the rest of the session — so the crossing is a
      ratchet, never a flicker. */
-  function planTurn(state, pair) {
+  function planTurn(state, stage) {
+    if (stage && stage.steps) return planGroupTurn(state, stage);
+    return planLegacyTurn(state, stage);
+  }
+
+  /* One exchange of a question-answer group. Which thing is new is read off
+     the step rather than worked out from mastery, exactly as before — there
+     are just three kinds of new thing now instead of two. */
+  function planGroupTurn(state, stage) {
+    const st = stage.steps[Math.min(state.step, stage.steps.length - 1)];
+    const pair = st.pair;
+    const { pattern } = recOf(state, pair);
+    const targetSlots = st.slotKey ? [st.slotKey] : [];
+
+    let introducing = null, introKey = null, introducedBy = null;
+    if (st.want === 'item' && st.fill) {
+      introKey = st.slotKey;
+      const rec = state.items[st.fill];
+      /* Vocabulary is hers, and under this ladder she can always carry it:
+         every group's question has a slot, so the word is in her mouth on the
+         exchange that introduces it. */
+      if (rec && !rec.introduced) { introducing = 'item'; introducedBy = 'actor'; }
+    } else if (st.want === 'pattern') {
+      if (!pattern.introduced) { introducing = 'pattern'; introducedBy = 'coach'; }
+    } else if (st.want === 'question') {
+      const ask = state.asks[stage.askId];
+      /* Hers to say and the coach's to translate — she cannot tell them what
+         her own question means without stepping out of the scene. */
+      if (ask && !ask.introduced) { introducing = 'question'; introducedBy = 'coach'; }
+    }
+
+    return {
+      pair, introducing, introKey, introducedBy,
+      stage: state.stage, step: state.step,
+      group: stage.id,
+      /* What she says this exchange, and whether her frame has crossed. */
+      askId: stage.askId,
+      askItem: st.fill || stage.askItem || null,
+      askTarget: !!st.askTarget,
+      frameTarget: st.frameTarget, targetSlots,
+      itemTarget: targetSlots.length > 0,
+      expected: expected(pair, st.frameTarget, targetSlots),
+      ...gaps(pair, st.frameTarget, targetSlots),
+    };
+  }
+
+  function planLegacyTurn(state, pair) {
     const { pattern } = recOf(state, pair);
     const keys = pair.slotKeys || [];
 
@@ -450,6 +575,9 @@ window.ENGINE = (function () {
       pair, introducing, introKey, stage: state.stage, step: state.step,
       // who says it first: vocab comes from the character, patterns from the coach
       introducedBy: introducing === 'item' ? 'actor' : introducing === 'pattern' ? 'coach' : null,
+      /* No group, so no question of hers to cross: the UI falls back to the
+         cue map, which is what the other two venues still run on. */
+      group: null, askId: null, askItem: null, askTarget: true,
       frameTarget, targetSlots,
       // kept for everything that still thinks in terms of one word
       itemTarget: targetSlots.length > 0,
@@ -747,6 +875,10 @@ window.ENGINE = (function () {
       if (item) item.exposures += 1;
       if (plan.introducing === 'pattern') pattern.introduced = true;
       if (plan.introducing === 'item' && item) item.introduced = true;
+      /* A question is introduced once and stays introduced — the same ratchet
+         the other two run on, so a makeup loop never translates it twice. */
+      if (plan.introducing === 'question' && plan.askId && state.asks[plan.askId])
+        state.asks[plan.askId].introduced = true;
       track(state, 'exchange_start', { pair: plan.pair.id, introducing: plan.introducing });
     }
   }

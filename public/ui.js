@@ -1118,6 +1118,18 @@
       return { kind: 'item', by: cueCarries(it.id) ? 'actor' : 'coach',
                target: it.target, means: it.native };
     }
+    /* NJA-3317 v2's third kind. The child is never asked to SAY her
+       question — nothing can select it — so what is new is that they
+       understood it, and the only person who can tell them what it meant is
+       the coach. She cannot translate herself without stepping out of the
+       scene. */
+    if (plan.introducing === 'question') {
+      const q = plan.askId && Q.vocabPatterns[plan.askId];
+      if (!q || !q[TL()] || !q[NL()]) return null;
+      return { kind: 'question', by: 'coach',
+               target: q[TL()].replace(/\{[^}]+\}/g, '___'),
+               means: q[NL()].replace(/\{[^}]+\}/g, '___') };
+    }
     const pat = Q.vocabPatterns[plan.pair.patternId];
     return { kind: 'pattern', by: 'coach',
              target: pat[TL()].replace(/\{[^}]+\}/g, '___'),
@@ -1353,6 +1365,37 @@
      "Thank you."). */
   let lastCue = null, lastItemId = null, lastPatternId = null;
   function cueFor(plan) {
+    /* NJA-3317 v2. On a venue that runs question-answer groups the engine
+       names her line: which question, about which word, and whether her frame
+       has crossed yet. There is nothing to choose — the group IS the choice —
+       so the cue map below is only the path the other two venues still take. */
+    if (plan.askId) {
+      const g = Q.actorSay(plan.askId, {
+        itemId: plan.askItem,
+        frameTarget: plan.askTarget,
+        expected: [plan.expected, plan.pair.allTarget],
+      })
+      /* A question that contains the child's own answer is a content mistake,
+         not a reason to leave her silent: render it anyway so the mistake is
+         on screen where somebody will see it. */
+      || Q.actorSay(plan.askId, { itemId: plan.askItem, frameTarget: plan.askTarget });
+      if (g) {
+        lastCue = g;
+        lastPatternId = plan.pair.patternId;
+        if (g.itemId) lastItemId = g.itemId;
+        /* Her frame is the child's own language until the group's last
+           exchange, so only the word in the slot has been MET in the target
+           one — marking the frame would turn "Do you have" blue and offer a
+           child a Spanish translation of English. */
+        for (const w of askTargetWords(plan, g))
+          for (const t of String(w).split(/\s+/)) { const k = bare(t); if (k) metWords.add(k); }
+        return g;
+      }
+    }
+    return cueFromMap(plan);
+  }
+
+  function cueFromMap(plan) {
     const want = plan.pair.itemId || lastItemId;
     /* The two or three steps of one construction are ONE exchange, seen again
        with more of it in the target language each go. So she asks once and
@@ -1401,18 +1444,54 @@
      “in a minute.”. — and reads as a typo. A question mark stays: it is part
      of the Spanish and part of what the Spanish means. */
   const unstop = str => String(str == null ? '' : str).replace(/\.\s*$/, '');
-  function newTargetWords(line) {
+  /* Which words of her line are in the TARGET language. Before NJA-3317 v2
+     that was all of them; now her question starts in the child's own language
+     with one word of the target in it, so the two halves have to be told
+     apart — "Do you have una entrada?" must not paint "Do you have" blue, and
+     the coach must not be told that "have" is a Spanish word he owes the
+     child a translation of. */
+  function askTargetWords(plan, cue) {
+    if (!cue) return [];
+    if (cue.frameTarget !== false) return String(cue.line).split(/\s+/);
+    const rec = plan.askItem && Q.vocabItems[plan.askItem];
+    const forms = rec && rec[TL()];
+    if (!forms) return [];
+    return (Q.forms || []).map(f => forms[f]).filter(Boolean);
+  }
+
+  /* On a mixed exchange the new thing is exactly one word, and the engine
+     already knows which — so take it from the engine rather than reading it
+     back out of her sentence. Reading it back picks up whatever punctuation
+     stood next to it and drops any article the ambiguity test will not vouch
+     for, which is how "el disco" came out as “disco?”. */
+  function newItemWord(plan) {
+    const it = (plan.pair.items || []).find(i => i.id === plan.askItem)
+            || (plan.pair.items || [])[0];
+    if (!it || !it.target) return [];
+    const key = bare(it.target);
+    if (!key || translated.has(key)) return [];
+    translated.add(key);
+    for (const t of String(it.target).split(/\s+/)) { const k = bare(t); if (k) translated.add(k); }
+    return [{ text: it.target, means: it.native }];
+  }
+
+  function newTargetWords(line, targetWords) {
     const all = new Set();
-    for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) all.add(k); }
+    for (const w of (targetWords || String(line).split(/\s+/)))
+      for (const t of String(w).split(/\s+/)) { const k = bare(t); if (k) all.add(k); }
     const out = [];
-    for (const f of F.fragments(String(line), all, Q.phrases, { allTarget: true })) {
+    /* `allTarget` only where the whole line IS the target language; on a mixed
+       line the ambiguity test still has a job, because "a" in "a ticket" is a
+       Spanish word in one direction and an English one in the other. */
+    const whole = !targetWords;
+    for (const f of F.fragments(String(line), all, Q.phrases, { allTarget: whole })) {
       if (f.type !== 'target') continue;
       const text = String(f.text).trim();
       const key = bare(text);
       if (!key || translated.has(key)) continue;
       translated.add(key);
       const m = f.translation || gloss(text);
-      if (m && !/^\(part of/.test(m)) out.push(text + ' = ' + m);
+      if (m && !/^\(part of/.test(m)) out.push({ text, means: m });
     }
     return out;
   }
@@ -1435,7 +1514,7 @@
         actorLine,
         /* NJA-3317. He is the only one who can say what she meant. */
         actorLineNative: actorNative || '',
-        newTargetWords: fresh || [],
+        newTargetWords: (fresh || []).map(f => f.text + ' = ' + f.means),
         recentCoach: recentCoach.slice(-6),
       }),
       COACH_DEADLINE_MS);
@@ -1544,9 +1623,16 @@
        Only when there is something new in her line — `turnFresh` is the same
        list the coach is sent, so this falls silent on the second and third
        step of a construction, where she repeats herself word for word. */
-    const heard = (lastCue && turnFresh.length)
-      ? t('fb-coach-heard', unstop(lastCue.line), unstop(lastCue.native)) + ' '
-      : '';
+    /* On the exchange where her QUESTION crosses, the thing to translate is
+       the question. On every other exchange her frame is already in the
+       child's language and the only new thing in it is the word — so
+       translating the whole line would be translating English into English.
+       NJA-3324's desired behaviour is the second one: "Una entrada means
+       ticket." */
+    const heard = !(lastCue && turnFresh.length) ? ''
+      : (lastCue.frameTarget !== false)
+        ? t('fb-coach-heard', unstop(lastCue.line), unstop(lastCue.native)) + ' '
+        : t('fb-coach-heard', unstop(turnFresh[0].text), unstop(turnFresh[0].means)) + ' ';
     let coach = heard + ask
       .split('{0}').join(plan.pair.allNative)
       .split('{1}').join(Q.languageNames.target);
@@ -1933,12 +2019,21 @@
        counts as new exactly once, and asking twice would answer no the second
        time. Before `fallbackLines`, because the written floor reads it — a
        turn's hint must not translate her line against last turn's answer. */
-    const fresh = turnFresh = cue ? newTargetWords(cue.line) : [];
+    /* The target-language half of her line, and what is new in it. Both are
+       worked out HERE and nowhere else, because `newTargetWords` marks as it
+       reads: asking twice would answer no the second time. */
+    const askWords = askTargetWords(plan, cue);
+    const mixed = !!cue && cue.frameTarget === false;
+    const fresh = turnFresh = !cue ? []
+      : mixed ? newItemWord(plan)
+      : newTargetWords(cue.line, null);
 
     const fb = fallbackLines(plan);
     const actorLine   = cue ? cue.line   : fb.actor_line;
     const actorNative = cue ? cue.native : plan.pair.allNative;
-    const actorFrags = toFragments(actorLine, [actorLine], { allTarget: true });
+    const actorFrags = mixed
+      ? toFragments(actorLine, askWords)
+      : toFragments(actorLine, [actorLine], { allTarget: true });
     turnLine = actorLine;
 
     /* The one model call left: the coach, told what she said, what it meant,

@@ -327,6 +327,36 @@ window.QUEST = (function () {
                       plural_bare: 'aktorzy',   plural_definite: 'aktorów' },
                 ro: { bare: 'actor',    definite: 'actorul',      indefinite: 'un actor',
                       plural_bare: 'actori',    plural_definite: 'actorii' } },
+    /* NJA-3317 v2. What you can show on a door besides a ticket. Both are
+       `item` so the door's answer pattern can take them, and neither is
+       `like` — nobody likes cash, and a slot that would let the coach say so
+       is a slot that will eventually say it. */
+    cash:     { tags: ['item'],
+                en: { bare: 'cash',     definite: 'the cash',     indefinite: 'cash',
+                      plural_bare: 'cash',      plural_definite: 'the cash' },
+                es: { bare: 'efectivo', definite: 'el efectivo',  indefinite: 'efectivo',
+                      plural_bare: 'efectivo',  plural_definite: 'el efectivo' },
+                pt: { bare: 'dinheiro', definite: 'o dinheiro',   indefinite: 'dinheiro',
+                      plural_bare: 'dinheiro',  plural_definite: 'o dinheiro' },
+                tr: { bare: 'nakit',    definite: 'nakiti',       indefinite: 'nakit',
+                      plural_bare: 'nakit',     plural_definite: 'nakiti' },
+                pl: { bare: 'gotówka',  definite: 'gotówkę',      indefinite: 'gotówki',
+                      plural_bare: 'gotówka',  plural_definite: 'gotówkę' },
+                ro: { bare: 'numerar',  definite: 'numerarul',    indefinite: 'numerar',
+                      plural_bare: 'numerar',   plural_definite: 'numerarul' } },
+    card:     { tags: ['item'],
+                en: { bare: 'card',     definite: 'the card',     indefinite: 'a card',
+                      plural_bare: 'cards',     plural_definite: 'the cards' },
+                es: { bare: 'tarjeta',  definite: 'la tarjeta',   indefinite: 'una tarjeta',
+                      plural_bare: 'tarjetas',  plural_definite: 'las tarjetas' },
+                pt: { bare: 'cartão',  definite: 'o cartão',    indefinite: 'um cartão',
+                      plural_bare: 'cartões',  plural_definite: 'os cartões' },
+                tr: { bare: 'kart',     definite: 'kartı',        indefinite: 'bir kart',
+                      plural_bare: 'kartlar',   plural_definite: 'kartları' },
+                pl: { bare: 'karta',    definite: 'kartę',        indefinite: 'karty',
+                      plural_bare: 'karty',     plural_definite: 'karty' },
+                ro: { bare: 'card',     definite: 'cardul',       indefinite: 'un card',
+                      plural_bare: 'carduri',   plural_definite: 'cardurile' } },
     /* NJA-3317. A price is a figure plus a currency word, and it is said one
        way: the five forms are the same string because a price has no article
        and no plural. They carry the `price` tag alone, so only the actor's
@@ -443,7 +473,23 @@ window.QUEST = (function () {
                       tr: '{item:indefinite^} alabilir miyim, lütfen?',
                       pl: 'Czy mogę prosić o {item:definite^}, proszę?',
                       ro: 'Îmi dai {item:indefinite^}, te rog?' },
-    'i-have':       { speaker: 'either',  en: 'I have {item:indefinite}.',            es: 'Tengo {item:indefinite}.' },
+    /* `^` on every answer slot, which is the whole of what NJA-3317 v2 owes
+       the measurement. Handing the article over instead of asking for it took
+       `do-you-have`'s rows from 48.4% wrong to 30.0% at 11.9 sigma, and the
+       reason was never the article itself — it was that an indefinite slot
+       asks for TWO pills where a bare one asks for one. The new ladder gives
+       the child "una entrada" as a single chunk in its own exchange and then
+       adds the frame to it, so the article must not come apart again when the
+       frame arrives. One new chunk per exchange, or the ladder is lying. */
+    'i-have':       { speaker: 'learner',
+                      en: 'I have {item:indefinite^}.',
+                      es: 'Tengo {item:indefinite^}.',
+                      pt: 'Tenho {item:indefinite^}.',
+                      /* "Bende X var" — X is on me. Plain "X var" is "there is
+                         an X", which is the room's fact and not the child's. */
+                      tr: 'Bende {item:indefinite^} var.',
+                      pl: 'Mam {item:definite^}.',
+                      ro: 'Am {item:indefinite^}.' },
     'i-dont-have':  { speaker: 'either',  en: "I don't have {item:bare}.",            es: 'No tengo {item:bare}.' },
     /* What you say to turn down what you have just been offered. The set had
        no way to decline at all, so the only near-miss the engine could reach
@@ -482,14 +528,14 @@ window.QUEST = (function () {
        keeps its article when it crosses into the English frame rather than
        arriving bare. */
     'i-like':       { speaker: 'either',
-                      en: 'I like {like:plural_bare}.',
-                      es: 'Me gusta {like:definite}.',
-                      pt: 'Gosto de {like:plural_bare}.',
-                      tr: '{like:plural_definite} seviyorum.',
-                      pl: 'Lubię {like:plural_definite}.',
+                      en: 'I like {like:plural_bare^}.',
+                      es: 'Me gusta {like:definite^}.',
+                      pt: 'Gosto de {like:plural_bare^}.',
+                      tr: '{like:plural_definite^} seviyorum.',
+                      pl: 'Lubię {like:plural_definite^}.',
                       /* `plac` rather than `place`: Romanian agrees the verb
                          with the thing liked, and this slot is plural. */
-                      ro: 'Îmi plac {like:plural_definite}.' },
+                      ro: 'Îmi plac {like:plural_definite^}.' },
     /* Two slots. NJA-3160's third unit test is a pattern of exactly this
        shape, and the engine used to refuse them outright — one slot per
        pattern, or it threw. The #1 / #2 numbering is what keeps the two
@@ -582,13 +628,17 @@ window.QUEST = (function () {
     /* Defined, and deliberately not cued at any venue: the child is drilled on
        `do-you-have`, so this is their own line in her mouth. It is here for a
        scenario where the counter asks and the child answers. */
+    /* The form she offers is the form they will answer in. She says "una
+       entrada" and the pill says "entrada" with "una" already on the page —
+       one word, met once, in one shape. A bare form here would show them the
+       word twice in two spellings on the exchange that introduces it. */
     'do-you-have-x': { speaker: 'actor',
                       en: 'Do you have {item:indefinite}?',
-                      es: '¿Tienes {item:bare}?',
-                      pt: 'Tens {item:bare}?',
-                      tr: '{item:bare} var mı?',
+                      es: '¿Tienes {item:indefinite}?',
+                      pt: 'Tens {item:indefinite}?',
+                      tr: '{item:indefinite} var mı?',
                       pl: 'Masz {item:definite}?',
-                      ro: 'Ai {item:bare}?' },
+                      ro: 'Ai {item:indefinite}?' },
     /* The closing beat after `how-much-is-it`. Both are defined and neither is
        in a venue yet: switching them on adds a tenth construction to a
        curriculum whose order was settled by measurement, so that is a decision
@@ -615,6 +665,53 @@ window.QUEST = (function () {
                       pl: 'Ile to kosztuje?', ro: 'Cât costă?' },
   };
 
+
+  /* ---------- NJA-3317 v2: the night as question-answer groups ----------
+     The unit of the night stops being a construction and becomes a GROUP: one
+     question the character asks, one answer the child learns to give, and two
+     or three words to give it about. Inside a group the ladder runs
+
+       one exchange per new word   — her question in the child's language with
+                                     the word in the target one, and an answer
+                                     in the child's language with the word in it
+       then the answer pattern     — the child's whole sentence crosses
+       then her question           — she asks it in the target language
+
+     so a group of three words is five exchanges, and every one of them has
+     exactly one new thing in it. That last exchange is the only one where
+     nothing new is asked of the child: what is new is that they understood
+     the question. The ticket counts that as exposure, and so does this.
+
+     Three groups and two book-ends make seventeen exchanges, which is what
+     the current night is — so the next read of the funnel compares like with
+     like rather than measuring a shorter night.
+
+     WHY THESE THREE. The gig's own title card promises "get in, get a drink
+     and tell someone you love the song", and those are the three groups. Each
+     character question CARRIES the word it is introducing, because vocabulary
+     is hers to hand over (NJA-3136) and a question with no slot — "¿Qué
+     quieres?" — cannot do that; it would leave the coach introducing every
+     noun, which is the regression that put a child in front of four untranslated
+     Spanish words last week.
+
+     The question a group teaches is not reused as a later group's answer. It
+     could be — hearing "¿Tienes...?" at the door and saying it at the bar is a
+     real progression and the ticket allows it — but it costs the night one of
+     its three ANSWER patterns, and "¿Me das...?" is the single most useful
+     sentence here. Three questions recognised and three different kinds of
+     sentence produced beats two of one kind. */
+  const QA_GIG = [
+    /* Book-ends. No word to learn and no question to understand, so one
+       exchange each: the construction crosses and that is the whole of it.
+       They are here because a night that opens and closes like a conversation
+       is worth two exchanges of the seventeen. */
+    { id: 'open',  ask: 'in-a-minute',     answer: 'excuse-me', vocab: [] },
+    { id: 'door',  ask: 'do-you-have-x',   answer: 'i-have',    vocab: ['ticket', 'cash', 'card'] },
+    { id: 'bar',   ask: 'would-you-like-x', answer: 'can-i-have', vocab: ['beer', 'soda', 'water'] },
+    { id: 'merch', ask: 'do-you-like-x',   answer: 'i-like',    vocab: ['record', 'tshirt', 'band'] },
+    /* She hands over the thing they have just said they like. */
+    { id: 'close', ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [] },
+  ];
 
   /* ---------- NJA-3317: which line sets up which answer ----------
      The ticket's pairings, read against the nine constructions this prototype
@@ -707,8 +804,12 @@ window.QUEST = (function () {
                        tr: 'Barmen', pl: 'Barmanka', ro: 'Barmaniță' } },
       prompt: 'You are the one woman behind the counter at a music venue. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
       objectives: ['get in', 'get something to drink', 'get some merch', 'talk about the band'],
-      items: ['ticket', 'water', 'soda', 'beer', 'sandwich', 'record', 'tshirt', 'band', 'singer'],
-      patterns: PATTERNS,
+      items: ['ticket', 'cash', 'card', 'beer', 'soda', 'water', 'record', 'tshirt', 'band'],
+      /* The learner half of the groups below, which is now what `patterns`
+         means: the constructions the child is asked to produce. The character's
+         questions are actor patterns and are never drilled. */
+      patterns: ['excuse-me', 'i-have', 'can-i-have', 'i-like', 'thank-you'],
+      qa: QA_GIG,
       intro: {
         en: {
           title: 'GOING TO A GIG',
@@ -1004,24 +1105,21 @@ The setting: {{scenario_prompt}}
 {{actor_name}} has just said, in {{target_language}}: "{{actor_line}}"
 What that means: {{actor_line_native}}
 
-THE SHAPE OF YOUR LINE — these parts, in this order, and nothing else:
+YOUR LINE IS TWO THINGS, IN THIS ORDER, AND NOTHING ELSE:
 
-  1. One short remark about what is happening in the scene. Not a greeting —
-     what she just did.
-
-  2. What the new {{target_language}} words mean. ONLY these ones, and only
-     because this is the first time the child has met them:
+  1. What the new {{target_language}} means. ONLY what is new this exchange —
+     this, and nothing else on the screen:
      {{new_target_words}}
-     Say nothing about a word that is not on that list. They have already been
-     told, and telling them again says the first time did not count.
+     Say nothing about anything that is not on that list. They have already
+     been told, and telling them twice says the first time did not count. If
+     the list is empty, skip this part entirely and your line is one sentence.
 
-  3. What they should say back — the MEANING of it, in {{native_language}}.
-     What they want, not the words they want it in.
+  2. A hint that POINTS AT the answer without being it. What they should tell
+     her — the thing, not the words. "Tell them you have cash" is the shape:
+     it says what to answer and leaves how to say it to them.
 
-If part 2 has nothing in it, your line is two parts, not three.
-
-LENGTH: four sentences at the most when you are translating something, three
-at the most when you are not. Shorter is better than longer.
+LENGTH: three sentences at the most, two when there is nothing new to
+translate. Shorter is better than longer.
 
 WHAT YOU NEVER DO
 
@@ -1508,24 +1606,24 @@ Return JSON only.`,
        the child's own language, which is the one thing it is always safe to
        hand over. */
     'fb-coach-ask': {
-      en: ['She is waiting. What you want is “{0}” — build it in {1}.',
-           'Your turn now. The idea is “{0}”, said in {1}.',
-           'That is your cue: “{0}” — put it together in {1}.'],
-      es: ['Está esperando. Lo que quieres es “{0}” — constrúyelo en {1}.',
-           'Te toca a ti. La idea es “{0}”, dicha en {1}.',
-           'Esa es tu señal: “{0}” — móntalo en {1}.'],
-      pt: ['Ela está à espera. O que queres é “{0}” — monta isso em {1}.',
-           'É a tua vez. A ideia é “{0}”, dita em {1}.',
-           'Essa é a deixa: “{0}” — junta as palavras em {1}.'],
-      tr: ['Bekliyor. İstediğin şey “{0}” — bunu {1} kur.',
-           'Sıra sende. Fikir şu: “{0}”, {1} söylenmiş hâli.',
-           'İşte işaretin: “{0}” — kelimeleri {1} birleştir.'],
-      pl: ['Czeka na ciebie. Chodzi o “{0}” — złóż to po angielsku.',
-           'Twoja kolej. Pomysł jest taki: “{0}”, tylko po angielsku.',
-           'To twój znak: “{0}” — ułóż to z tych słów.'],
-      ro: ['Te așteaptă. Ce vrei să spui e “{0}” — construiește-o în {1}.',
-           'E rândul tău. Ideea e “{0}”, spusă în {1}.',
-           'Ăsta e semnalul: “{0}” — pune cuvintele cap la cap în {1}.'],
+      en: ['Tell them “{0}” — in {1}.',
+           'What you want is “{0}”, in {1}.',
+           'Your turn: say “{0}” in {1}.'],
+      es: ['Diles “{0}” — en {1}.',
+           'Lo que quieres es “{0}”, en {1}.',
+           'Te toca: di “{0}” en {1}.'],
+      pt: ['Diz-lhes “{0}” — em {1}.',
+           'O que queres é “{0}”, em {1}.',
+           'É a tua vez: diz “{0}” em {1}.'],
+      tr: ['Ona “{0}” de — {1}.',
+           'İstediğin şey “{0}”, {1}.',
+           'Sıra sende: “{0}” de, {1}.'],
+      pl: ['Powiedz im “{0}” — po angielsku.',
+           'Chodzi o “{0}”, po angielsku.',
+           'Twoja kolej: powiedz “{0}” po angielsku.'],
+      ro: ['Spune-le „{0}” — în {1}.',
+           'Ce vrei e „{0}”, în {1}.',
+           'E rândul tău: spune „{0}” în {1}.'],
     },
     /* This one used to print the answer in the target language, which is the
        single thing NJA-3317 coach AC 3 forbids. {0} is now the MEANING: the
@@ -1898,6 +1996,17 @@ Return JSON only.`,
                            forms, langs: LANGS, slotKeys, slots });
     }
 
+    /* NJA-3317 v2. The groups, resolved: the character's question, the
+       child's answer, and the words. The engine turns each one into its
+       exchanges; the content only says what is in it. */
+    q.qa = (activity.qa || []).map(g => ({
+      id: g.id,
+      askId: g.ask,
+      askItem: g.askItem || null,
+      answerId: g.answer,
+      vocab: (g.vocab || []).slice(),
+    })).filter(g => q.groups.some(x => x.id === g.answerId));
+
     q.actorCues = ACTOR_CUES;
     q.actorReactions = ACTOR_REACTIONS;
 
@@ -1926,13 +2035,20 @@ Return JSON only.`,
         if (!pick) return null;
         fill[key] = pick;
       }
-      const line   = render(g.targetFrames, LANGS, fill, new Set(g.slotKeys), g.forms);
+      /* `frameTarget` is the crossing NJA-3317 v2 adds. Her question starts
+         in the child's own language with only the new word in the target one
+         — "Do you have una entrada?" — and crosses whole on the last exchange
+         of the group. Defaults to true, so every caller written before the
+         groups existed keeps the behaviour it was written for. */
+      const whole  = o.frameTarget !== false;
+      const line   = render(whole ? g.targetFrames : g.nativeFrames,
+                            LANGS, fill, new Set(g.slotKeys), g.forms);
       const native = render(g.nativeFrames, LANGS, fill, new Set(), g.forms);
       const banned = [].concat(o.expected || []).filter(Boolean);
       for (const b of banned) {
         if (phraseKey(line).indexOf(phraseKey(b)) >= 0) return null;
       }
-      return { id: pid, line, native, itemId: fill[g.slotKeys[0]] || null };
+      return { id: pid, line, native, frameTarget: whole, itemId: fill[g.slotKeys[0]] || null };
     };
 
     /* The line that sets up THIS construction.
