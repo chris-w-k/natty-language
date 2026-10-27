@@ -134,6 +134,10 @@ window.ENGINE = (function () {
 
       out.push({
         id: g.id, askId: g.askId, askItem: g.askItem || null, answerId: g.answerId,
+        /* NJA-3341's first beat: why this exchange is happening. Carried from
+           content so the coach is told it rather than left to infer it from
+           the venue prompt, which describes the night and not the turn. */
+        goal: g.goal || null,
         /* The learner construction her question IS, when it is one of
            theirs under another id. */
         twin: ((quest.vocabPatterns || {})[g.askId] || {}).twin || null,
@@ -596,6 +600,7 @@ window.ENGINE = (function () {
       /* What she says this exchange, and whether her frame has crossed. */
       askId: stage.askId,
       askItem: st.fill || stage.askItem || null,
+      goal: stage.goal || null,
       askTarget: !!st.askTarget,
       revision: !!state.revision,
       /* For the analytics, which cannot otherwise tell the three phases

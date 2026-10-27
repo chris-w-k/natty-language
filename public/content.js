@@ -728,17 +728,33 @@ window.QUEST = (function () {
      its three ANSWER patterns, and "¿Me das...?" is the single most useful
      sentence here. Three questions recognised and three different kinds of
      sentence produced beats two of one kind. */
+  /* TWO words per group, not three, and so four exchanges per group rather
+     than five. NJA-3317's schema gives `nlt_exchange_group_standard` exactly
+     `vocab_1` and `vocab_2`, both required, and NJA-3343 spells the four
+     exchanges out: word one, word two, the child's construction, her
+     question. The prototype ran three words over a weekend because the shape
+     was still being argued; it is not any more, so the third word goes.
+
+     `goal` is new, and it is the first part of NJA-3341's coach hint: why
+     this exchange is happening, in the scene, right now. It is written in
+     English because it is prompt text — the coach says it back to the child
+     in their own language. */
   const QA_GIG = [
-    { id: 'open',   ask: 'in-a-minute',              answer: 'excuse-me',   vocab: [] },
+    { id: 'open',   ask: 'in-a-minute',              answer: 'excuse-me',   vocab: [],
+      goal: 'You have walked up to the counter and she has not noticed you yet.' },
     /* She asks what you have got, and you tell her. */
-    { id: 'door',   ask: 'do-you-have-x',            answer: 'i-have',      vocab: ['ticket', 'cash', 'card'] },
+    { id: 'door',   ask: 'do-you-have-x',            answer: 'i-have',      vocab: ['ticket', 'cash'],
+      goal: 'You cannot get in until you show her what you have got.' },
     /* She offers, and you ask what is on — saying back the question she
        asked you at the door. */
-    { id: 'drinks', ask: 'would-you-like-something', answer: 'do-you-have', vocab: ['water', 'soda', 'beer'] },
+    { id: 'drinks', ask: 'would-you-like-something', answer: 'do-you-have', vocab: ['water', 'soda'],
+      goal: 'You are thirsty, and you do not know what they have got.' },
     /* She tells you what she has got, in the construction YOU used at the
        door, and you order. */
-    { id: 'order',  ask: 'i-have-x',                 answer: 'can-i-have',  vocab: ['record', 'tshirt', 'poster'] },
-    { id: 'close',  ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [] },
+    { id: 'order',  ask: 'i-have-x',                 answer: 'can-i-have',  vocab: ['record', 'tshirt'],
+      goal: 'You want something to take home from tonight.' },
+    { id: 'close',  ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [],
+      goal: 'She is handing it over, and the queue behind you is building.' },
   ];
 
   /* ---------- NJA-3317: which line sets up which answer ----------
@@ -756,6 +772,11 @@ window.QUEST = (function () {
   const ACTOR_CUES = {
     'excuse-me':         ['in-a-minute'],
     'do-you-have':       ['what-would-you-like', 'anything-else'],
+    /* The gig never reads this one — its door group declares `do-you-have-x`
+       as its own `ask`, and `cueFor` takes the group's over the map's. It is
+       here because a learner construction with no entry has no fallback at
+       all, and `i-have` was the only one in the venue without one. */
+    'i-have':            ['do-you-have-x', 'anything-else'],
     'can-i-have':        ['what-would-you-like', 'would-you-like-x'],
     'can-i-have-please': ['would-you-like-x', 'what-would-you-like'],
     'i-dont-want':       ['would-you-like-x', 'anything-else'],
@@ -835,7 +856,12 @@ window.QUEST = (function () {
                        tr: 'Barmen', pl: 'Barmanka', ro: 'Barmaniță' } },
       prompt: 'You are the one woman behind the counter at a night club. You sell the tickets, the drinks and the merchandise, and you have all of it in stock — whatever a customer asks you for, you have it and you hand it over. Personality: grumpy, seen it all, a queue always building.',
       objectives: ['get in', 'find out what there is to drink', 'order something', 'buy some merch'],
-      items: ['ticket', 'cash', 'card', 'water', 'soda', 'beer', 'record', 'tshirt', 'poster'],
+      /* Six, because the three groups name two words each. `card`, `beer` and
+         `poster` are still defined — the cinema uses `poster` — but nobody
+         meets them here any more, and an item nobody meets is not even a
+         decoy: `decoyItems` draws from the group's own words and the ones
+         already met, never from the rest of the venue. */
+      items: ['ticket', 'cash', 'water', 'soda', 'record', 'tshirt'],
       /* The learner half of the groups below, which is now what `patterns`
          means: the constructions the child is asked to produce. The character's
          questions are actor patterns and are never drilled. */
@@ -1129,6 +1155,17 @@ wording. Return JSON only.`,
          4  no greeting, no two hints opening alike, `please` only when taught
          5  four sentences with a translation in them, three without
 
+       NJA-3341 then named rule 2's three beats and made them the shape of the
+       line rather than an ordering over it: CONTEXT (why this exchange is
+       happening), EXPOSURE (what the new words mean), INSTRUCTION (what to
+       tell her). The scene beat had been dropped from this prompt while
+       NJA-3325 sat in Refinement, which left the child a translation and a
+       hint and no reason to be saying either. It is back, and it is fed by
+       the group's own `goal` rather than by the venue prompt, because "you
+       need a ticket to get in" is true of one exchange and not of the night.
+       NJA-3325's other half is the greeting: allowed once, on the first
+       exchange, and never again.
+
        Rule 3 is the one that costs something, and it is deliberate. Handing a
        child the sentence and asking them to repeat it is the thing the
        educator review called out: they produce it once, correctly, having
@@ -1145,21 +1182,27 @@ The setting: {{scenario_prompt}}
 {{actor_name}} has just said, in {{target_language}}: "{{actor_line}}"
 What that means: {{actor_line_native}}
 
-YOUR LINE IS TWO THINGS, IN THIS ORDER, AND NOTHING ELSE:
+YOUR LINE IS THREE THINGS, IN THIS ORDER, AND NOTHING ELSE:
 
-  1. What the new {{target_language}} means. ONLY what is new this exchange —
-     this, and nothing else on the screen:
+  1. CONTEXT. One short clause saying why this exchange is happening — what
+     they are after, at this counter, right now:
+     {{exchange_goal}}
+     Put it in your own words, as a reason rather than an instruction. "You
+     need a ticket to get in" is the shape. One clause, never two.
+
+  2. EXPOSURE. What the new {{target_language}} means. ONLY what is new this
+     exchange — this, and nothing else on the screen:
      {{new_target_words}}
      Say nothing about anything that is not on that list. They have already
      been told, and telling them twice says the first time did not count. If
-     the list is empty, skip this part entirely and your line is one sentence.
+     the list is empty, skip this part entirely.
 
-  2. A hint that POINTS AT the answer without being it. What they should tell
-     her — the thing, not the words. "Tell them you have cash" is the shape:
-     it says what to answer and leaves how to say it to them.
+  3. INSTRUCTION. A hint that POINTS AT the answer without being it. What they
+     should tell her — the thing, not the words. "Tell her you have a ticket"
+     is the shape: it says what to answer and leaves how to say it to them.
 
-LENGTH: three sentences at the most, two when there is nothing new to
-translate. Shorter is better than longer.
+LENGTH: three sentences at the most, one per part — and two when there is
+nothing new to translate. Shorter is better than longer.
 
 WHAT YOU NEVER DO
 
@@ -1171,9 +1214,8 @@ meant to teach. They are expected to reply: {{user_expected_answer}} (meaning:
 {{user_expected_answer_native}}). That sentence is theirs to build out of the
 words in front of them. You point at it. You do not say it.
 
-Never open with a greeting or a filler. No "right then", "alright", "ok",
-"hey", "so", no name, no "mate" — start with the thing you have to say. And
-never open two hints in a row with the same three words.
+{{greeting_rule}} And never open two hints in a row with the same three
+words.
 
 Never write "please", or {{target_language}}'s word for it, unless being
 polite is the thing being taught this exchange.

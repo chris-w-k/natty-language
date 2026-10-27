@@ -57,33 +57,52 @@ exactly like a real test failure.
 
 ## The shape of a night
 
-Five question-answer groups, seventeen exchanges. A group is one question the
-character asks, one construction the child answers with, and three words to
-answer about. Inside a group: one exchange per new word, then the child's
-sentence crosses into the target language, then **her question** crosses.
+Five question-answer groups, fourteen exchanges. A group is one question the
+character asks, one construction the child answers with, and **two** words to
+answer about. Inside a group there are exactly four exchanges: one per new
+word, then the child's sentence crosses into the target language, then **her
+question** crosses. That is NJA-3317's schema (`vocab_1` and `vocab_2`, both
+required, and no third) and NJA-3343's exchange list, which the build follows
+item for item.
 
 ```
 nightIndex  group   construction   what is new
 0           open    excuse-me      the construction
-1,2,3       door    i-have         ticket, cash, card
-4           door    i-have         the child's sentence crosses
-5           door    i-have         HER QUESTION crosses
-6,7,8       drinks  do-you-have    water, soda, beer
-9           drinks  do-you-have    the child's sentence crosses
-10          drinks  do-you-have    HER QUESTION crosses
-11,12,13    order   can-i-have     record, tshirt, poster
-14          order   can-i-have     the child's sentence crosses
-15          order   can-i-have     HER QUESTION crosses
-16          close   thank-you      the construction
+1,2         door    i-have         ticket, cash
+3           door    i-have         the child's sentence crosses
+4           door    i-have         HER QUESTION crosses
+5,6         drinks  do-you-have    water, soda
+7           drinks  do-you-have    the child's sentence crosses
+8           drinks  do-you-have    HER QUESTION crosses
+9,10        order   can-i-have     record, tshirt
+11          order   can-i-have     the child's sentence crosses
+12          order   can-i-have     HER QUESTION crosses
+13          close   thank-you      the construction
 ```
+
+The engine derives all of this from `g.vocab`: two words in, four steps out.
+Nothing in `qaStages` counts to three or to five. To change the length of a
+group, change its word list.
 
 Then a **revision round** of up to five exchanges, made only of what the child
 got wrong the first time, run whether or not they passed. Then, if still short
 of the pass mark, the older makeup loop.
 
-Exchanges 5, 10 and 15 are the ones the redesign is judged on: the child's
+Exchanges 4, 8 and 12 are the ones the redesign is judged on: the child's
 answer there is a sentence they have already produced, so a wrong answer is a
 failure to *understand her*, not to build the sentence.
+
+## The coach's three parts
+
+NJA-3341: every hint is CONTEXT, then EXPOSURE, then INSTRUCTION — why this
+exchange is happening, what the new words mean, and what to tell her. The
+context beat is fed by the group's own `goal` in content, not by the venue
+prompt: "you need a ticket to get in" is true of one exchange and false of the
+night. A hint with no context is a translation and an order, which is what
+shipped over the weekend while NJA-3325 sat in Refinement.
+
+NJA-3325's other half: the coach may greet the child **once**, on exchange 0,
+and never again. `greeting_rule` in `coachVars` is the switch.
 
 ## The files
 

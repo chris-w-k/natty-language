@@ -368,6 +368,10 @@ function turnVars(b) {
     new_target_words: (b.newTargetWords || []).length
       ? b.newTargetWords
       : '(nothing new this exchange — translate none of it again)',
+    /* NJA-3341 part one. The engine knows why this exchange is happening; the
+       coach cannot say it unless he is told, and the venue prompt is not it —
+       it describes the night. */
+    exchange_goal: b.goal || '(no particular goal this exchange — skip this part)',
   };
 }
 
@@ -399,6 +403,12 @@ function coachVars(b) {
           ? `NEW THIS EXCHANGE: the child meets the ${b.targetLang} word "${intro.target}" ("${intro.means}") for the first time, and ${b.actor} has NOT said it — nothing she says this exchange contains it. Write it, in ${b.targetLang}, and say what it means. You are the only one who can, and a child guessing which word is which learns nothing.`
           : `NEW THIS EXCHANGE: the child meets the construction "${intro.target}" for the first time. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write the construction out in ${b.targetLang}. The words are on screen for them to find.`)
       : `NEW THIS EXCHANGE: ${b.actor} has just used the new word "${intro.target}". Tell the child what it means, in ${b.nativeLang}.`;
+  /* NJA-3325. A hello is for meeting somebody, and the child meets the coach
+     once a night. Everywhere else it is the filler that pushed the hint down
+     the screen. */
+  v.greeting_rule = b.firstTurn
+    ? 'This is the first thing you say to them all night, so you may open with a hello — one word, then straight into the three parts. You never greet them again after this.'
+    : 'Never open with a greeting or a filler. No "right then", "alright", "ok", "hey", "so", no name, no "mate" — start with the thing you have to say.';
   return v;
 }
 

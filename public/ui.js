@@ -1261,6 +1261,11 @@
       learnerOnly: [...learnerOnlyWords()],
       // the ONE new thing, and whose job it is to hand it over
       introducing: newThing(plan),
+      /* NJA-3341 part one, and NJA-3325's greeting exception. The goal is the
+         group's own reason for the exchange; `firstTurn` is the only turn all
+         night on which the coach may open with a hello. */
+      goal: plan.goal || '',
+      firstTurn: plan.nightIndex === 0 && !plan.revision && !plan.makeup,
       /* NJA-3317. The character's line is in the target language now, so the
          coach is told what it meant and which of its words are new — he is
          the only one who can say either, and he cannot say what he is not
