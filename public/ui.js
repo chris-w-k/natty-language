@@ -1881,7 +1881,12 @@
   function showPane(which) {
     $('answer').classList.toggle('hidden', which !== 'build');
     $('dock').classList.toggle('hidden', which !== 'build');
-    $('choice').classList.toggle('hidden', which !== 'choice');
+    const box = $('choice');
+    box.classList.toggle('hidden', which !== 'choice');
+    /* Emptied as well as hidden. A stale option left in the DOM is one CSS
+       mistake away from being on screen again, and it has been on screen
+       twice now. */
+    if (which !== 'choice') { box.innerHTML = ''; compOpts = null; }
   }
 
   /* label by how many gaps there actually are, not by the level */
