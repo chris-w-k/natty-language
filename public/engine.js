@@ -112,17 +112,38 @@ window.ENGINE = (function () {
       const pairOf = id => quest.pairFor(g.answerId, slotKey && id ? { [slotKey]: id } : {});
 
       const steps = [];
+      /* The demonstration beat. Nothing to answer: the child watches the line
+         being used, in context, and taps on. It exists because the open group
+         used to begin by asking for a construction nobody had shown them. */
+      if (g.demo) steps.push({ kind: 'demo', fill: null, frameTarget: true, askTarget: true, want: 'demo' });
       /* One exchange per word. Her question is in the child's language with
          the word in the target one; so is their answer. */
-      for (const id of g.vocab) steps.push({ fill: id, frameTarget: false, askTarget: false, want: 'item' });
+      for (const id of g.vocab) steps.push({ kind: 'production', fill: id, frameTarget: false, askTarget: false, want: 'item' });
       if (g.vocab.length) {
+        const second = g.vocab[1] || g.vocab[0];
         /* Their sentence crosses, on the first word they met. */
-        steps.push({ fill: g.vocab[0], frameTarget: true, askTarget: false, want: 'pattern' });
+        const cross = { kind: 'production', fill: g.vocab[0], frameTarget: true, askTarget: false, want: 'pattern' };
         /* Her question crosses, on a different word — so the exchange is not
            the previous one with a new coat of paint. */
-        steps.push({ fill: g.vocab[1] || g.vocab[0], frameTarget: true, askTarget: true, want: 'question' });
+        const ask   = { kind: 'production', fill: second, frameTarget: true, askTarget: true, want: 'question' };
+        /* And immediately before it, the rung that asks only whether they
+           UNDERSTOOD her. Same question, same word, no sentence to build: two
+           readings in their own language and one tap. It sits in front of the
+           crossing rather than after it because answering a question you have
+           not understood is guesswork, and guesswork is what the error rate
+           at the crossings has been measuring. */
+        const comp  = { kind: 'comprehension', fill: second, frameTarget: false, askTarget: true, want: 'comprehension' };
+        if (g.askFirst) {
+          /* HER question crosses first and theirs stays in their own language,
+             so the first crossing they meet is one to understand rather than
+             one to build. Their sentence crosses on the rung after. */
+          ask.frameTarget = false;
+          steps.push(comp, ask, cross);
+        } else {
+          steps.push(cross, comp, ask);
+        }
       } else {
-        steps.push({ fill: null, frameTarget: true, askTarget: true, want: 'pattern' });
+        steps.push({ kind: 'production', fill: null, frameTarget: true, askTarget: true, want: 'pattern' });
       }
       for (const st of steps) { st.pair = pairOf(st.fill); st.slotKey = slotKey; }
       /* Where each exchange sits in the night, 0..16, fixed at build time.
@@ -138,6 +159,8 @@ window.ENGINE = (function () {
            content so the coach is told it rather than left to infer it from
            the venue prompt, which describes the night and not the turn. */
         goal: g.goal || null,
+        /* The near-miss on the comprehension rung, named in content. */
+        confuse: g.confuse || null,
         /* The learner construction her question IS, when it is one of
            theirs under another id. */
         twin: ((quest.vocabPatterns || {})[g.askId] || {}).twin || null,
@@ -568,7 +591,23 @@ window.ENGINE = (function () {
     const targetSlots = st.slotKey ? [st.slotKey] : [];
 
     let introducing = null, introKey = null, introducedBy = null;
-    if (st.want === 'item' && st.fill) {
+    if (st.want === 'demo') {
+      /* The demonstration hands the construction over. Nobody says what it
+         means in so many words — the child watches it work, which is the
+         whole of the beat. `seen` still ratchets it to introduced, so the
+         rung after it is practice rather than a second introduction. */
+      if (!pattern.introduced) { introducing = 'pattern'; introducedBy = 'demo'; }
+    } else if (st.want === 'comprehension') {
+      /* Her question crosses HERE, one rung before they have to answer it.
+         Nobody translates it: the child's two options are the translation,
+         and being told first would make the rung a reading test with the
+         answer printed above it. */
+      const ask = state.asks[stage.askId];
+      const twin = stage.twin;
+      const known = twin && state.patterns[twin] && state.patterns[twin].introduced;
+      if (ask && !ask.introduced && !known) { introducing = 'question'; introducedBy = 'child'; }
+      if (ask && known) ask.introduced = true;
+    } else if (st.want === 'item' && st.fill) {
       introKey = st.slotKey;
       const rec = state.items[st.fill];
       /* Vocabulary is hers, and under this ladder she can always carry it:
@@ -601,6 +640,10 @@ window.ENGINE = (function () {
       askId: stage.askId,
       askItem: st.fill || stage.askItem || null,
       goal: stage.goal || null,
+      /* 'production' | 'comprehension' | 'demo'. The UI renders a different
+         pane for each; the analytics file them apart with `rung`. */
+      kind: st.kind || 'production',
+      confuse: stage.confuse || null,
       askTarget: !!st.askTarget,
       revision: !!state.revision,
       /* For the analytics, which cannot otherwise tell the three phases
@@ -1052,6 +1095,21 @@ window.ENGINE = (function () {
     track(state, 'mercy', { pair: plan.pair.id, stage: state.stage, step: state.step });
   }
 
+  /* The demonstration beat going past. There is nothing to judge, so there is
+     nothing to score — but a step with no score is a step the mastery reading
+     counts as zero for ever, and a step with no exit is the one `weakest()`
+     sends round again for the rest of the night. So it banks a clean score and
+     retires itself, and it never reaches `state.missed`, which is what keeps
+     it out of the revision round. */
+  function applyDemo(state, plan) {
+    bank(state, STEP_SCORE.clean);
+    state.released[stepKey(state.stage, state.step)] = true;
+    state.turn += 1;
+    state.attempts = 0;
+    if (state.quest) advance(state, state.quest);
+    track(state, 'demo', { pair: plan.pair.id, stage: state.stage, step: state.step });
+  }
+
   /* ---------- analytics ----------
      NJA-3136 feature 10: start/end, success/failure, translation clicks. Kept
      in state so a session can be read back whole. */
@@ -1063,7 +1121,7 @@ window.ENGINE = (function () {
   return {
     createState, pickNext, planTurn, pills, check, validate, makePills, slug,
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
-    seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
+    seen, applyCorrect, applyWrong, mercyDue, applyMercy, applyDemo, track, isOpener,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,
