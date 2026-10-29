@@ -1090,15 +1090,36 @@ window.ENGINE = (function () {
     let pid = null, itemId = null, priority = 0;
     if (phase === 'consolidate' || phase === 'expand') {
       itemId = phaseWords(M, rec, allWords, phase)[0] || null;
+      /* A drill rides in a construction the child HAS. Ranked over all ten,
+         an un-introduced one could win the carrier slot, and consolidation -
+         which exists to shore up what they have already met - would quietly
+         hand them a construction they had never seen, teaching nothing in a
+         turn that was meant to be revision. */
+      const known = patternIds.filter(id => (rec.patterns[id] || {}).introduced);
+      const pool = known.length ? known : patternIds;
       const carriers = itemId
-        ? patternIds.filter(id => slotPoolOf(quest, id).indexOf(itemId) >= 0)
+        ? pool.filter(id => slotPoolOf(quest, id).indexOf(itemId) >= 0)
         : [];
-      const rankedC = M.rank(rec, carriers.length ? carriers : patternIds);
+      const rankedC = M.rank(rec, carriers.length ? carriers : pool);
       pid = rankedC[0].id; priority = rankedC[0].priority;
       if (!carriers.length) itemId = null;
     } else {
-      const ranked = M.rank(rec, patternIds);
-      pid = ranked[0].id; priority = ranked[0].priority;
+      /* Max's curriculum is a LIST and B teaches the next thing on it. This
+         ranked all ten instead, and on a blank record all ten tie at the same
+         weakness - so the only term left standing was `rotation`, which
+         rewards a HIGH curriculum index. The engine therefore opened every
+         first night on the LAST construction in the pack: a child's first
+         words in a cafe were "I want to go shopping".
+
+         Priority is for choosing what to PRACTISE among things already
+         taught. What to teach next is the list. */
+      pid = phase === 'introduce'
+          ? (patternIds.find(id => !(rec.patterns[id] || {}).introduced) || null)
+        : phase === 'oneshot'
+          ? oneShotOwed(rec, patternIds)
+          : null;
+      if (!pid) { const r = M.rank(rec, patternIds); pid = r[0].id; }
+      priority = M.priority(rec, pid, patternIds.indexOf(pid), patternIds.length);
       itemId = phaseWords(M, rec, slotPoolOf(quest, pid), phase)[0] || null;
     }
 
@@ -1229,9 +1250,28 @@ window.ENGINE = (function () {
     const k = (g.slotKeys || [])[0];
     return k ? (g.slots[k] || []) : [];
   }
+  /* Section 7, row 2: "a pattern was taught last turn and never tested".
+     The record has carried `oneShotCandidate` since the port - it is set when
+     a construction is introduced and cleared by the first correct use - and
+     nothing ever read it. Without it the introduce phase fires again the
+     moment it has finished, so a learner met all ten of Max's constructions
+     in ten consecutive turns and produced none of them twice. */
+  function oneShotOwed(rec, patternIds) {
+    const turn = rec.turn || 0;
+    return patternIds.find(id => {
+      const p = rec.patterns[id];
+      return p && p.oneShotCandidate && p.lastSeenTurn === turn - 1;
+    }) || null;
+  }
+
   function masteryPhase(rec, patternIds, wordIds) {
     const M = window.MASTERY;
     const w = id => rec.words[id];
+    /* Above the consolidate inversion below, and only this row is: it is
+       scoped to the turn straight after a teach, so it takes one turn and
+       then stands aside. A construction taught and never produced is the most
+       perishable thing in the record. */
+    if (oneShotOwed(rec, patternIds)) return 'oneshot';
     const veryWeak = wordIds.filter(id => w(id) && w(id).seen && w(id).mastery < VERY_WEAK);
     /* B3 first when something met has not landed. This is the inversion of
        the naive reading and it is the whole fix. */
@@ -1255,11 +1295,26 @@ window.ENGINE = (function () {
       /* Rotated so a pack is not always met in declaration order. */
       if (unseen.length) return [unseen[(rec.turn || 0) % unseen.length]];
     }
-    if (phase === 'introduce') {
+    if (phase === 'introduce' || phase === 'oneshot') {
       /* The strongest word they have, so the construction is the only new
          thing in the turn. Falls through to an unseen one if they have none
-         yet, because a first construction has to be about something. */
-      const strong = seen.slice().sort((a, b) => w(b).mastery - w(a).mastery);
+         yet, because a first construction has to be about something.
+
+         The one-shot asks for the SAME construction in "a new example in a
+         fresh situation", so it takes the second-strongest: same shape,
+         different thing in the slot. With only one word to its name there is
+         no fresh example to give, and asking again with the same one is the
+         honest version of the turn. */
+      const strong = seen.slice().sort((a, b) => w(b).mastery - w(a).mastery || (a < b ? -1 : 1));
+      if (phase === 'oneshot' && strong.length) {
+        /* Second-strongest if they have one. If they do not, a word they have
+           never met: the construction is not new this turn, so the word is
+           still the only new thing in it, and asking the same construction
+           about the same noun twice running is not a fresh situation - it is
+           the same turn twice. */
+        const unseen = valid.filter(id => !w(id) || !w(id).seen);
+        return [strong[1] || unseen[(rec.turn || 0) % (unseen.length || 1)] || strong[0]];
+      }
       if (strong.length) return [strong[0]];
     }
     /* consolidate and free: section 2 says a word at the bar is never a
@@ -1279,6 +1334,12 @@ window.ENGINE = (function () {
   /* The outcome of a turn, folded back into the record. The UI says what
      happened; every number is decided in MASTERY and nowhere else, which is
      the invariant Max's own stack document states. */
+  /* Our phase names to section 4's gain rates. Only the phases that are
+     actually planned appear: `warm`, `contrast` and `transfer` are rows of
+     his table that nothing selects yet, and a rate for a phase that cannot
+     happen would be a claim this engine does not support. */
+  const GAIN_PHASE = { oneshot: 'oneshot' };
+
   function masteryApply(state, plan, outcome) {
     const M = window.MASTERY;
     const rec = state.mastery || (state.mastery = M.blank());
@@ -1288,7 +1349,12 @@ window.ENGINE = (function () {
       hints: outcome.hints || 0,
       attempt: outcome.attempt || 0,
       typo: !!outcome.typo,
-      phase: outcome.phase || 'base',
+      /* Section 4 prices a turn by what it ASKED for, and this read a field
+         the UI never sent - so every turn in arm B was paid the 0.10 base and
+         Max's one-shot, warm and transfer rates had no way to fire. The plan
+         already says which phase picked the turn; read it there rather than
+         asking every caller to pass it. */
+      phase: outcome.phase || GAIN_PHASE[plan.phaseKind] || 'base',
     };
     if (outcome.correct) {
       ev.kind = outcome.offPattern ? 'offPattern' : 'produced';

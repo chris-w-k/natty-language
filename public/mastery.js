@@ -273,10 +273,18 @@ window.MASTERY = (function () {
       case 'produced': {
         if (pid) {
           const p = pat(s, pid);
+          /* Whether this hit TAUGHT the construction or TESTED it, which is
+             the difference between setting the one-shot candidate and
+             satisfying it. The engine has no separate teach event - the first
+             correct answer is the teach - so this cleared a candidate it had
+             set one line earlier, and the one-shot phase could never see one.
+             A construction was therefore taught and never retested. */
+          const taught = !p.introduced;
           p.mastery = score(p.mastery + (PATTERN_GAIN[ev.phase] || PATTERN_GAIN.base) * d.pattern);
           p.introduced = true;
           p.lastSeenTurn = s.turn;
-          if (p.oneShotCandidate) { p.oneShotSuccess = true; p.oneShotCandidate = false; }
+          if (taught) p.oneShotCandidate = true;
+          else if (p.oneShotCandidate) { p.oneShotSuccess = true; p.oneShotCandidate = false; }
           schedule(p, true, s.turn, s.sessionIndex);
           /* "not yet resolved by a later correct use" — this is that use. */
           for (const e of s.errors) if (e.patternId === pid) e.resolved = true;
