@@ -52,7 +52,10 @@ window.QUEST = (function () {
     ro: { en: 'engleză',    es: 'spaniolă',    pt: 'portugheză',  tr: 'turcă',       pl: 'poloneză',    ro: 'română' },
   };
 
-  const slotTags = ['ticket', 'item', 'like', 'price'];
+  /* The last four come from Max's pack (cafe.js). A slot tag with no valid
+     item in an activity throws at build time, which is the check that keeps a
+     half-merged pack from reaching a child. */
+  const slotTags = ['ticket', 'item', 'like', 'price', 'thing', 'place', 'count', 'doing'];
 
   /* NJA-3152's five forms, per language. `bare` is the spelling the schema
      ticket uses — NJA-3204's fixtures write `base` for the same field, and
@@ -829,6 +832,22 @@ window.QUEST = (function () {
                     'i-dont-want', 'do-you-like', 'i-like', 'i-like-two',
                     'thank-you'];
 
+  /* ---------- Max's pack, folded in ----------
+     cafe.js loads before this file, so by here the words and patterns exist
+     and can join the tables the builder already reads. Nothing is overwritten:
+     `water`, `card` and `cash` are in both, and the night club's versions win
+     because they are the ones already in a child's event history. */
+  if (typeof window !== 'undefined' && window.CAFE_PACK) {
+    for (const [id, w] of Object.entries(window.CAFE_PACK.words))
+      if (!vocabItems[id]) vocabItems[id] = w;
+    for (const [id, pt] of Object.entries(window.CAFE_PACK.patterns))
+      if (!vocabPatterns[id]) vocabPatterns[id] = pt;
+  }
+  const CAFE_WORDS = (typeof window !== 'undefined' && window.CAFE_PACK)
+    ? Object.keys(window.CAFE_PACK.words) : [];
+  const CAFE_PATTERNS = (typeof window !== 'undefined' && window.CAFE_PACK)
+    ? Object.keys(window.CAFE_PACK.patterns) : [];
+
   const VENUES = {
     /* The original night, unchanged but for the person behind the counter. */
     gig: {
@@ -1002,6 +1021,39 @@ window.QUEST = (function () {
           tap: 'Atinge pentru a continua',
         },
       },
+    },
+  };
+
+  /* ---------- the cafe ----------
+     Max's scenario, running his pattern and word list. It declares no `qa`
+     groups on purpose: the fixed ladder is what the mastery engine replaces,
+     so this activity has vocabulary and constructions and nothing that says
+     what order to meet them in. The engine asks the learner's record instead.
+
+     Dressed in the night club's room and character for now. Chris is writing
+     the scenario spec; this is the content under it, not the scene. */
+  if (CAFE_PATTERNS.length) VENUES.cafe = {
+    id: 'dev_nlt_activity_cafe',
+    venue: 'cafe',
+    title: 'The cafe',
+    background: 'venue-bar',
+    bed: 'audio/bed-gig.mp3',
+    name: { en: 'The cafe', es: 'La cafeteria', pt: 'O cafe',
+            tr: 'Kahveci', pl: 'Kawiarnia', ro: 'Cafeneaua' },
+    actor: { id: 'bartender', speaks: 'target', accent: 'target',
+             name: { en: 'Server', es: 'Camarera', pt: 'Empregada',
+                     tr: 'Garson', pl: 'Kelnerka', ro: 'Ospatarita' } },
+    prompt: 'You are behind the counter of a small cafe. You serve drinks and food, you know the neighbourhood, and you have everything a customer asks for. Personality: warm, quick, a queue always building.',
+    objectives: ['order something', 'find out what they have', 'ask where things are', 'ask what it costs'],
+    items: CAFE_WORDS,
+    patterns: CAFE_PATTERNS,
+    intro: {
+      en: { title: 'AT THE CAFE', sub: 'Learn the {0} you need to order, ask and pay.', tap: 'Tap to continue' },
+      es: { title: 'EN LA CAFETERIA', sub: 'Aprende el {0} para pedir, preguntar y pagar.', tap: 'Toca para continuar' },
+      pt: { title: 'NO CAFE', sub: 'Aprende o {0} para pedir, perguntar e pagar.', tap: 'Toca para continuar' },
+      tr: { title: 'KAHVECIDE', sub: 'Siparis vermek, sormak ve odemek icin {0} ogren.', tap: 'Devam etmek icin dokun' },
+      pl: { title: 'W KAWIARNI', sub: 'Poznaj {0} - zamow, zapytaj i zaplac.', tap: 'Dotknij, aby kontynuowac' },
+      ro: { title: 'LA CAFENEA', sub: 'Invata {0} ca sa comanzi, sa intrebi si sa platesti.', tap: 'Atinge ca sa continui' },
     },
   };
 

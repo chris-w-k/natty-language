@@ -1052,6 +1052,238 @@ window.ENGINE = (function () {
     track(state, 'mercy', { pair: plan.pair.id, stage: state.stage, step: state.step });
   }
 
+  /* ---------- the mastery arm ----------
+     Arm A walks a fixed ladder and forgets it. This asks the learner's record
+     what to do next, which is the whole of the difference: a second night is
+     not the same night again, it is whatever did not stick.
+
+     The plan it returns has THE SAME SHAPE as arm A's. That is deliberate and
+     it is what keeps actor -> coach -> child intact: `renderTurn` does not
+     know which arm it is drawing, so she still asks, he still hints, and the
+     child still answers. Only the choosing changed.
+
+     The scaffold is the join. Max derives support from mastery where we
+     hard-coded it by position, and his five levels land on machinery we
+     already have: L0 and L1 are her line in the child's language with the
+     target word in it, L2 and L3 cross the frames, L4 is the whole thing
+     across with the coach saying least. */
+  function masteryTurn(state, quest) {
+    const M = window.MASTERY;
+    const rec = state.mastery || (state.mastery = M.blank());
+    const patternIds = (quest.groups || []).map(g => g.id);
+    if (!patternIds.length) return null;
+
+    /* Section 7's PHASE, decided over EVERY word the activity has rather than
+       over the pool of whichever construction happens to win the ranking.
+       Scoped per pattern it does nothing: each construction keeps expanding
+       its own pool, a new word arrives every turn, fifty-nine words share the
+       credit, nothing is produced the four times it takes to reach the bar,
+       and a perfect learner tops out around 80% for ever. "Nothing is very
+       weak" is a statement about the LEARNER, not about one slot. */
+    const allWords = (quest.activity.items || []);
+    const phase = masteryPhase(rec, patternIds, allWords);
+
+    /* Section 8, carrier rotation. On a word phase the WORD is chosen first
+       and then a construction that can carry it, because a drill aimed at the
+       weakest word is wasted if the pattern that won the ranking has no slot
+       it fits. On a pattern phase it is the other way round. */
+    let pid = null, itemId = null, priority = 0;
+    if (phase === 'consolidate' || phase === 'expand') {
+      itemId = phaseWords(M, rec, allWords, phase)[0] || null;
+      const carriers = itemId
+        ? patternIds.filter(id => slotPoolOf(quest, id).indexOf(itemId) >= 0)
+        : [];
+      const rankedC = M.rank(rec, carriers.length ? carriers : patternIds);
+      pid = rankedC[0].id; priority = rankedC[0].priority;
+      if (!carriers.length) itemId = null;
+    } else {
+      const ranked = M.rank(rec, patternIds);
+      pid = ranked[0].id; priority = ranked[0].priority;
+      itemId = phaseWords(M, rec, slotPoolOf(quest, pid), phase)[0] || null;
+    }
+
+    const group = quest.groups.find(g => g.id === pid);
+    const slotKey = (group.slotKeys || [])[0] || null;
+    const valid = slotKey ? (group.slots[slotKey] || []) : [];
+    if (!slotKey) itemId = null;
+    else if (!itemId || valid.indexOf(itemId) < 0)
+      itemId = phaseWords(M, rec, valid, phase)[0] || valid[0] || null;
+    const fill = (slotKey && itemId) ? { [slotKey]: itemId } : {};
+    const pair = quest.pairFor(pid, fill);
+    if (!pair) return null;
+
+    const words = itemId ? [itemId] : [];
+    const level = M.scaffold(rec, pid, words);
+    const targetSlots = slotKey ? [slotKey] : [];
+    /* L2 is where the child's own sentence crosses; L3 is where hers does. */
+    const frameTarget = level >= 2;
+    const askTarget = level >= 3;
+
+    const prec = rec.patterns[pid];
+    const wrec = itemId ? rec.words[itemId] : null;
+    /* One new thing a turn, same rule as arm A, but read off the record
+       rather than off a step. A word nobody has met is hers to hand over; a
+       construction is the coach's. The word goes first, because a child
+       cannot build a sentence out of a word they have never seen. */
+    let introducing = null, introducedBy = null;
+    if (itemId && (!wrec || !wrec.seen)) { introducing = 'item'; introducedBy = 'actor'; }
+    else if (!prec || !prec.introduced) { introducing = 'pattern'; introducedBy = 'coach'; }
+
+    return Object.assign({
+      pair, introducing, introducedBy,
+      introKey: introducing === 'item' ? slotKey : null,
+      arm: 'mastery',
+      /* No stage or step: there is no list to be at a position in. The
+         analytics key is what the turn was ABOUT, which is the only thing
+         stable across nights. */
+      stage: 0, step: 0,
+      group: pid,
+      patternId: pid,
+      itemId: itemId,
+      stepKey: pid + (itemId ? '/' + itemId : ''),
+      nightIndex: undefined,
+      kind: 'production',
+      phase: 'night',
+      revision: false,
+      /* Max's L0 to L4, on the event, because it is the thing his model
+         decides and ours used to hard-code. */
+      level: level,
+      phaseKind: phase,
+      priority: priority,
+      masteryPattern: (prec && prec.mastery) || 0,
+      masteryWord: (wrec && wrec.mastery) || 0,
+      askId: null,
+      askItem: itemId,
+      askTarget,
+      pool: valid.length ? valid.slice() : null,
+      frameTarget, targetSlots,
+      itemTarget: targetSlots.length > 0,
+      expected: expected(pair, frameTarget, targetSlots),
+    }, gaps(pair, frameTarget, targetSlots));
+  }
+
+  /* Section 7's phase table, in the order it resolves. "Very weak" is his
+     0.35: below it a word is not learned, it has merely been seen, and
+     putting a second new word next to it buys nothing. */
+  const VERY_WEAK = 0.35;
+  /* Every word some construction can actually ASK FOR.
+
+     A pack can carry words no pattern has a slot for - Max's list has
+     nineteen, the function words and the money words, which live inside his
+     frames or in a quest rather than in a slot. They are real vocabulary and
+     they are glossed, but they cannot be PRODUCED, so they cannot reach the
+     bar, so a scenario scored over all of them can never be finished. Mastery
+     is measured over what the child can be asked to say. */
+  function reachableWords(quest) {
+    const out = [];
+    for (const g of quest.groups || [])
+      for (const id of slotPoolOf(quest, g.id)) if (out.indexOf(id) < 0) out.push(id);
+    return out;
+  }
+
+  /* The words a construction's slot will actually accept. */
+  function slotPoolOf(quest, pid) {
+    const g = (quest.groups || []).find(x => x.id === pid);
+    if (!g) return [];
+    const k = (g.slotKeys || [])[0];
+    return k ? (g.slots[k] || []) : [];
+  }
+  function masteryPhase(rec, patternIds, wordIds) {
+    const M = window.MASTERY;
+    const w = id => rec.words[id];
+    const veryWeak = wordIds.filter(id => w(id) && w(id).seen && w(id).mastery < VERY_WEAK);
+    /* B3 first when something met has not landed. This is the inversion of
+       the naive reading and it is the whole fix. */
+    if (veryWeak.length) return 'consolidate';
+    /* B - teach a construction, on a word they already have, so the turn
+       still carries exactly one new thing. */
+    if (patternIds.some(id => !(rec.patterns[id] || {}).introduced)) return 'introduce';
+    /* B2 - vocabulary expansion, once nothing is floundering. */
+    if (wordIds.some(id => !w(id) || !w(id).seen)) return 'expand';
+    /* B3 again, for the merely shaky. */
+    if (wordIds.some(id => w(id) && !M.atBar(w(id).mastery))) return 'consolidate';
+    /* F - the scenario is done; anything valid is scene glue now. */
+    return 'free';
+  }
+
+  function phaseWords(M, rec, valid, phase) {
+    const w = id => rec.words[id];
+    const seen = valid.filter(id => w(id) && w(id).seen);
+    if (phase === 'expand') {
+      const unseen = valid.filter(id => !w(id) || !w(id).seen);
+      /* Rotated so a pack is not always met in declaration order. */
+      if (unseen.length) return [unseen[(rec.turn || 0) % unseen.length]];
+    }
+    if (phase === 'introduce') {
+      /* The strongest word they have, so the construction is the only new
+         thing in the turn. Falls through to an unseen one if they have none
+         yet, because a first construction has to be about something. */
+      const strong = seen.slice().sort((a, b) => w(b).mastery - w(a).mastery);
+      if (strong.length) return [strong[0]];
+    }
+    /* consolidate and free: section 2 says a word at the bar is never a
+       target, section 8 says weakest first from a rotating offset.
+
+       SEEN ONLY, and this is the trap. `targetWords` ranks by mastery and an
+       unseen word scores 0, which is weaker than anything already met - so
+       asked for "the weakest" it hands back a word the child has never been
+       shown, and consolidation silently becomes expansion. Consolidating
+       means drilling what they HAVE met and not landed. */
+    const below = seen.filter(id => !M.atBar(w(id).mastery))
+                      .sort((a, b) => w(a).mastery - w(b).mastery || (a < b ? -1 : 1));
+    if (below.length) return [below[(rec.turn || 0) % below.length]];
+    return seen.length ? [seen[(rec.turn || 0) % seen.length]] : [];
+  }
+
+  /* The outcome of a turn, folded back into the record. The UI says what
+     happened; every number is decided in MASTERY and nowhere else, which is
+     the invariant Max's own stack document states. */
+  function masteryApply(state, plan, outcome) {
+    const M = window.MASTERY;
+    const rec = state.mastery || (state.mastery = M.blank());
+    const ev = {
+      patternId: plan.patternId,
+      words: plan.itemId ? [plan.itemId] : [],
+      hints: outcome.hints || 0,
+      attempt: outcome.attempt || 0,
+      typo: !!outcome.typo,
+      phase: outcome.phase || 'base',
+    };
+    if (outcome.correct) {
+      ev.kind = outcome.offPattern ? 'offPattern' : 'produced';
+      ev.produced = plan.itemId ? [plan.itemId] : [];
+    } else {
+      ev.kind = 'wrong';
+    }
+    const out = M.apply(rec, ev);
+    state.mastery = M.nextTurn(out.state);
+    return out.moved;
+  }
+
+  /* Her words, read rather than said, which Max credits at a fifth of
+     production. Called when her line lands, not when the child answers. */
+  function masteryHeard(state, wordIds) {
+    const M = window.MASTERY;
+    const rec = state.mastery || (state.mastery = M.blank());
+    if (!wordIds || !wordIds.length) return [];
+    const out = M.apply(rec, { kind: 'read', readWords: wordIds });
+    state.mastery = out.state;
+    return out.moved;
+  }
+
+  /* When a night ends. Max runs 15 to 20 blocks; the scenario being finished
+     ends it early, which is the point of a mastery session and the thing a
+     fixed ladder could never do. */
+  const MASTERY_TURNS = 16;
+  function masteryDone(state, quest) {
+    const M = window.MASTERY;
+    const rec = state.mastery || M.blank();
+    const patternIds = (quest.groups || []).map(g => g.id);
+    if (M.scenarioMastered(rec, patternIds, reachableWords(quest))) return 'mastered';
+    if ((rec.turn || 0) >= MASTERY_TURNS) return 'turns';
+    return null;
+  }
+
   /* ---------- analytics ----------
      NJA-3136 feature 10: start/end, success/failure, translation clicks. Kept
      in state so a session can be read back whole. */
@@ -1064,6 +1296,7 @@ window.ENGINE = (function () {
     createState, pickNext, planTurn, pills, check, validate, makePills, slug,
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
+    masteryTurn, masteryApply, masteryHeard, masteryDone, MASTERY_TURNS, reachableWords,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,
