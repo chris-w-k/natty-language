@@ -8,6 +8,13 @@
      when it changes. Everything below reads Q at call time rather than
      capturing bits of it. */
   let Q = window.QUEST;
+
+  /* Who this is, and which engine they get. Read once, at the top, before
+     anything is drawn — the arm decides what the night looks like, and the
+     mastery it carries decides where the night starts. See store.js for why
+     the arm lives in the same store as the mastery rather than behind a
+     feature flag. */
+  const LEARNER = window.STORE.begin();
   const C = window.CONTENT;
   /* Which night this is. Set before the quest starts and never changed inside
      a go — a venue switch rebuilds the whole content object through here. */
@@ -299,7 +306,30 @@
         /* Which side of the webview this is. Set once, as a super-property, so
            every event — the NovaPals.* ones and the $screen ones alike — can be
            split by it without each call site having to remember. */
-        window.ANALYTICS.register({ in_webview: B.inApp });
+        window.ANALYTICS.register({
+          in_webview: B.inApp,
+          /* The split, on every event. 'scenarios' is the night as it stands;
+             'mastery' is the one that keeps the scenario and drills it. */
+          arm: LEARNER.arm,
+          /* How many nights this child has started, and whether tonight is a
+             RETURN rather than a second go in one sitting. */
+          plays: LEARNER.plays,
+          returning: LEARNER.returning,
+          /* Whether we could remember them at all. Without this a child who
+             did not come back and a child whose storage was wiped are the
+             same row, and they need opposite fixes. */
+          storage: LEARNER.storage,
+        });
+        /* Fired only on a later DAY, never on a second go in one sitting. It
+           is the event the whole pivot is judged on, so it carries what the
+           child brought back with them. */
+        if (LEARNER.returning) {
+          AN('NovaPals.Nlt.Returning', {
+            plays: LEARNER.plays, daysSeen: LEARNER.daysSeen,
+            daysSince: LEARNER.daysSince,
+            mastered: LEARNER.mastered, known: LEARNER.known,
+          });
+        }
       }
       return true;
     } catch { serverUp = false; return true; }
@@ -3721,6 +3751,14 @@
     plan: () => plan, pair: () => current, state: () => state,
     locked: () => inputLocked,
     pills: () => optionPills(),
+    /* Who the store thinks this is, so a test can read the arm and the
+       mastery without reaching into localStorage itself. */
+    learner: () => LEARNER,
+    store: () => window.STORE.state,
+    /* What kind of beat is on screen. The scenarios arm only ever builds a
+       sentence; the mastery arm will have more kinds, and a test that walks
+       the night should not have to know which arm it is in. */
+    rung: () => (plan && plan.kind) || 'production',
     introduced: () => [...introducedWords()],
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,
