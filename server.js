@@ -332,6 +332,17 @@ function historyContents(history, mine, names) {
   return out;
 }
 
+/* Max's scaffold, section 6, written out as what the coach may do. The
+   thresholds are his; the wording is ours, because his is about a Turkish
+   tutor and ours has to hold for six target languages. */
+const SCAFFOLD_RULE = {
+  0: 'LEVEL 0. They have barely met this. Carry the meaning in their own language. The target-language words appear once, spelled out and glossed, and you say plainly what each one means.',
+  1: 'LEVEL 1. Your sentence is in their language with the target words standing in it. Gloss the new one; do not gloss the ones they have met.',
+  2: 'LEVEL 2. They can build this. Name what to say and add at most ONE short clause of explanation in their own language. No glossing of words they have met.',
+  3: 'LEVEL 3. They know this. Their own language is for framing the situation only — one clause of scene, then what to say. No explanation of the construction.',
+  4: 'LEVEL 4. They have this. Say what to do in as few words as possible and get out of the way. No explanation, no glossing, no encouragement padding.',
+};
+
 /* The tag values both agents share. Everything here is a decision the engine
    has already made; nothing is left for a model to infer. */
 function turnVars(b) {
@@ -372,6 +383,11 @@ function turnVars(b) {
        coach cannot say it unless he is told, and the venue prompt is not it —
        it describes the night. */
     exchange_goal: b.goal || '(no particular goal this exchange — skip this part)',
+    /* Max's section 6, as a rule the coach is told rather than a number. The
+       level is derived from what the child has shown, never chosen by a
+       model, which is the invariant his own stack document states. */
+    scaffold_level: b.level == null ? '' : ('L' + b.level),
+    scaffold_rule: SCAFFOLD_RULE[b.level == null ? 2 : b.level] || SCAFFOLD_RULE[2],
   };
 }
 

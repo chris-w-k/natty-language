@@ -1293,7 +1293,13 @@
       prompt: Q.activity.prompt,
       coachPrompt: Q.activity.coach.prompt,
       actorRules: Q.prompts.actorRules,
-      coachRules: Q.prompts.coachRules,
+      /* Arm B opens the block with the coach, so it needs the prompt written
+         for a coach who speaks FIRST - no {{actor_line}} in it, because she
+         has not said anything yet. */
+      coachRules: (MASTERY_ARM && Q.prompts.coachOpenRules) || Q.prompts.coachRules,
+      /* Max's section 6. The server turns it into the rule the coach is told;
+         it is derived from the record and is never the model's to choose. */
+      level: plan.level == null ? undefined : plan.level,
       actor: Q.activity.actor.name,
       coach: Q.activity.coach.name,
       objectives: Q.activity.objectives,
@@ -1628,6 +1634,21 @@
        skips the model, so every reader of them — the bubble, the retry floor,
        the transcript — gets the same pair without having to know it is the
        opener. */
+    /* Arm B's floor. She has not spoken, so there is nothing of hers to
+       translate and nothing for `heard` to say - the whole first half of this
+       function is about her line. What is left is the instruction, plus the
+       new word, which `coachCopy` badges on afterwards. */
+    if (MASTERY_ARM) {
+      const asks = tList('fb-coach-ask');
+      const line = asks[state.turn % asks.length]
+        .split('{0}').join(plan.pair.allNative)
+        .split('{1}').join(Q.languageNames.target);
+      return { actor_line: '', coach_line: line };
+    }
+    /* Arm A's scripted opening beat, and arm A's alone: it is the bartender
+       not looking up, which is a night-club demo rather than a first block.
+       Checked AFTER arm B above, because arm B's turn one is a block like
+       every other block of Max's order. */
     if (E.isOpener(state)) return openingLines(plan);
     const intro = newThing(plan);
     /* Only reached by a construction with no entry in ACTOR_CUES at all, which
@@ -2047,13 +2068,18 @@
     /* The opening turn is written, so neither call is made and there is
        nothing to wait for: the bartender is on screen as fast as his voice can
        be fetched. */
-    const written = E.isOpener(state);
+    const written = !MASTERY_ARM && E.isOpener(state);
 
     /* The character's line, rendered rather than asked for (NJA-3317). This
        used to be the first of three model calls and the only one on the
        critical path: nothing could be drawn until it landed. It is now a
        lookup, so the spinner above comes down in the same frame it went up. */
-    const cue = cueFor(plan);
+    /* Arm B asks for no cue. She does not open the block in Max's order, so
+       rendering a line nobody shows is not merely wasted: `cueFor` sets
+       `lastCue` and marks her words as MET, and that line then leaked into
+       the coach's written floor and into the badge, telling a child what a
+       sentence meant that they had never been shown. */
+    const cue = MASTERY_ARM ? null : cueFor(plan);
     $('turn-loading').classList.add('hidden');
 
     /* The revision round, announced once and by Axel rather than by a banner.
@@ -2069,7 +2095,8 @@
       }
     }
     lastGenMs  = 0;
-    lastGenWhy = cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
+    lastGenWhy = MASTERY_ARM ? 'arm B: she does not open'
+      : cue ? 'cue ' + cue.id : 'no cue for ' + plan.pair.patternId;
 
     /* Worked out HERE and nowhere else, because it has a side effect: a word
        counts as new exactly once, and asking twice would answer no the second
@@ -2080,7 +2107,12 @@
        reads: asking twice would answer no the second time. */
     const askWords = askTargetWords(plan, cue);
     const mixed = !!cue && cue.frameTarget === false;
-    const fresh = turnFresh = !cue ? []
+    /* Arm B has no line of hers to read the new word out of, because she has
+       not spoken. It comes off the engine's own item instead, which is where
+       it was always truer anyway - `newItemWord` exists because parsing it
+       back out of her sentence once produced `"disco?" means "record"`. */
+    const fresh = turnFresh = MASTERY_ARM ? newItemWord(plan)
+      : !cue ? []
       : mixed ? newItemWord(plan)
       : newTargetWords(cue.line, null);
 
@@ -2090,7 +2122,7 @@
     const actorFrags = mixed
       ? toFragments(actorLine, askWords)
       : toFragments(actorLine, [actorLine], { allTarget: true });
-    turnLine = actorLine;
+    turnLine = MASTERY_ARM ? '' : actorLine;
 
     /* The one model call left: the coach, told what she said, what it meant,
        and which of its words the child is meeting for the first time. Fired
@@ -2120,9 +2152,20 @@
        both at once lets a child read the hint before they have heard the
        question. */
     V.stop();
-    say(ACTOR, fragmentsHTML(actorFrags), actorLine, actorFrags);
     setLocked(true);
-    const characterDone = V.say(actorLine, { speaker: ACTOR, lang: accentOf(ACTOR) });
+    /* ---------- who speaks first ----------
+       Arm A: she asks, he hints, they answer. Arm B runs Max's order - the
+       coach opens the block, they produce, and SHE reacts afterwards, which
+       is `sayReaction` on the way out of `submit`.
+
+       His order is why his content works and ours went vague. A character who
+       opens has to ask something the child's line answers, and there is no
+       question a server asks that draws out "Where is the hotel?". A coach who
+       opens just says to ask her. */
+    const characterDone = MASTERY_ARM
+      ? Promise.resolve()
+      : (say(ACTOR, fragmentsHTML(actorFrags), actorLine, actorFrags),
+         V.say(actorLine, { speaker: ACTOR, lang: accentOf(ACTOR) }));
 
     let coachShown = false;
     const showCoach = async () => {
@@ -2879,7 +2922,11 @@
          survives only where there IS no next line: a wrong answer, where the
          turn does not advance. */
       setLocked(true);
-      await new Promise(r => setTimeout(r, BANNER_MIN_MS));
+      /* Arm A folds her acknowledgement into the line that opens the next
+         turn, so a separate reaction bubble said the same thing twice. Arm B
+         has no next line of hers - the coach opens - so the reaction IS her
+         turn in the block, and it is the only target language she speaks. */
+      await atLeast(MASTERY_ARM ? sayReaction(said, true) : Promise.resolve(), BANNER_MIN_MS);
       hideBanner();
       busy = false;
       step();

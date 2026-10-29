@@ -1298,6 +1298,12 @@ window.ENGINE = (function () {
     }
     const out = M.apply(rec, ev);
     state.mastery = M.nextTurn(out.state);
+    /* Arm A counts turns in `applyCorrect`/`applyWrong`; arm B answers
+       neither, so nothing was counting. `state.turn` stayed 0 all night,
+       which is not a cosmetic miscount: `isOpener` is `turn === 0`, so every
+       block of arm B rendered the scripted opening beat and never asked the
+       model for a coach line at all. */
+    state.turn += 1;
     return out.moved;
   }
 
