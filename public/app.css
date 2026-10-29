@@ -267,10 +267,6 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 
 /* answer row: the sentence being built, and the submit */
 #answer{display:flex;align-items:flex-end;gap:10px;}
-/* An id rule beats `.hidden`, so both of these need saying twice. Without it
-   the comprehension rung drew its two readings UNDER the last turn's slot and
-   tray, with the previous answer still sitting in it. */
-#answer.hidden,#dock.hidden{display:none;}
 #slot{
   flex:1;min-width:0;background:var(--fill);border-radius:var(--r-md);
   min-height:52px;padding:8px 12px;
@@ -341,28 +337,6 @@ mark{background:var(--accent-soft);color:var(--accent-deep);padding:1px 5px;bord
 #tray .chip:active{transform:scale(.95);}
 #tray .chip:disabled{opacity:.32;box-shadow:none;cursor:default;}
 #dock-side{display:flex;gap:8px;flex:none;}
-
-/* ---------- the comprehension rung and the demonstration beat ----------
-   Two readings of what she just asked, or one button to carry on. They stack
-   rather than sitting side by side: a pair of sentences in two columns on a
-   phone wraps to three lines each and the near-miss stops reading as a near
-   miss. Full width, generous target, and no visual difference between the
-   two — the right one must not be the prettier one. */
-#choice{display:flex;flex-direction:column;gap:10px;padding:2px 0 4px;}
-/* And this one needs it too. An id rule with a `display` on it beats
-   `.hidden` every time, so the two readings stayed on screen underneath the
-   next turn's tray and a child was offered pills AND choices at once. Three
-   elements have now had this bug; check it on the fourth. */
-#choice.hidden{display:none;}
-#choice .opt{
-  width:100%;text-align:left;background:var(--paper);border:1px solid var(--line);
-  border-radius:12px;padding:14px 16px;font-size:15px;line-height:1.35;
-  color:var(--ink);box-shadow:var(--shadow);
-  transition:transform .12s ease,opacity .12s ease;
-}
-#choice .opt:active{transform:scale(.98);}
-#choice .opt.go{text-align:center;background:var(--accent);color:#fff;border-color:transparent;font-weight:600;}
-#lower.locked #choice .opt{opacity:.45;pointer-events:none;}
 .btn.icon{
   width:44px;height:44px;border-radius:50%;background:var(--fill);color:var(--ink-2);
   display:flex;align-items:center;justify-content:center;flex:none;

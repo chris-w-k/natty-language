@@ -1235,9 +1235,6 @@
   const REACT_DEADLINE_MS = 3500;
   let lastGenMs = 0, lastGenWhy = 'template';
   let lastCoachMs = 0, lastCoachWhy = 'template';
-  /* Set the first time the coach is asked for a line, so his one allowed
-     greeting lands on the turn he actually opens his mouth. */
-  let coachHasSpoken = false;
 
   /* Everything both calls need. All of it is the engine's, none of it is the
      model's to decide — which is why the same object serves both. */
@@ -1266,14 +1263,9 @@
       introducing: newThing(plan),
       /* NJA-3341 part one, and NJA-3325's greeting exception. The goal is the
          group's own reason for the exchange; `firstTurn` is the only turn all
-         night on which the coach may open with a hello.
-
-         It is the first turn the COACH SPEAKS ON, not nightIndex 0 — since the
-         demonstration beat took that index and the coach's line there is
-         written, keying off the index meant the one greeting he is allowed
-         went to a turn that never asks him for a line. */
+         night on which the coach may open with a hello. */
       goal: plan.goal || '',
-      firstTurn: !coachHasSpoken && !plan.revision && !plan.makeup,
+      firstTurn: plan.nightIndex === 0 && !plan.revision && !plan.makeup,
       /* NJA-3317. The character's line is in the target language now, so the
          coach is told what it meant and which of its words are new — he is
          the only one who can say either, and he cannot say what he is not
@@ -1492,18 +1484,15 @@
   async function generateCoachLine(plan, actorLine, actorNative, fresh) {
     if (!serverUp) { lastCoachWhy = 'no server'; return null; }
     const t0 = Date.now();
-    /* The body is built BEFORE the flag moves, because the body is where
-       `firstTurn` is read: setting it first made every turn a later one and
-       the greeting he is allowed once went to nobody. */
-    const body = Object.assign(turnBody(plan), {
-      actorLine,
-      /* NJA-3317. He is the only one who can say what she meant. */
-      actorLineNative: actorNative || '',
-      newTargetWords: (fresh || []).map(f => f.text + ' = ' + f.means),
-      recentCoach: recentCoach.slice(-6),
-    });
-    coachHasSpoken = true;
-    const j = await post('/api/coach', body, COACH_DEADLINE_MS);
+    const j = await post('/api/coach',
+      Object.assign(turnBody(plan), {
+        actorLine,
+        /* NJA-3317. He is the only one who can say what she meant. */
+        actorLineNative: actorNative || '',
+        newTargetWords: (fresh || []).map(f => f.text + ' = ' + f.means),
+        recentCoach: recentCoach.slice(-6),
+      }),
+      COACH_DEADLINE_MS);
     lastCoachMs = Date.now() - t0;
     if (j.fail) { lastCoachWhy = j.fail; return null; }
     if (!j.coachText) { lastCoachWhy = 'empty'; return null; }
@@ -1869,24 +1858,7 @@
     /* A tray pill already sitting in a slot is disabled on its own account, so
        re-enabling every chip on unlock would offer the same word twice. Let
        the tray redraw itself instead of poking its buttons. */
-    /* Only the pane that has a tray. A comprehension rung and the
-       demonstration beat have no sentence to build, and redrawing a tray into
-       a hidden dock on every lock was how `syncSay` came to poke a submit
-       button that was not on screen. */
-    if (plan && (plan.kind || 'production') === 'production') { renderTray(); syncSay(); }
-  }
-
-  /* Which of the two lower panes is showing. The night has three kinds of
-     rung now and only one of them is a sentence to build. */
-  function showPane(which) {
-    $('answer').classList.toggle('hidden', which !== 'build');
-    $('dock').classList.toggle('hidden', which !== 'build');
-    const box = $('choice');
-    box.classList.toggle('hidden', which !== 'choice');
-    /* Emptied as well as hidden. A stale option left in the DOM is one CSS
-       mistake away from being on screen again, and it has been on screen
-       twice now. */
-    if (which !== 'choice') { box.innerHTML = ''; compOpts = null; }
+    if (plan) { renderTray(); syncSay(); }
   }
 
   /* label by how many gaps there actually are, not by the level */
@@ -2005,19 +1977,6 @@
     clearAnswer();
     submitted = false;
     hideBanner();
-
-    /* Two rungs do not build a sentence, so they do not run the turn below:
-       no tray, no judge, no model call for the coach. */
-    if (plan.kind === 'demo') return renderDemo();
-    if (plan.kind === 'comprehension') {
-      const prep = comprehensionPrep();
-      if (prep) return renderComprehension(prep);
-      /* No near-miss to offer against her question, which is a content gap
-         rather than a reason to stop: the child builds the sentence they
-         would have built anyway, and the gap is on the error dashboard. */
-      plan.kind = 'production';
-    }
-    showPane('build');
 
     setLocked(true);
     $('turn-loading').classList.remove('hidden');
@@ -2147,220 +2106,6 @@
     };
     V.say('').then(release);
     setTimeout(release, 12000);
-  }
-
-  /* ---------- the demonstration beat ----------
-     The open group used to begin by asking a child to produce a construction
-     nobody had shown them being used, and a quarter of every night's leavers
-     were gone inside three exchanges. So the night opens by playing the
-     exchange instead: the coach says what is about to happen, the line is
-     used, she answers it, and the child taps on. No tray, no judge, no score.
-
-     It is excluded from every error denominator by having no answer at all —
-     `rung: 'demo'` on the event, and `NovaPals.Nlt.Demo` rather than a
-     QuestionEnd, so it cannot be swept into one by accident. */
-  async function renderDemo() {
-    showPane('choice');
-    setLocked(true);
-    $('turn-loading').classList.add('hidden');
-    $('slot-label').textContent = '';
-    hinted = false; attempts = 0; misheardOnce = false;
-    preloadScene();
-    mountBackground($('layer-bg'), Q.activity.background);
-    mountCharacter($('character'), { character: ACTOR, state: 'idle' });
-
-    const shown = plan.pair.allTarget;
-    const cue = cueFor(plan);
-    turnLine = cue ? cue.line : '';
-    turnAsk = t('demo-axel');
-    turnCoachHtml = esc(turnAsk);
-    turnCoachFrags = null;
-    renderHud();
-    AN('NovaPals.Nlt.Demo', Object.assign(questionProps(plan), { demoLine: shown }));
-
-    const box = $('choice');
-    box.innerHTML = '';
-
-    V.stop();
-    const af = toFragments(turnAsk);
-    say('axel', fragmentsHTML(af), turnAsk, af);
-    await new Promise(r => setTimeout(r, 500));
-
-    /* The child's line, performed rather than asked for. Its words go into
-       `metWords` because they HAVE now been met — the rung after this one is
-       practice, and a word the child has just watched being used must not be
-       introduced to them a second time. */
-    for (const w of String(shown).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
-    const mf = toFragments(shown, [shown], { allTarget: true });
-    say('me', fragmentsHTML(mf), shown, mf);
-    await new Promise(r => setTimeout(r, 700));
-
-    if (cue) {
-      const cf = toFragments(cue.line, [cue.line], { allTarget: true });
-      say(ACTOR, fragmentsHTML(cf), cue.line, cf);
-      await V.say(cue.line, { speaker: ACTOR, lang: accentOf(ACTOR) });
-    }
-
-    const b = document.createElement('button');
-    b.className = 'opt go';
-    b.type = 'button';
-    b.id = 'demo-go';
-    b.textContent = t('demo-tap');
-    b.addEventListener('click', () => {
-      if (busy) return;
-      busy = true;
-      recordTurn(plan, turnLine, turnAsk, true);
-      E.applyDemo(state, plan);
-      renderHud();
-      busy = false;
-      step();
-    }, { once: true });
-    box.appendChild(b);
-    setLocked(false);
-  }
-
-  /* ---------- the comprehension rung ----------
-     Her question has just crossed into the target language. Before the child
-     has to ANSWER it they say what it asked, in their own language, out of
-     two readings. Nothing to build, one tap.
-
-     The point is to separate two failures the error rate could never tell
-     apart: a child who understood her and could not build the sentence, and
-     a child who built a sentence without understanding a word of what they
-     were answering. The crossings were running at 48.7% wrong and nobody
-     could say which of those it was.
-
-     The coach's line here is WRITTEN, not generated. A model told to point at
-     the answer on a rung where the answer is a translation of her question
-     points at the translation, and the rung tests nothing. */
-  let compOpts = null;
-
-  /* Her line and the near-miss, or null if either is missing. Two options one
-     of which is blank is not a question, and a near-miss that reads the same
-     as the real one is not a test. */
-  function comprehensionPrep() {
-    const cue = cueFor(plan);
-    const other = plan.confuse ? Q.readingOf(plan.confuse, plan.askItem) : null;
-    if (!cue || !other || norm2(other) === norm2(cue.native)) {
-      AN('NovaPals.Nlt.ClientError', {
-        kind: 'content', message: 'no near-miss for ' + (plan.confuse || '(none named)'),
-        where: plan.stepKey || '', errors: 1, capped: false,
-      });
-      return null;
-    }
-    return { cue, other };
-  }
-
-  async function renderComprehension({ cue, other }) {
-    showPane('choice');
-    setLocked(true);
-    $('turn-loading').classList.add('hidden');
-    $('slot-label').textContent = t('comp-label');
-    hinted = false; attempts = 0; misheardOnce = false;
-    preloadScene();
-    mountBackground($('layer-bg'), Q.activity.background);
-    mountCharacter($('character'), { character: ACTOR, state: 'idle' });
-
-    turnLine = cue.line;
-    turnAsk = t('comp-axel');
-    turnCoachHtml = esc(turnAsk);
-    turnCoachFrags = null;
-    renderHud();
-
-    /* Shuffled once and kept, because a wrong answer re-offers THE SAME two
-       options in the same places: moving them would make the retry a second
-       question rather than a second look at the first one. */
-    compOpts = Math.random() < 0.5
-      ? [{ text: cue.native, ok: true }, { text: other, ok: false }]
-      : [{ text: other, ok: false }, { text: cue.native, ok: true }];
-
-    V.stop();
-    const qf = toFragments(cue.line, [cue.line], { allTarget: true });
-    say(ACTOR, fragmentsHTML(qf), cue.line, qf);
-    await V.say(cue.line, { speaker: ACTOR, lang: accentOf(ACTOR) });
-
-    const af = toFragments(turnAsk);
-    say('axel', fragmentsHTML(af), turnAsk, af);
-    AN('NovaPals.Nlt.QuestionStart', questionProps(plan));
-
-    renderChoice();
-    setLocked(false);
-  }
-
-  const norm2 = x => String(x || '').toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
-
-  function renderChoice() {
-    const box = $('choice');
-    box.innerHTML = '';
-    for (const opt of compOpts) {
-      const b = document.createElement('button');
-      b.className = 'opt';
-      b.type = 'button';
-      b.textContent = opt.text;
-      b.addEventListener('click', () => chooseReading(opt));
-      box.appendChild(b);
-    }
-  }
-
-  async function chooseReading(opt) {
-    if (busy || inputLocked) return;
-    busy = true;
-    setLocked(true);
-    const correct = !!opt.ok;
-    say('me', esc(opt.text), opt.text, null, correct ? 'right' : 'wrong');
-
-    AN('NovaPals.Nlt.QuestionEnd', Object.assign(questionProps(plan), {
-      answerText: opt.text,
-      /* a third input path beside 'tap' and 'voice' */
-      answerMode: 'choice',
-      isCorrect: correct,
-    }));
-
-    if (correct) {
-      const before = E.overall(state, Q);
-      E.applyCorrect(state, plan, { hinted });
-      if (E.overall(state, Q) > before + 1e-6) pulseMastery();
-      showBanner('good');
-      SFX.play('right');
-      renderHud();
-      recordTurn(plan, turnLine, turnAsk, true);
-      await new Promise(r => setTimeout(r, BANNER_MIN_MS));
-      hideBanner();
-      busy = false;
-      step();
-      return;
-    }
-
-    const { attempts: n } = E.applyWrong(state, plan);
-    attempts = n;
-    hinted = true;
-    renderHud();
-    showBanner('bad');
-    SFX.play('wrong');
-    await new Promise(r => setTimeout(r, BANNER_MIN_MS));
-    hideBanner();
-
-    /* "A wrong answer replays her question once and re-offers the same two
-       options." Once. A second miss moves on uncredited, which puts the rung
-       in the revision round — `applyWrong` marked it on the first miss —
-       rather than holding a child in front of two sentences they cannot tell
-       apart. */
-    if (n >= 2) {
-      recordTurn(plan, turnLine, turnAsk, false);
-      E.applyMercy(state, plan);
-      renderHud();
-      busy = false;
-      setTimeout(() => step(), 900);
-      return;
-    }
-
-    const again = t('comp-again');
-    say('axel', esc(again), again);
-    const qf = toFragments(turnLine, [turnLine], { allTarget: true });
-    say(ACTOR, fragmentsHTML(qf), turnLine, qf);
-    await V.say(turnLine, { speaker: ACTOR, lang: accentOf(ACTOR) });
-    setLocked(false);
-    busy = false;
   }
 
   /* ---------- who sounds like what ----------
@@ -2840,23 +2585,12 @@
     /* 'night' | 'revision' | 'makeup' — which of the three parts this
        exchange belongs to. */
     phase: pl.phase || 'night',
-    /* 0..17, this exchange's fixed place in the night, whatever phase it is
-       being met in. Null on a venue with no groups. RENUMBERED whenever the
-       night's shape changes, so it only means anything inside one `build`. */
+    /* 0..16, this exchange's fixed place in the night, whatever phase it is
+       being met in. Null on a venue with no groups. */
     nightIndex: pl.nightIndex == null ? undefined : pl.nightIndex,
     /* "1:3" — the canonical identity of an exchange: which group, which rung.
-       Stable across phases, across replays and across venues.
-
-       A comprehension rung carries a "c" ("1:2c") and the demonstration beat
-       a "d", because a rung with no sentence to build must never be averaged
-       into the error rate of the rungs that have one. The suffix is on the
-       REPORTED key only — the engine's own key, the one `best`, `missed` and
-       `released` are filed under, stays plain. Group on `rung` to filter;
-       the suffix is here so a key read on its own still says what it is. */
-    stepKey: (pl.stepKey || '') + (pl.kind === 'comprehension' ? 'c' : pl.kind === 'demo' ? 'd' : ''),
-    /* 'production' | 'comprehension' | 'demo'. Exclude 'demo' from every
-       error denominator: it has no right answer. */
-    rung: pl.kind || 'production',
+       Stable across phases, across replays and across venues. */
+    stepKey: pl.stepKey || '',
     /* open | door | drinks | order | close */
     groupId: pl.group || '',
   });
@@ -3346,20 +3080,6 @@
     $('speak-state').classList.remove('good');
     renderSpeakDots();
     speakMicLabel();
-    /* The child's turn has actually begun: the line is on screen and the
-       microphone button is live. Once per line — `renderSpeak` is called
-       again on a retry, and a second row would make one slow line look like
-       two. `msSinceTaken` is the whole of the question: a large number here
-       says the card took its time, a missing event entirely says the turn
-       never started at all. */
-    if (speakTurnFired !== speak.at) {
-      speakTurnFired = speak.at;
-      AN('NovaPals.Nlt.SpeakTurnStart', {
-        venue, go: state.go, lineIndex: speak.at,
-        msSinceTaken: Math.max(0, Date.now() - speakTakenAt),
-        micBlocked: !!$('speak-mic').disabled,
-      });
-    }
     /* Axel says it before they do. Hearing the line once is not a hint here —
        they built it themselves ten minutes ago — and it is what makes the
        microphone feel answerable rather than blank. */
@@ -3374,23 +3094,8 @@
     b.disabled = !!micSending;
   }
 
-  /* ---------- the gap between "yes" and speaking ----------
-     59.9% of the children who take the dare never attempt a single line, and
-     until now the funnel could not say why. Three things can happen between
-     tapping yes and a `SpeakAttempt`, and they want different fixes: the
-     microphone was refused, the turn never started, or the turn started and
-     the child said nothing. These events separate them. No behaviour changes
-     here — this ships as telemetry and the build that acts on it is its own
-     ticket. */
-  let speakTakenAt = 0;
-  let speakTurnFired = -1;      // the last line index reported as started
-  let micPromptFired = false;   // one permission pair per challenge
-
   function openSpeak(lines) {
     speak = { lines, at: 0, open: true, right: 0, tries: 0, misheard: 0, results: [] };
-    speakTakenAt = Date.now();
-    speakTurnFired = -1;
-    micPromptFired = false;
     AN('NovaPals.Nlt.SpeakChallengeTaken',
        { venue, go: state.go, lines: lines.length });
     SCREEN.at('Speak challenge');
@@ -3484,12 +3189,6 @@
     AN('NovaPals.Nlt.SpeakChallengeEnd', {
       venue, go: state.go, lines: done.lines.length,
       attempted: Math.min(done.at, done.lines.length), spoken: done.right, reason,
-      /* Where they stopped, so an abandon can be PLACED. "Quit" on its own
-         cannot tell the child who never got past the first line from the one
-         who gave up on the last. -1 means the card closed before any line
-         was presented, which is the turn-never-started case. */
-      lastLineIndex: speakTurnFired,
-      msSinceTaken: speakTakenAt ? Math.max(0, Date.now() - speakTakenAt) : undefined,
     });
     if (speak) speak.open = false;
     if (micOn) setMic(false);
@@ -3636,67 +3335,18 @@
 
   const closeMicAsk = () => $('mic-ask').classList.add('hidden');
 
-  /* What the browser says about the microphone right now, or null where it
-     will not say — Safari does not implement the query for it, which is the
-     platform this matters most on. */
-  async function micPermissionState() {
-    try {
-      const st = await navigator.permissions.query({ name: 'microphone' });
-      return (st && st.state) || null;
-    } catch { return null; }
-  }
-
-  /* One pair of permission events per context per session. The night's
-     microphone and the speak challenge's are the same recorder and the same
-     permission, but only one of them is the funnel anybody is reading. */
-  const permFired = { night: false, speak: false };
-
   async function startRecording() {
     let stream;
-    const where = (speak && speak.open) ? 'speak' : 'night';
-    /* The OS prompt only appears when the answer is not already on file. Fired
-       BEFORE the call, because the call is what puts the prompt on screen and
-       a child who never comes back from it leaves no other trace. */
-    const before = await micPermissionState();
-    const willAsk = before !== 'granted' && before !== 'denied';
-    if (willAsk && !permFired[where]) {
-      AN('NovaPals.Nlt.SpeakPermissionShown', { where, venue, go: state.go, known: before || 'unknown' });
-    }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       /* Denied, or the host never asked for the permission at all — which is
          what a webview does unless the app grants it. Either way the child
          taps instead, and is told why rather than left with a dead button. */
-      /* DENIED and DISMISSED both arrive here as NotAllowedError, and telling
-         them apart is the whole point of the event: a child who said no needs
-         a different fix from one who closed the prompt without reading it. The
-         browser's own permission state after the fact is what separates them
-         — an explicit refusal is recorded as 'denied', a dismissal leaves it
-         at 'prompt'. Where the browser will not say, `certain` is false and
-         the row should be read as "refused, one way or the other". */
-      if (willAsk && !permFired[where]) {
-        permFired[where] = true;
-        const after = await micPermissionState();
-        AN('NovaPals.Nlt.SpeakPermissionResult', {
-          where, venue, go: state.go,
-          outcome: after === 'denied' ? 'denied' : after === 'prompt' ? 'dismissed' : 'denied',
-          certain: after === 'denied' || after === 'prompt',
-          error: (e && e.name) || 'unknown',
-          msSinceTaken: speakTakenAt ? Math.max(0, Date.now() - speakTakenAt) : undefined,
-        });
-      }
       AN('NovaPals.Activity.Error', { reason: 'mic-denied', detail: (e && e.name) || 'unknown' });
       $('btn-mic').style.opacity = '.4';
       askForMic(true);
       return;
-    }
-    if (willAsk && !permFired[where]) {
-      permFired[where] = true;
-      AN('NovaPals.Nlt.SpeakPermissionResult', {
-        where, venue, go: state.go, outcome: 'granted', certain: true,
-        msSinceTaken: speakTakenAt ? Math.max(0, Date.now() - speakTakenAt) : undefined,
-      });
     }
     /* They said yes. Remembered so the card is a once-ever thing rather than a
        toll on every answer they want to speak. */
@@ -4071,10 +3721,6 @@
     plan: () => plan, pair: () => current, state: () => state,
     locked: () => inputLocked,
     pills: () => optionPills(),
-    /* The comprehension rung's two readings and which of them is hers, so a
-       test can answer one without having to re-derive the content. */
-    choice: () => compOpts ? compOpts.map(o => ({ text: o.text, ok: !!o.ok })) : null,
-    rung: () => (plan && plan.kind) || null,
     introduced: () => [...introducedWords()],
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,

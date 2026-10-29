@@ -739,35 +739,19 @@ window.QUEST = (function () {
      this exchange is happening, in the scene, right now. It is written in
      English because it is prompt text — the coach says it back to the child
      in their own language. */
-  /* `demo`     — a demonstration beat before the group's first prompt. The
-                  child watches the line being used and taps on. No answer, no
-                  pass or fail, and excluded from every error denominator.
-     `askFirst` — HER question crosses before the child's sentence does.
-                  Everywhere else it is the other way round. The door group is
-                  the first crossing a child ever meets, and meeting it as
-                  something to understand rather than something to build is the
-                  cheaper of the two.
-     `confuse`  — the near-miss on the comprehension rung. A plausible wrong
-                  reading of the same question about the same thing, named in
-                  content rather than picked by rule: "do you have water?"
-                  against "can I have water?" is the test; an unrelated
-                  sentence is not a test of anything. */
   const QA_GIG = [
-    { id: 'open',   ask: 'in-a-minute',              answer: 'excuse-me',   vocab: [], demo: true,
+    { id: 'open',   ask: 'in-a-minute',              answer: 'excuse-me',   vocab: [],
       goal: 'You have walked up to the counter and she has not noticed you yet.' },
     /* She asks what you have got, and you tell her. */
     { id: 'door',   ask: 'do-you-have-x',            answer: 'i-have',      vocab: ['ticket', 'cash'],
-      askFirst: true, confuse: 'can-i-have',
       goal: 'You cannot get in until you show her what you have got.' },
     /* She offers, and you ask what is on — saying back the question she
        asked you at the door. */
     { id: 'drinks', ask: 'would-you-like-something', answer: 'do-you-have', vocab: ['water', 'soda'],
-      confuse: 'what-would-you-like',
       goal: 'You are thirsty, and you do not know what they have got.' },
     /* She tells you what she has got, in the construction YOU used at the
        door, and you order. */
     { id: 'order',  ask: 'i-have-x',                 answer: 'can-i-have',  vocab: ['record', 'tshirt'],
-      confuse: 'do-you-have',
       goal: 'You want something to take home from tonight.' },
     { id: 'close',  ask: 'here-is-x', askItem: 'tshirt', answer: 'thank-you', vocab: [],
       goal: 'She is handing it over, and the queue behind you is building.' },
@@ -1516,47 +1500,6 @@ Return JSON only.`,
       pl: 'Dobra — kilka nie weszło. Jeszcze raz je przerobimy i koniec.',
       ro: 'Hai — câteva nu ți-au rămas. Încă o dată pe ele și am terminat.',
     },
-    /* ---------- the demonstration beat ---------- */
-    /* One line from the coach, then the exchange plays itself and the child
-       taps on. The open group used to open with a prompt, which asked a child
-       to produce a construction nobody had shown them being used. */
-    'demo-axel': {
-      en: 'Watch how this one goes — she is busy, so you have to get her attention first.',
-      es: 'Mira cómo va esto — está ocupada, así que primero hay que llamarle la atención.',
-      pt: 'Vê como isto se faz — ela está ocupada, por isso primeiro tens de chamar a atenção dela.',
-      tr: 'Şuna bir bak — meşgul, yani önce dikkatini çekmen gerek.',
-      pl: 'Zobacz, jak to wygląda — jest zajęta, więc najpierw trzeba zwrócić jej uwagę.',
-      ro: 'Uite cum merge asta — e ocupată, aşa că întâi trebuie să-i atragi atenţia.',
-    },
-    'demo-tap': {
-      en: 'Tap to carry on', es: 'Toca para seguir', pt: 'Toca para continuar',
-      tr: 'Devam etmek için dokun', pl: 'Dotknij, aby iść dalej', ro: 'Atinge ca să continui',
-    },
-    /* ---------- the comprehension rung ---------- */
-    /* Her question has just crossed. Before they answer it they say what it
-       asked — in their own language, out of two readings, with nothing to
-       build. A wrong answer here is a failure to understand her, which is the
-       thing the redesign is betting on and the thing it could never see. */
-    'comp-label': {
-      en: 'What did she ask you?', es: '¿Qué te ha preguntado?', pt: 'O que é que ela te perguntou?',
-      tr: 'Sana ne sordu?', pl: 'O co cię zapytała?', ro: 'Ce te-a întrebat?',
-    },
-    'comp-axel': {
-      en: 'She asked you something. Which one was it?',
-      es: 'Te ha preguntado algo. ¿Cuál de las dos era?',
-      pt: 'Ela perguntou-te algo. Qual das duas era?',
-      tr: 'Sana bir şey sordu. Hangisiydi?',
-      pl: 'O coś cię zapytała. Które to było?',
-      ro: 'Te-a întrebat ceva. Care dintre ele era?',
-    },
-    'comp-again': {
-      en: 'Not that one. Listen to her again.',
-      es: 'Esa no. Escucha otra vez.',
-      pt: 'Essa não. Ouve outra vez.',
-      tr: 'O değil. Bir daha dinle.',
-      pl: 'Nie ta. Posłuchaj jeszcze raz.',
-      ro: 'Nu aia. Ascult-o încă o dată.',
-    },
     'scenario-title': {
       en: 'A big night out!',
       es: '¡Una gran noche!',
@@ -2157,8 +2100,8 @@ Return JSON only.`,
        way through, silently, and the engine reads a group that is missing
        half of what content wrote. `goal` shipped on 27 Oct and never arrived:
        the coach's context beat was asking for a value this map threw away, so
-       every hint that build gave went out with its first part blank. Add the
-       key here whenever you add one above. */
+       every hint that build gave went out with its first part blank, and
+       nothing failed. Add the key here whenever you add one above. */
     q.qa = (activity.qa || []).map(g => ({
       id: g.id,
       askId: g.ask,
@@ -2166,9 +2109,6 @@ Return JSON only.`,
       answerId: g.answer,
       vocab: (g.vocab || []).slice(),
       goal: g.goal || null,
-      demo: !!g.demo,
-      askFirst: !!g.askFirst,
-      confuse: g.confuse || null,
     })).filter(g => q.groups.some(x => x.id === g.answerId));
 
     q.actorCues = ACTOR_CUES;
@@ -2213,29 +2153,6 @@ Return JSON only.`,
         if (phraseKey(line).indexOf(phraseKey(b)) >= 0) return null;
       }
       return { id: pid, line, native, frameTarget: whole, itemId: fill[g.slotKeys[0]] || null };
-    };
-
-    /* What a pattern SAYS, in the child's own language, whoever owns it.
-
-       The comprehension rung needs two readings of one moment — what she
-       actually asked, and a near-miss — and the near-miss is often a learner
-       construction ("Can I have a ticket?") while hers is an actor one. Two
-       lookups with one answer, so the rung does not have to know which kind it
-       is holding. */
-    q.readingOf = (patternId, itemId) => {
-      const said = q.actorSay(patternId, { itemId, frameTarget: false });
-      if (said) return said.native;
-      const g = q.groups.find(x => x.id === patternId);
-      if (!g) return null;
-      const fill = {};
-      for (const key of g.slotKeys) {
-        const valid = g.slots[key] || [];
-        const pick = (itemId && valid.indexOf(itemId) >= 0) ? itemId : valid[0];
-        if (!pick) return null;
-        fill[key] = pick;
-      }
-      const pair = makePair(g, fill);
-      return pair ? pair.allNative : null;
     };
 
     /* The line that sets up THIS construction.
