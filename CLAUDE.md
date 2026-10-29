@@ -42,6 +42,10 @@ Test doors on the URL:
 | `?debug=1` | the test strip, and `window.__DEBUG` |
 | `?analytics=0` | no events |
 | `?opener=0` | score the first turn instead of gifting it |
+| `?arm=mastery` | force the mastery engine, without rewriting the real assignment |
+| `?arm=scenarios` | force the fixed-ladder engine, same |
+| `?learner=new` | wipe this browser's learner and come back as a first-time child |
+| `?venue=cafe` | Max's pack, which is what the mastery arm runs |
 
 `?intro=0` is the one that matters. Without it a headless test sits on the
 intro forever, and that cost the better part of a week before anyone noticed

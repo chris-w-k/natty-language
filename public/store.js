@@ -83,6 +83,12 @@ window.STORE = (function () {
   /* Called once at boot, before anything is drawn. Returns what the session
      needs to know about who just arrived. */
   function begin() {
+    /* ?learner=new wipes this browser's learner and starts over as somebody
+       who has never played. Testing the arm needs it: everything interesting
+       about the mastery engine happens on the SECOND night, and without a way
+       back to the first you are stuck reading one child's record for ever.
+       It does not touch anybody else - the store is per browser. */
+    if (q.get('learner') === 'new') { try { localStorage.removeItem(KEY); } catch {} }
     state = read() || fresh();
     /* A store we could not read is a store we cannot write either, so the
        session runs on a learner who exists only in memory. `storage: false`
