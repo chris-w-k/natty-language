@@ -15,10 +15,30 @@
      the arm lives in the same store as the mastery rather than behind a
      feature flag. */
   const LEARNER = window.STORE.begin();
+  const ARM = LEARNER.arm;
+  const MASTERY_ARM = ARM === 'mastery';
+
+  /* The number on screen. Arm A averages its fixed steps; arm B has no steps,
+     so it reads Max's level mastery - patterns and words, fifty-fifty, over
+     the words some construction can actually ask for. */
+  function overall() {
+    if (!MASTERY_ARM) return E.overall(state, Q);
+    const M = window.MASTERY, rec = state && state.mastery;
+    if (!rec) return 0;
+    return M.levelMastery(rec, (Q.groups || []).map(g => g.id), E.reachableWords(Q));
+  }
+
+  /* The record outlives the session, which is the entire point of the arm. */
+  function saveMastery() {
+    if (!MASTERY_ARM || !state || !state.mastery) return;
+    try { window.STORE.setMastery(state.mastery); } catch {}
+  }
   const C = window.CONTENT;
   /* Which night this is. Set before the quest starts and never changed inside
      a go — a venue switch rebuilds the whole content object through here. */
-  let venue = C.defaultVenue;
+  /* Arm B runs Max's cafe, because that is the content his model was tuned
+     against. Arm A stays in the night club. */
+  let venue = (MASTERY_ARM && C.venues.indexOf('cafe') >= 0) ? 'cafe' : C.defaultVenue;
   const played = [];
   function setPair(nativeCode, targetCode, venueId) {
     if (venueId) venue = venueId;
@@ -1367,6 +1387,10 @@
      running; `itemId` carries the previous turn's noun into a line that has a
      slot but no answer of its own to take it from ("Here's the t-shirt." then
      "Thank you."). */
+  /* What the last answer moved, largest first. Max's section 9 feeds this to
+     a per-answer popup; for now it rides on the event so the dashboard can
+     see whether a turn was worth anything. */
+  let lastMoved = [];
   let revisionSaid = false;
   let lastCue = null, lastItemId = null, lastPatternId = null;
   function cueFor(plan) {
@@ -1934,7 +1958,7 @@
   function renderRail() {
     const fill = $('rail').firstChild && $('rail').firstChild.firstChild;
     if (!fill) return;
-    fill.style.width = (E.overall(state, Q) * 100).toFixed(1) + '%';
+    fill.style.width = (overall() * 100).toFixed(1) + '%';
   }
 
   /* A ui_string, in the child's own language, with {0} filled in. A string
@@ -1959,7 +1983,7 @@
 
   function renderHud() {
     renderRail();
-    $('mastery').textContent = t('mastery-display-string', Math.round(E.overall(state, Q) * 100));
+    $('mastery').textContent = t('mastery-display-string', Math.round(overall() * 100));
     $('coins').textContent = String(state.coins);
     $('t-obj').textContent = plan ? plan.pair.id : '—';
     $('t-scaf').textContent = plan
@@ -1999,8 +2023,16 @@
 
   async function renderTurn() {
     const pair = current;
-    plan = E.planTurn(state, pair);
-    E.seen(state, plan);
+    plan = MASTERY_ARM ? E.masteryTurn(state, Q) : E.planTurn(state, pair);
+    if (!plan) { AN('NovaPals.Activity.Error', { reason: 'no-plan' }); return finish('no-plan'); }
+    /* `current` is arm A's idea of what is being asked, and `submit` guards on
+       it: with it null every answer returned silently and the night sat on
+       turn one for ever. Arm B has no stage to point at, so it points at the
+       pair the planner chose. */
+    if (MASTERY_ARM) current = plan.pair;
+    /* `seen` is arm A's exposure ratchet, keyed on its steps. Arm B's record
+       is ratcheted by MASTERY.apply instead, where every number lives. */
+    if (!MASTERY_ARM) E.seen(state, plan);
     /* Before the first lock, not after: setLocked redraws the pane, and with
        the new plan in place but last turn's pills still in `placed` it would
        draw one frame of the wrong answer. */
@@ -2621,13 +2653,39 @@
     /* "1:3" — the canonical identity of an exchange: which group, which rung.
        Stable across phases, across replays and across venues. */
     stepKey: pl.stepKey || '',
-    /* open | door | drinks | order | close */
+    /* open | door | drinks | order | close, or the construction's own id on
+       the mastery arm, which has no groups. */
     groupId: pl.group || '',
+    /* ---------- the mastery arm ---------- */
+    /* Which engine drew this turn. On every event already, as a super
+       property, but repeated here so a question can be read on its own. */
+    arm: ARM,
+    /* Max's L0 to L4, derived from mastery rather than chosen. The thing to
+       watch: if it never climbs, the child is not learning; if it climbs and
+       then falls, the model is right and the content is too hard. */
+    level: pl.level == null ? undefined : pl.level,
+    /* Which of his section 7 phases picked this turn. */
+    masteryPhase: pl.phaseKind,
+    /* Where the two items stood BEFORE the answer, so a move can be read
+       without joining to the turn before. */
+    masteryPattern: pl.masteryPattern == null ? undefined : pl.masteryPattern,
+    masteryWord: pl.masteryWord == null ? undefined : pl.masteryWord,
+    patternId2: pl.patternId,
+    wordId: pl.itemId || undefined,
   });
 
   /* ---------- the turn loop ---------- */
   function step() {
     if (state.finished) return;
+    /* Arm B has no list to be at the end of. It stops when the scenario is
+       finished or when the night has run its length, which is Max's 15 to 20
+       blocks and the reason a mastered scenario can end early. */
+    if (MASTERY_ARM) {
+      const why = E.masteryDone(state, Q);
+      if (why) return finish(why);
+      current = null;
+      return renderTurn();
+    }
     if (E.sessionComplete(state, Q)) return finish('complete');
     if (state.turn >= Q.session.turnCap) return finish('turn-cap');
     const pair = E.pickNext(state, Q);
@@ -2791,9 +2849,17 @@
 
     if (v.correct) {
       say('me', spanishHTML(said), said, null, 'right');
-      const before = E.overall(state, Q);
-      const ph = E.applyCorrect(state, plan, { hinted });
-      if (E.overall(state, Q) > before + 1e-6) pulseMastery();
+      const before = overall();
+      let ph = { pattern: null, item: null };
+      if (MASTERY_ARM) {
+        /* Every number is decided in MASTERY and nowhere else. This says what
+           happened; the model says what it is worth. */
+        lastMoved = E.masteryApply(state, plan, { correct: true, hints: hinted ? 1 : 0, attempt: 0 });
+        saveMastery();
+      } else {
+        ph = E.applyCorrect(state, plan, { hinted });
+      }
+      if (overall() > before + 1e-6) pulseMastery();
       showBanner('good');
       SFX.play('right');
       $('verdict').textContent = '';
@@ -2825,12 +2891,21 @@
        so after a few tries the coach says it for them and the exchange moves
        on — uncredited, so the pair comes back. */
     say('me', spanishHTML(said), said, null, 'wrong');
-    const { attempts: n } = E.applyWrong(state, plan);
+    let n;
+    if (MASTERY_ARM) {
+      /* Only the first miss of a turn is charged, which is the model's rule
+         and not this file's: retries inside one turn are free. */
+      lastMoved = E.masteryApply(state, plan, { correct: false, hints: hinted ? 1 : 0, attempt: attempts });
+      saveMastery();
+      n = attempts + 1;
+    } else {
+      n = E.applyWrong(state, plan).attempts;
+    }
     attempts = n;
     hinted = true;
     renderHud();
 
-    if (E.mercyDue(state)) {
+    if (MASTERY_ARM ? attempts >= 3 : E.mercyDue(state)) {
       recordTurn(plan, turnLine, turnAsk, false);
       hideBanner();
       $('verdict').textContent = t('coach-says-it', COACH, plan.expected);
@@ -2838,7 +2913,7 @@
          without being asked; the coach's voice is available on a tap — the
          hint sheet has a button, and every highlighted word reads itself. */
       await new Promise(r => setTimeout(r, 900));
-      E.applyMercy(state, plan);
+      if (MASTERY_ARM) saveMastery(); else E.applyMercy(state, plan);
       setTimeout(() => { busy = false; submitted = false; step(); }, 1200);
       return;
     }
@@ -2892,24 +2967,44 @@
 
   function finish(reason) {
     state.finished = true;
-    const score = E.overall(state, Q);
+    const score = overall();
     const mark = E.passMark(Q);
+    if (MASTERY_ARM) saveMastery();
     const ok = score >= mark;
-    const rows = E.report(state, Q);
+    const rows = MASTERY_ARM ? E.masteryReport(state, Q) : E.report(state, Q);
     const left = rows.filter(r => r.verdict !== 'stuck');
 
     E.track(state, 'session_end', {
       turns: state.turn, overall: score, passed: ok, go: state.go, reason,
     });
-    AN('NovaPals.Activity.End', {
+    AN('NovaPals.Activity.End', Object.assign({
       turns: state.turn, mastery: Math.round(score * 100), passed: ok,
       go: state.go, reason,
-    });
+    }, MASTERY_ARM ? {
+      /* What the night was worth, which is the only reading that survives to
+         tomorrow. `mastered` means the scenario is finished and there is
+         nothing to come back for, which is a result and not a failure. */
+      masteredWords: Object.values(state.mastery.words || {}).filter(w => w.mastery >= window.MASTERY.BAR).length,
+      knownWords: Object.keys(state.mastery.words || {}).length,
+      introducedPatterns: Object.values(state.mastery.patterns || {}).filter(p => p.introduced).length,
+      sessionIndex: state.mastery.sessionIndex,
+      finishedScenario: reason === 'mastered',
+    } : {}));
     AN('NovaPals.Quest.End', { mastery: Math.round(score * 100), passed: ok });
 
-    $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
-    $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
-    $('end-sub').textContent = t(ok ? 'end-passed-sub' : 'end-short-sub', Math.round(mark * 100));
+    /* Arm B does not pass or fail a night. It stops, keeps the record, and
+       asks them back - which is the behaviour under test, so it gets its own
+       ending rather than being squeezed into a pass mark it has no use for. */
+    if (MASTERY_ARM) {
+      const done = reason === 'mastered';
+      $('end-msg').textContent = t(done ? 'again-done-title' : 'again-title');
+      $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
+      $('end-sub').textContent = done ? t('again-done-sub') : t('again-sub', Math.round(score * 100));
+    } else {
+      $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
+      $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
+      $('end-sub').textContent = t(ok ? 'end-passed-sub' : 'end-short-sub', Math.round(mark * 100));
+    }
 
     /* The bar exists so the number has somewhere to be: the tick is the pass
        mark, and whether the fill reaches it is the result. */
@@ -3576,6 +3671,29 @@
     }
 
     state = E.createState(Q);
+    /* ---------- yesterday, carried in ----------
+       The one line that makes a second night mean anything. Without it every
+       night is a first night wearing a welcome-back message.
+
+       `nextSession` counts the session up, clears the turn and empties the
+       per-session summary, and leaves the mastery alone - which is the whole
+       asymmetry the arm is built on. */
+    if (MASTERY_ARM) {
+      const M = window.MASTERY;
+      const held = window.STORE.mastery();
+      const carried = held && Object.keys(held).length ? held : null;
+      state.mastery = carried
+        ? M.nextSession(Object.assign(M.blank(), carried))
+        : M.blank();
+      /* Said once, and only to somebody who actually left something behind.
+         A child whose storage was wiped is a new learner and is not greeted
+         as a returning one. */
+      if (carried && LEARNER.returning) {
+        const pct = Math.round(overall() * 100);
+        const line = t('again-welcome', pct);
+        if (line) { const f = toFragments(line); say('axel', fragmentsHTML(f), line, f); }
+      }
+    }
     /* ?opener=0 turns off the taught first turn, so a harness about generated
        lines or wrong answers can reach one without playing through a turn that
        has neither. Same door as ?intro=0, and the same reason. */

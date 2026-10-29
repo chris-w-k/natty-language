@@ -117,10 +117,20 @@ window.STORE = (function () {
       returning: prevDays > 0 && state.days[state.days.length - 1] !== state.days[0] && prevPlay > 0,
       daysSeen: state.days.length,
       daysSince: prevPlay ? Math.floor((Date.now() - prevPlay) / DAY) : null,
-      mastered: Object.values(state.mastery || {}).filter(v => v >= 7).length,
-      known: Object.keys(state.mastery || {}).length,
+      /* The record this holds is MASTERY's, not a flat word-to-score map:
+         { patterns, words, turn, sessionIndex, ... }. Reading it the other
+         way counts zero for ever and the welcome-back line never fires. */
+      mastered: countWords(state.mastery, w => w && w.mastery >= 0.85),
+      known: countWords(state.mastery, () => true),
     };
   }
+
+  const countWords = (rec, ok) => {
+    const ws = (rec && rec.words) || {};
+    let n = 0;
+    for (const id of Object.keys(ws)) if (ok(ws[id])) n += 1;
+    return n;
+  };
 
   /* The mastery map, for the engine that uses it. Arm A never touches it. */
   const mastery = () => (state && state.mastery) || {};

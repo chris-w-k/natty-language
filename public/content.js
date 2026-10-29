@@ -788,6 +788,27 @@ window.QUEST = (function () {
     'i-like-two':        ['do-you-like-x', 'anything-else'],
     'thank-you':         ['here-is-x'],
     'how-much-is-it':    ['thats-x'],
+
+    /* ---------- the cafe ----------
+       PLACEHOLDER, and marked as one. Max's scenario has the tutor open the
+       block; ours has the character open it, so every cafe construction needs
+       a line of hers to answer. These reach for the slotless actor patterns
+       the night club already has, because a cue with a slot would want a tag
+       the cafe words do not carry.
+
+       The result is a server who is warm and a little vague. It is enough to
+       run the arm and read the numbers; it is not the scene. Chris is writing
+       the scenario spec and this is the first thing it should replace. */
+    'want-x':            ['what-would-you-like', 'would-you-like-something'],
+    'is-there-x':        ['what-would-you-like', 'anything-else'],
+    'there-is-x':        ['anything-else', 'ok-then'],
+    'there-is-no-x':     ['anything-else', 'ok-then'],
+    'where-is-x':        ['anything-else', 'ok-then'],
+    'how-much-x':        ['anything-else', 'what-would-you-like'],
+    'how-many-lira':     ['anything-else', 'ok-then'],
+    'how-many':          ['ok-then', 'anything-else'],
+    'x-items':           ['what-would-you-like', 'anything-else'],
+    'want-to-do-x':      ['what-would-you-like', 'anything-else'],
   };
 
   /* Her two answers to what the child actually said, as pattern ids. The third
@@ -847,6 +868,9 @@ window.QUEST = (function () {
     ? Object.keys(window.CAFE_PACK.words) : [];
   const CAFE_PATTERNS = (typeof window !== 'undefined' && window.CAFE_PACK)
     ? Object.keys(window.CAFE_PACK.patterns) : [];
+  /* Hers. Slotless on purpose - see the note on the cafe's `patterns`. */
+  const CAFE_ACTORS = ['in-a-minute', 'what-would-you-like', 'anything-else',
+                       'would-you-like-something', 'ok-then', 'say-again'];
 
   const VENUES = {
     /* The original night, unchanged but for the person behind the counter. */
@@ -1046,7 +1070,12 @@ window.QUEST = (function () {
     prompt: 'You are behind the counter of a small cafe. You serve drinks and food, you know the neighbourhood, and you have everything a customer asks for. Personality: warm, quick, a queue always building.',
     objectives: ['order something', 'find out what they have', 'ask where things are', 'ask what it costs'],
     items: CAFE_WORDS,
-    patterns: CAFE_PATTERNS,
+    /* The learner constructions, plus the character's own. An activity that
+       declares no actor patterns has nobody to open a turn: `actorSay` looks
+       them up in the activity, so the cue map finds nothing and she stands
+       there silent. Only the slotless ones, because the cafe's words do not
+       carry the tags the slotted actor lines ask for. */
+    patterns: CAFE_PATTERNS.concat(CAFE_ACTORS),
     intro: {
       en: { title: 'AT THE CAFE', sub: 'Learn the {0} you need to order, ask and pay.', tap: 'Tap to continue' },
       es: { title: 'EN LA CAFETERIA', sub: 'Aprende el {0} para pedir, preguntar y pagar.', tap: 'Toca para continuar' },
@@ -1551,6 +1580,42 @@ Return JSON only.`,
       tr: 'Hadi bakalım — birkaçı aklında kalmadı. Bir kez daha deneyelim, sonra bitti.',
       pl: 'Dobra — kilka nie weszło. Jeszcze raz je przerobimy i koniec.',
       ro: 'Hai — câteva nu ți-au rămas. Încă o dată pe ele și am terminat.',
+    },
+    /* ---------- the mastery arm's ending ----------
+       Max's meta layer in one line: the session stops, the record keeps, and
+       the invitation is to raise it rather than to finish it. The number is
+       the level reading, so it is the same number that will greet them. */
+    'again-title': {
+      en: 'Come back tomorrow', es: 'Vuelve mañana', pt: 'Volta amanhã',
+      tr: 'Yarın yine gel', pl: 'Wróć jutro', ro: 'Mai vino mâine',
+    },
+    'again-sub': {
+      en: "You're at {0}%. Come back tomorrow and push it higher.",
+      es: 'Vas por el {0}%. Vuelve mañana y súbelo más.',
+      pt: 'Estás nos {0}%. Volta amanhã e sobe mais.',
+      tr: '%{0} seviyesindesin. Yarın gel ve daha yukarı çıkar.',
+      pl: 'Masz {0}%. Wróć jutro i podnieś wynik.',
+      ro: 'Ești la {0}%. Mai vino mâine și urcă mai sus.',
+    },
+    'again-done-title': {
+      en: 'You finished it', es: 'Lo has terminado', pt: 'Terminaste',
+      tr: 'Bitirdin', pl: 'Skończone', ro: 'Ai terminat',
+    },
+    'again-done-sub': {
+      en: 'Every word and every sentence. Nothing left to practise here.',
+      es: 'Todas las palabras y todas las frases. Aquí ya no queda nada.',
+      pt: 'Todas as palavras e todas as frases. Aqui já não falta nada.',
+      tr: 'Her kelime ve her cümle. Burada pratik edecek bir şey kalmadı.',
+      pl: 'Każde słowo i każde zdanie. Nic tu już nie zostało.',
+      ro: 'Fiecare cuvânt și fiecare propoziție. Nu a mai rămas nimic aici.',
+    },
+    'again-welcome': {
+      en: 'Back again. You left off at {0}%.',
+      es: 'Otra vez por aquí. Lo dejaste en el {0}%.',
+      pt: 'De volta. Ficaste nos {0}%.',
+      tr: 'Yine geldin. %{0} ile bırakmıştın.',
+      pl: 'Znowu tu jesteś. Skończyłeś na {0}%.',
+      ro: 'Ai revenit. Ai rămas la {0}%.',
     },
     'scenario-title': {
       en: 'A big night out!',

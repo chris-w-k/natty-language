@@ -1115,8 +1115,16 @@ window.ENGINE = (function () {
     const words = itemId ? [itemId] : [];
     const level = M.scaffold(rec, pid, words);
     const targetSlots = slotKey ? [slotKey] : [];
-    /* L2 is where the child's own sentence crosses; L3 is where hers does. */
-    const frameTarget = level >= 2;
+    /* L2 is where the child's own sentence crosses; L3 is where hers does.
+
+       UNLESS THE CONSTRUCTION HAS NO SLOT. A slotless one - "How many?",
+       "Anything else?" - has no word to carry the meaning, so below L2 there
+       is nothing in the target language at all and nothing for the child to
+       build: the whole sentence is already in their own language and the tray
+       comes up empty. A construction with no slot has nothing to hand over
+       except itself, so its frame crosses from the first turn. The night sat
+       on `how-many` for ever before this. */
+    const frameTarget = slotKey ? level >= 2 : true;
     const askTarget = level >= 3;
 
     const prec = rec.patterns[pid];
@@ -1160,6 +1168,39 @@ window.ENGINE = (function () {
       itemTarget: targetSlots.length > 0,
       expected: expected(pair, frameTarget, targetSlots),
     }, gaps(pair, frameTarget, targetSlots));
+  }
+
+  /* The end screen, from the record rather than from steps that do not exist.
+     Arm A's `report` walks its fixed ladder and scores each rung; arm B has
+     no rungs, so every row came back "not yet" however well the night went -
+     a child at 23% was told they had learned nothing.
+
+     Max's two thresholds: the bar at 0.85 is learned, and 0.75 is where a
+     label turns from practising to can-use. */
+  function masteryReport(state, quest) {
+    const M = window.MASTERY;
+    const rec = (state && state.mastery) || M.blank();
+    const rows = [];
+    for (const g of quest.groups || []) {
+      const pair = quest.pairFor(g.id, {});
+      if (!pair) continue;
+      const m = (rec.patterns[g.id] || {}).mastery || 0;
+      rows.push({
+        pair, target: pair.allTarget, native: pair.allNative,
+        mastery: m,
+        verdict: M.atBar(m) ? 'stuck' : m >= M.CAN_USE ? 'shaky' : 'missed',
+      });
+    }
+    /* Strongest first: the child should read what they CAN do before what
+       they cannot. */
+    return rows.sort((a, b) => b.mastery - a.mastery);
+  }
+
+  /* A plan with nothing to answer is a stalled night, and it is silent: the
+     tray is empty, the submit button never enables and the loop waits for a
+     child who has nothing to tap. Worth asserting rather than discovering. */
+  function masteryPlayable(plan) {
+    return !!(plan && plan.answer && plan.answer.length);
   }
 
   /* Section 7's phase table, in the order it resolves. "Very weak" is his
@@ -1297,6 +1338,7 @@ window.ENGINE = (function () {
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     masteryTurn, masteryApply, masteryHeard, masteryDone, MASTERY_TURNS, reachableWords,
+    masteryPlayable, masteryReport,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
     expected, gaps, tagOfPattern, norm, words,
