@@ -682,7 +682,12 @@
      is not. */
   function pickVenue() {
     const forced = paramVenue();
-    const id = forced || C.defaultVenue;
+    /* `venue` already holds the arm's room - the cafe for arm B, the night
+       club for arm A - and this read `C.defaultVenue` instead, which threw
+       that away and put every arm B session in the night club. Arm B then ran
+       Max's engine over the gig's words: a mastery arm asking a child in a
+       cafe for a ticket to the show. */
+    const id = forced || venue;
     setPair(Q.nativeLang, Q.targetLang, id);
     V.unlock(); SFX.unlock();
     roomBed(0.30, 4000);
@@ -3096,7 +3101,9 @@
 
     /* Somewhere they have not been yet, by preference — a child who has done
        the gig twice is offered the cinema rather than a third gig. */
-    const list = C.venueList(NL());
+    /* Arm B is the same scenario, every night, until it is mastered. "Try
+       somewhere else" is the opposite of the thing being tested. */
+    const list = MASTERY_ARM ? [] : C.venueList(NL());
     const nextVenue = list.find(v => played.indexOf(v.id) < 0) ||
                       list.find(v => v.id !== venue) || null;
     other.classList.toggle('hidden', !nextVenue);
