@@ -104,9 +104,15 @@ window.CAFE_PACK = (function () {
                   tr: '{doing:bare} istiyorum.' },
   };
 
+  /* No `met` flag. The screenshots this list was transcribed from carried one
+     per word, and it read like Max marking which vocabulary a learner starts
+     with. It is not: it was one playthrough's progress, the words that player
+     had reached. Nothing ever read it, and a content file carrying one
+     person's save game is a trap for whoever reads it next. Every word here
+     starts unmet; what a learner has met is the learner's own record. */
   const words = {
     /* Countable in a café sense (dwie herbaty = two teas), so a real plural is given. */
-    'tea':               { tags: ['thing'], met: true,
+    'tea':               { tags: ['thing'],
                   en: { bare: 'tea', definite: 'the tea', indefinite: 'a tea', plural_bare: 'teas', plural_definite: 'the teas' },
                   es: { bare: 'té', definite: 'el té', indefinite: 'un té', plural_bare: 'tés', plural_definite: 'los tés' },
                   pt: { bare: 'chá', definite: 'o chá', indefinite: 'um chá', plural_bare: 'chás', plural_definite: 'os chás' },
@@ -114,7 +120,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'ceai', definite: 'ceaiul', indefinite: 'un ceai', plural_bare: 'ceaiuri', plural_definite: 'ceaiurile' },
                   tr: { bare: 'çay', definite: 'çay', indefinite: 'çay', plural_bare: 'çay', plural_definite: 'çay' } },
     /* Countable in a cafe ('un café' = a cup of coffee), so it keeps a real indefinite and plural. */
-    'coffee':            { tags: ['thing'], met: true,
+    'coffee':            { tags: ['thing'],
                   en: { bare: 'coffee', definite: 'the coffee', indefinite: 'a coffee', plural_bare: 'coffees', plural_definite: 'the coffees' },
                   es: { bare: 'café', definite: 'el café', indefinite: 'un café', plural_bare: 'cafés', plural_definite: 'los cafés' },
                   pt: { bare: 'café', definite: 'o café', indefinite: 'um café', plural_bare: 'cafés', plural_definite: 'os cafés' },
@@ -122,7 +128,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'cafea', definite: 'cafeaua', indefinite: 'o cafea', plural_bare: 'cafele', plural_definite: 'cafelele' },
                   tr: { bare: 'kahve', definite: 'kahve', indefinite: 'kahve', plural_bare: 'kahve', plural_definite: 'kahve' } },
     /* ALSO IN content.js: already in content.js | Spanish 'agua' is feminine but takes 'el' in the singular; the article is correct as written. | PL reproduced EXACTLY as it already stands in content.js, including the mass-noun plural that just repeats the singular. For the record the real PL plural is 'wody' (nom and acc), and 'dwie wody' is normal in a café – change it only if you also change content.js. */
-    'water':             { tags: ['thing'], met: true,
+    'water':             { tags: ['thing'],
                   en: { bare: 'water', definite: 'the water', indefinite: 'water', plural_bare: 'water', plural_definite: 'the water' },
                   es: { bare: 'agua', definite: 'el agua', indefinite: 'agua', plural_bare: 'agua', plural_definite: 'el agua' },
                   pt: { bare: 'água', definite: 'a água', indefinite: 'água', plural_bare: 'água', plural_definite: 'a água' },
@@ -130,7 +136,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'apă', definite: 'apa', indefinite: 'o apă', plural_bare: 'ape', plural_definite: 'apele' },
                   tr: { bare: 'su', definite: 'su', indefinite: 'su', plural_bare: 'su', plural_definite: 'su' } },
     /* Mass noun: plural slots repeat the singular. PL neuter, so accusative = nominative. */
-    'milk':              { tags: ['thing'], met: true,
+    'milk':              { tags: ['thing'],
                   en: { bare: 'milk', definite: 'the milk', indefinite: 'milk', plural_bare: 'milk', plural_definite: 'the milk' },
                   es: { bare: 'leche', definite: 'la leche', indefinite: 'leche', plural_bare: 'leche', plural_definite: 'la leche' },
                   pt: { bare: 'leite', definite: 'o leite', indefinite: 'leite', plural_bare: 'leite', plural_definite: 'o leite' },
@@ -138,7 +144,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'lapte', definite: 'laptele', indefinite: 'un lapte', plural_bare: 'lapte', plural_definite: 'laptele' },
                   tr: { bare: 'süt', definite: 'süt', indefinite: 'süt', plural_bare: 'süt', plural_definite: 'süt' } },
     /* PL genitive is 'cukru' (the e of cukier drops). RO: I left the indefinite slot WITHOUT 'un' – 'un zahăr' only means one sachet/cube, and 'Vreau un zahăr' is not what a learner should be taught first. */
-    'sugar':             { tags: ['thing'], met: true,
+    'sugar':             { tags: ['thing'],
                   en: { bare: 'sugar', definite: 'the sugar', indefinite: 'sugar', plural_bare: 'sugar', plural_definite: 'the sugar' },
                   es: { bare: 'azúcar', definite: 'el azúcar', indefinite: 'azúcar', plural_bare: 'azúcar', plural_definite: 'el azúcar' },
                   pt: { bare: 'açúcar', definite: 'o açúcar', indefinite: 'açúcar', plural_bare: 'açúcar', plural_definite: 'o açúcar' },
@@ -146,7 +152,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'zahăr', definite: 'zahărul', indefinite: 'zahăr', plural_bare: 'zahăr', plural_definite: 'zahărul' },
                   tr: { bare: 'şeker', definite: 'şeker', indefinite: 'şeker', plural_bare: 'şeker', plural_definite: 'şeker' } },
     /* PL treated as mass (plural 'chleby' exists but means loaves/kinds and is not A1). RO 'o pâine' = a loaf, which is fine and common. */
-    'bread':             { tags: ['thing'], met: true,
+    'bread':             { tags: ['thing'],
                   en: { bare: 'bread', definite: 'the bread', indefinite: 'bread', plural_bare: 'bread', plural_definite: 'the bread' },
                   es: { bare: 'pan', definite: 'el pan', indefinite: 'pan', plural_bare: 'pan', plural_definite: 'el pan' },
                   pt: { bare: 'pão', definite: 'o pão', indefinite: 'pão', plural_bare: 'pão', plural_definite: 'o pão' },
@@ -154,7 +160,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'pâine', definite: 'pâinea', indefinite: 'o pâine', plural_bare: 'pâini', plural_definite: 'pâinile' },
                   tr: { bare: 'ekmek', definite: 'ekmek', indefinite: 'ekmek', plural_bare: 'ekmek', plural_definite: 'ekmek' } },
     /* Treated as a mass noun for the indefinite ('un queso' means a whole wheel), but the plural is real and means kinds of cheese. | RO treated as mass: plural slots repeat the singular and the indefinite slot has no 'o' – 'o brânză' means a whole cheese. A real RO plural exists ('brânzeturi' = cheeses/dairy) if you want it. */
-    'cheese':            { tags: ['thing'], met: false,
+    'cheese':            { tags: ['thing'],
                   en: { bare: 'cheese', definite: 'the cheese', indefinite: 'cheese', plural_bare: 'cheese', plural_definite: 'the cheese' },
                   es: { bare: 'queso', definite: 'el queso', indefinite: 'queso', plural_bare: 'quesos', plural_definite: 'los quesos' },
                   pt: { bare: 'queijo', definite: 'o queijo', indefinite: 'queijo', plural_bare: 'queijos', plural_definite: 'os queijos' },
@@ -162,21 +168,21 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'brânză', definite: 'brânza', indefinite: 'brânză', plural_bare: 'brânză', plural_definite: 'brânza' },
                   tr: { bare: 'peynir', definite: 'peynir', indefinite: 'peynir', plural_bare: 'peynir', plural_definite: 'peynir' } },
     /* PL 'jajko' is the everyday food word; 'jajo' is the biological/formal one. PL neuter: acc = nom, and nom pl = acc pl = 'jajka'. */
-    'egg':               { tags: ['thing'], met: false,
+    'egg':               { tags: ['thing'],
                   en: { bare: 'egg', definite: 'the egg', indefinite: 'an egg', plural_bare: 'eggs', plural_definite: 'the eggs' },
                   es: { bare: 'huevo', definite: 'el huevo', indefinite: 'un huevo', plural_bare: 'huevos', plural_definite: 'los huevos' },
                   pt: { bare: 'ovo', definite: 'o ovo', indefinite: 'um ovo', plural_bare: 'ovos', plural_definite: 'os ovos' },
                   pl: { bare: 'jajko', definite: 'jajko', indefinite: 'jajka', plural_bare: 'jajka', plural_definite: 'jajka' },
                   ro: { bare: 'ou', definite: 'oul', indefinite: 'un ou', plural_bare: 'ouă', plural_definite: 'ouăle' },
                   tr: { bare: 'yumurta', definite: 'yumurta', indefinite: 'yumurta', plural_bare: 'yumurta', plural_definite: 'yumurta' } },
-    'soup':              { tags: ['thing'], met: false,
+    'soup':              { tags: ['thing'],
                   en: { bare: 'soup', definite: 'the soup', indefinite: 'a soup', plural_bare: 'soups', plural_definite: 'the soups' },
                   es: { bare: 'sopa', definite: 'la sopa', indefinite: 'una sopa', plural_bare: 'sopas', plural_definite: 'las sopas' },
                   pt: { bare: 'sopa', definite: 'a sopa', indefinite: 'uma sopa', plural_bare: 'sopas', plural_definite: 'as sopas' },
                   pl: { bare: 'zupa', definite: 'zupę', indefinite: 'zupy', plural_bare: 'zupy', plural_definite: 'zupy' },
                   ro: { bare: 'supă', definite: 'supa', indefinite: 'o supă', plural_bare: 'supe', plural_definite: 'supele' },
                   tr: { bare: 'çorba', definite: 'çorba', indefinite: 'çorba', plural_bare: 'çorba', plural_definite: 'çorba' } },
-    'salad':             { tags: ['thing'], met: false,
+    'salad':             { tags: ['thing'],
                   en: { bare: 'salad', definite: 'the salad', indefinite: 'a salad', plural_bare: 'salads', plural_definite: 'the salads' },
                   es: { bare: 'ensalada', definite: 'la ensalada', indefinite: 'una ensalada', plural_bare: 'ensaladas', plural_definite: 'las ensaladas' },
                   pt: { bare: 'salada', definite: 'a salada', indefinite: 'uma salada', plural_bare: 'saladas', plural_definite: 'as saladas' },
@@ -184,7 +190,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'salată', definite: 'salata', indefinite: 'o salată', plural_bare: 'salate', plural_definite: 'salatele' },
                   tr: { bare: 'salata', definite: 'salata', indefinite: 'salata', plural_bare: 'salata', plural_definite: 'salata' } },
     /* Both are invariable for number, which matches the English 'there is/are' gloss. | PL 'jest' is 3sg; a plural subject needs 'są'. RO 'este' shortens to 'e' in speech. Neither inflects for case, so all five slots match. */
-    'there-is':          { tags: ['function'], met: true,
+    'there-is':          { tags: ['function'],
                   en: { bare: 'there is/are', definite: 'there is/are', indefinite: 'there is/are', plural_bare: 'there is/are', plural_definite: 'there is/are' },
                   es: { bare: 'hay', definite: 'hay', indefinite: 'hay', plural_bare: 'hay', plural_definite: 'hay' },
                   pt: { bare: 'há', definite: 'há', indefinite: 'há', plural_bare: 'há', plural_definite: 'há' },
@@ -192,14 +198,14 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'este', definite: 'este', indefinite: 'este', plural_bare: 'este', plural_definite: 'este' },
                   tr: { bare: 'var', definite: 'var', indefinite: 'var', plural_bare: 'var', plural_definite: 'var' } },
     /* PL 'nie ma' is fixed and forces the GENITIVE on whatever follows – that is the there-is-no-x pattern. RO 'nu este' / 'nu e'. */
-    'there-is-not':      { tags: ['function'], met: true,
+    'there-is-not':      { tags: ['function'],
                   en: { bare: 'there is not', definite: 'there is not', indefinite: 'there is not', plural_bare: 'there is not', plural_definite: 'there is not' },
                   es: { bare: 'no hay', definite: 'no hay', indefinite: 'no hay', plural_bare: 'no hay', plural_definite: 'no hay' },
                   pt: { bare: 'não há', definite: 'não há', indefinite: 'não há', plural_bare: 'não há', plural_definite: 'não há' },
                   pl: { bare: 'nie ma', definite: 'nie ma', indefinite: 'nie ma', plural_bare: 'nie ma', plural_definite: 'nie ma' },
                   ro: { bare: 'nu este', definite: 'nu este', indefinite: 'nu este', plural_bare: 'nu este', plural_definite: 'nu este' },
                   tr: { bare: 'yok', definite: 'yok', indefinite: 'yok', plural_bare: 'yok', plural_definite: 'yok' } },
-    'yes':               { tags: ['function'], met: true,
+    'yes':               { tags: ['function'],
                   en: { bare: 'yes', definite: 'yes', indefinite: 'yes', plural_bare: 'yes', plural_definite: 'yes' },
                   es: { bare: 'sí', definite: 'sí', indefinite: 'sí', plural_bare: 'sí', plural_definite: 'sí' },
                   pt: { bare: 'sim', definite: 'sim', indefinite: 'sim', plural_bare: 'sim', plural_definite: 'sim' },
@@ -207,7 +213,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'da', definite: 'da', indefinite: 'da', plural_bare: 'da', plural_definite: 'da' },
                   tr: { bare: 'evet', definite: 'evet', indefinite: 'evet', plural_bare: 'evet', plural_definite: 'evet' } },
     /* Careful in PL: 'nie' is both 'no' and the negator 'not'. That is correct, not a copy-paste error. */
-    'no':                { tags: ['function'], met: false,
+    'no':                { tags: ['function'],
                   en: { bare: 'no', definite: 'no', indefinite: 'no', plural_bare: 'no', plural_definite: 'no' },
                   es: { bare: 'no', definite: 'no', indefinite: 'no', plural_bare: 'no', plural_definite: 'no' },
                   pt: { bare: 'não', definite: 'não', indefinite: 'não', plural_bare: 'não', plural_definite: 'não' },
@@ -215,7 +221,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'nu', definite: 'nu', indefinite: 'nu', plural_bare: 'nu', plural_definite: 'nu' },
                   tr: { bare: 'hayır', definite: 'hayır', indefinite: 'hayır', plural_bare: 'hayır', plural_definite: 'hayır' } },
     /* Masculine citation form. In real use it agrees ('otra sopa', 'outra sopa'), which the flat five-form shape cannot carry. | SHAKY – both are adjectives that must agree with the noun, and I was forced to pick one citation form. PL: inny (masc) / inna (fem) / inne (neut+plural) – so 'inną kawę', not 'inny kawę'. RO: alt (masc) / altă (fem) – 'altă cafea', 'alt ceai'. If this word is ever concatenated with a thing-word b */
-    'other':             { tags: ['function'], met: false,
+    'other':             { tags: ['function'],
                   en: { bare: 'other/another', definite: 'other/another', indefinite: 'other/another', plural_bare: 'other/another', plural_definite: 'other/another' },
                   es: { bare: 'otro', definite: 'otro', indefinite: 'otro', plural_bare: 'otro', plural_definite: 'otro' },
                   pt: { bare: 'outro', definite: 'outro', indefinite: 'outro', plural_bare: 'outro', plural_definite: 'outro' },
@@ -223,7 +229,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'alt', definite: 'alt', indefinite: 'alt', plural_bare: 'alt', plural_definite: 'alt' },
                   tr: { bare: 'başka', definite: 'başka', indefinite: 'başka', plural_bare: 'başka', plural_definite: 'başka' } },
     /* PL 'trochę' is invariant and takes the GENITIVE: 'trochę wody', 'trochę mleka' – a good second use of the genitive slot. RO 'puțin' agrees: puțină apă (fem), puțin lapte (masc/neut). The fully invariant RO alternative is 'un pic (de)' – 'un pic de apă'. */
-    'a-little':          { tags: ['function'], met: false,
+    'a-little':          { tags: ['function'],
                   en: { bare: 'a little', definite: 'a little', indefinite: 'a little', plural_bare: 'a little', plural_definite: 'a little' },
                   es: { bare: 'un poco', definite: 'un poco', indefinite: 'un poco', plural_bare: 'un poco', plural_definite: 'un poco' },
                   pt: { bare: 'um pouco', definite: 'um pouco', indefinite: 'um pouco', plural_bare: 'um pouco', plural_definite: 'um pouco' },
@@ -231,7 +237,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'puțin', definite: 'puțin', indefinite: 'puțin', plural_bare: 'puțin', plural_definite: 'puțin' },
                   tr: { bare: 'biraz', definite: 'biraz', indefinite: 'biraz', plural_bare: 'biraz', plural_definite: 'biraz' } },
     /* PL 'więcej' is invariant and also takes the GENITIVE: 'więcej kawy'. RO 'mai mult' agrees: mai multă apă (fem), mai mult lapte (masc/neut). */
-    'more':              { tags: ['function'], met: false,
+    'more':              { tags: ['function'],
                   en: { bare: 'more', definite: 'more', indefinite: 'more', plural_bare: 'more', plural_definite: 'more' },
                   es: { bare: 'más', definite: 'más', indefinite: 'más', plural_bare: 'más', plural_definite: 'más' },
                   pt: { bare: 'mais', definite: 'mais', indefinite: 'mais', plural_bare: 'mais', plural_definite: 'mais' },
@@ -239,7 +245,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'mai mult', definite: 'mai mult', indefinite: 'mai mult', plural_bare: 'mai mult', plural_definite: 'mai mult' },
                   tr: { bare: 'daha', definite: 'daha', indefinite: 'daha', plural_bare: 'daha', plural_definite: 'daha' } },
     /* 'Vale' is Spain. Latin America says 'bueno' or 'está bien'. 'Está bem' is Portugal; 'OK' also works there. */
-    'okay':              { tags: ['function'], met: false,
+    'okay':              { tags: ['function'],
                   en: { bare: 'okay', definite: 'okay', indefinite: 'okay', plural_bare: 'okay', plural_definite: 'okay' },
                   es: { bare: 'vale', definite: 'vale', indefinite: 'vale', plural_bare: 'vale', plural_definite: 'vale' },
                   pt: { bare: 'está bem', definite: 'está bem', indefinite: 'está bem', plural_bare: 'está bem', plural_definite: 'está bem' },
@@ -247,7 +253,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'bine', definite: 'bine', indefinite: 'bine', plural_bare: 'bine', plural_definite: 'bine' },
                   tr: { bare: 'tamam', definite: 'tamam', indefinite: 'tamam', plural_bare: 'tamam', plural_definite: 'tamam' } },
     /* Masculine citation form; agrees in real use ('lista', 'pronta'). | PL 'gotowy' is an adjective and must agree with the speaker/thing: gotowy (male speaker) / gotowa (female speaker) / gotowe (neuter). For a teen app where the learner says it about themselves this WILL be wrong for girls – flag to the team. RO 'gata' is genuinely invariant, no problem there. */
-    'ready':             { tags: ['function'], met: false,
+    'ready':             { tags: ['function'],
                   en: { bare: 'ready', definite: 'ready', indefinite: 'ready', plural_bare: 'ready', plural_definite: 'ready' },
                   es: { bare: 'listo', definite: 'listo', indefinite: 'listo', plural_bare: 'listo', plural_definite: 'listo' },
                   pt: { bare: 'pronto', definite: 'pronto', indefinite: 'pronto', plural_bare: 'pronto', plural_definite: 'pronto' },
@@ -255,7 +261,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'gata', definite: 'gata', indefinite: 'gata', plural_bare: 'gata', plural_definite: 'gata' },
                   tr: { bare: 'hazır', definite: 'hazır', indefinite: 'hazır', plural_bare: 'hazır', plural_definite: 'hazır' } },
     /* PL 'tutaj' is the full form; 'tu' is the shorter everyday variant. Both mean the location 'here'. */
-    'here':              { tags: ['function'], met: true,
+    'here':              { tags: ['function'],
                   en: { bare: 'here', definite: 'here', indefinite: 'here', plural_bare: 'here', plural_definite: 'here' },
                   es: { bare: 'aquí', definite: 'aquí', indefinite: 'aquí', plural_bare: 'aquí', plural_definite: 'aquí' },
                   pt: { bare: 'aqui', definite: 'aqui', indefinite: 'aqui', plural_bare: 'aqui', plural_definite: 'aqui' },
@@ -263,21 +269,21 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'aici', definite: 'aici', indefinite: 'aici', plural_bare: 'aici', plural_definite: 'aici' },
                   tr: { bare: 'burada', definite: 'burada', indefinite: 'burada', plural_bare: 'burada', plural_definite: 'burada' } },
     /* PL masculine inanimate: accusative = nominative. */
-    'hotel':             { tags: ['place'], met: true,
+    'hotel':             { tags: ['place'],
                   en: { bare: 'hotel', definite: 'the hotel', indefinite: 'a hotel', plural_bare: 'hotels', plural_definite: 'the hotels' },
                   es: { bare: 'hotel', definite: 'el hotel', indefinite: 'un hotel', plural_bare: 'hoteles', plural_definite: 'los hoteles' },
                   pt: { bare: 'hotel', definite: 'o hotel', indefinite: 'um hotel', plural_bare: 'hotéis', plural_definite: 'os hotéis' },
                   pl: { bare: 'hotel', definite: 'hotel', indefinite: 'hotelu', plural_bare: 'hotele', plural_definite: 'hotele' },
                   ro: { bare: 'hotel', definite: 'hotelul', indefinite: 'un hotel', plural_bare: 'hoteluri', plural_definite: 'hotelurile' },
                   tr: { bare: 'otel', definite: 'otel', indefinite: 'otel', plural_bare: 'otel', plural_definite: 'otel' } },
-    'restaurant':        { tags: ['place'], met: false,
+    'restaurant':        { tags: ['place'],
                   en: { bare: 'restaurant', definite: 'the restaurant', indefinite: 'a restaurant', plural_bare: 'restaurants', plural_definite: 'the restaurants' },
                   es: { bare: 'restaurante', definite: 'el restaurante', indefinite: 'un restaurante', plural_bare: 'restaurantes', plural_definite: 'los restaurantes' },
                   pt: { bare: 'restaurante', definite: 'o restaurante', indefinite: 'um restaurante', plural_bare: 'restaurantes', plural_definite: 'os restaurantes' },
                   pl: { bare: 'restauracja', definite: 'restaurację', indefinite: 'restauracji', plural_bare: 'restauracje', plural_definite: 'restauracje' },
                   ro: { bare: 'restaurant', definite: 'restaurantul', indefinite: 'un restaurant', plural_bare: 'restaurante', plural_definite: 'restaurantele' },
                   tr: { bare: 'restoran', definite: 'restoran', indefinite: 'restoran', plural_bare: 'restoran', plural_definite: 'restoran' } },
-    'airport':           { tags: ['place'], met: false,
+    'airport':           { tags: ['place'],
                   en: { bare: 'airport', definite: 'the airport', indefinite: 'an airport', plural_bare: 'airports', plural_definite: 'the airports' },
                   es: { bare: 'aeropuerto', definite: 'el aeropuerto', indefinite: 'un aeropuerto', plural_bare: 'aeropuertos', plural_definite: 'los aeropuertos' },
                   pt: { bare: 'aeroporto', definite: 'o aeroporto', indefinite: 'um aeroporto', plural_bare: 'aeroportos', plural_definite: 'os aeroportos' },
@@ -285,7 +291,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'aeroport', definite: 'aeroportul', indefinite: 'un aeroport', plural_bare: 'aeroporturi', plural_definite: 'aeroporturile' },
                   tr: { bare: 'havaalanı', definite: 'havaalanı', indefinite: 'havaalanı', plural_bare: 'havaalanı', plural_definite: 'havaalanı' } },
     /* 'Mercado' is the produce market. The Turkish 'market' is really a corner grocery; if the scenario means a small shop, Spanish 'supermercado' / Portuguese 'supermercado' or 'mini-mercado' fits better. | JUDGEMENT CALL. Turkish 'market' means a small grocery shop, but English 'market' most often means an open-air market – the two senses differ. I translated the Turkish/shop sense: PL 'sklep', RO 'magazin'. If you actua */
-    'market':            { tags: ['place'], met: false,
+    'market':            { tags: ['place'],
                   en: { bare: 'market', definite: 'the market', indefinite: 'a market', plural_bare: 'markets', plural_definite: 'the markets' },
                   es: { bare: 'mercado', definite: 'el mercado', indefinite: 'un mercado', plural_bare: 'mercados', plural_definite: 'los mercados' },
                   pt: { bare: 'mercado', definite: 'o mercado', indefinite: 'um mercado', plural_bare: 'mercados', plural_definite: 'os mercados' },
@@ -293,14 +299,14 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'magazin', definite: 'magazinul', indefinite: 'un magazin', plural_bare: 'magazine', plural_definite: 'magazinele' },
                   tr: { bare: 'market', definite: 'market', indefinite: 'market', plural_bare: 'market', plural_definite: 'market' } },
     /* RO 'bancă' also means a bench or a joke – context carries it, and 'Unde este banca?' reads as the money sense in a town scenario. */
-    'bank':              { tags: ['place'], met: false,
+    'bank':              { tags: ['place'],
                   en: { bare: 'bank', definite: 'the bank', indefinite: 'a bank', plural_bare: 'banks', plural_definite: 'the banks' },
                   es: { bare: 'banco', definite: 'el banco', indefinite: 'un banco', plural_bare: 'bancos', plural_definite: 'los bancos' },
                   pt: { bare: 'banco', definite: 'o banco', indefinite: 'um banco', plural_bare: 'bancos', plural_definite: 'os bancos' },
                   pl: { bare: 'bank', definite: 'bank', indefinite: 'banku', plural_bare: 'banki', plural_definite: 'banki' },
                   ro: { bare: 'bancă', definite: 'banca', indefinite: 'o bancă', plural_bare: 'bănci', plural_definite: 'băncile' },
                   tr: { bare: 'banka', definite: 'banka', indefinite: 'banka', plural_bare: 'banka', plural_definite: 'banka' } },
-    'pharmacy':          { tags: ['place'], met: false,
+    'pharmacy':          { tags: ['place'],
                   en: { bare: 'pharmacy', definite: 'the pharmacy', indefinite: 'a pharmacy', plural_bare: 'pharmacies', plural_definite: 'the pharmacies' },
                   es: { bare: 'farmacia', definite: 'la farmacia', indefinite: 'una farmacia', plural_bare: 'farmacias', plural_definite: 'las farmacias' },
                   pt: { bare: 'farmácia', definite: 'a farmácia', indefinite: 'uma farmácia', plural_bare: 'farmácias', plural_definite: 'as farmácias' },
@@ -308,7 +314,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'farmacie', definite: 'farmacia', indefinite: 'o farmacie', plural_bare: 'farmacii', plural_definite: 'farmaciile' },
                   tr: { bare: 'eczane', definite: 'eczane', indefinite: 'eczane', plural_bare: 'eczane', plural_definite: 'eczane' } },
     /* 'Casa de banho' is European Portuguese (Brazil: 'banheiro'). In Spain a public toilet is usually 'los servicios' or 'el aseo', but '¿Dónde está el baño?' is understood everywhere and is the safest single form. */
-    'toilet':            { tags: ['place'], met: false,
+    'toilet':            { tags: ['place'],
                   en: { bare: 'toilet', definite: 'the toilet', indefinite: 'a toilet', plural_bare: 'toilets', plural_definite: 'the toilets' },
                   es: { bare: 'baño', definite: 'el baño', indefinite: 'un baño', plural_bare: 'baños', plural_definite: 'los baños' },
                   pt: { bare: 'casa de banho', definite: 'a casa de banho', indefinite: 'uma casa de banho', plural_bare: 'casas de banho', plural_definite: 'as casas de banho' },
@@ -316,7 +322,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'toaletă', definite: 'toaleta', indefinite: 'o toaletă', plural_bare: 'toalete', plural_definite: 'toaletele' },
                   tr: { bare: 'tuvalet', definite: 'tuvalet', indefinite: 'tuvalet', plural_bare: 'tuvalet', plural_definite: 'tuvalet' } },
     /* a bus/tram stop | 'Paragem' is European Portuguese (Brazil: 'ponto'). | PL genitive 'przystanku' – the e of przystanek drops. RO 'stație' is the bus/tram stop; full form 'stația de autobuz'. */
-    'bus-stop':          { tags: ['place'], met: false,
+    'bus-stop':          { tags: ['place'],
                   en: { bare: 'stop', definite: 'the stop', indefinite: 'a stop', plural_bare: 'stops', plural_definite: 'the stops' },
                   es: { bare: 'parada', definite: 'la parada', indefinite: 'una parada', plural_bare: 'paradas', plural_definite: 'las paradas' },
                   pt: { bare: 'paragem', definite: 'a paragem', indefinite: 'uma paragem', plural_bare: 'paragens', plural_definite: 'as paragens' },
@@ -324,7 +330,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'stație', definite: 'stația', indefinite: 'o stație', plural_bare: 'stații', plural_definite: 'stațiile' },
                   tr: { bare: 'durak', definite: 'durak', indefinite: 'durak', plural_bare: 'durak', plural_definite: 'durak' } },
     /* FLAG: PL 'stacja' is a metro/small or petrol station; a RAILWAY station is 'dworzec' (acc dworzec, gen dworca, pl dworce). I chose 'stacja' because it is the broader word and does not collide with 'przystanek', but if this scenario means a train station, 'dworzec' is the right word. RO 'gară' is specifically the railway station, chosen to stay distinct from 'stație' above. */
-    'station':           { tags: ['place'], met: false,
+    'station':           { tags: ['place'],
                   en: { bare: 'station', definite: 'the station', indefinite: 'a station', plural_bare: 'stations', plural_definite: 'the stations' },
                   es: { bare: 'estación', definite: 'la estación', indefinite: 'una estación', plural_bare: 'estaciones', plural_definite: 'las estaciones' },
                   pt: { bare: 'estação', definite: 'a estação', indefinite: 'uma estação', plural_bare: 'estações', plural_definite: 'as estações' },
@@ -332,14 +338,14 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'gară', definite: 'gara', indefinite: 'o gară', plural_bare: 'gări', plural_definite: 'gările' },
                   tr: { bare: 'istasyon', definite: 'istasyon', indefinite: 'istasyon', plural_bare: 'istasyon', plural_definite: 'istasyon' } },
     /* town centre | PL 'centrum' is indeclinable in the singular – all three singular slots are identical, which is correct, not a mistake. */
-    'centre':            { tags: ['place'], met: false,
+    'centre':            { tags: ['place'],
                   en: { bare: 'centre', definite: 'the centre', indefinite: 'a centre', plural_bare: 'centres', plural_definite: 'the centres' },
                   es: { bare: 'centro', definite: 'el centro', indefinite: 'un centro', plural_bare: 'centros', plural_definite: 'los centros' },
                   pt: { bare: 'centro', definite: 'o centro', indefinite: 'um centro', plural_bare: 'centros', plural_definite: 'os centros' },
                   pl: { bare: 'centrum', definite: 'centrum', indefinite: 'centrum', plural_bare: 'centra', plural_definite: 'centra' },
                   ro: { bare: 'centru', definite: 'centrul', indefinite: 'un centru', plural_bare: 'centre', plural_definite: 'centrele' },
                   tr: { bare: 'merkez', definite: 'merkez', indefinite: 'merkez', plural_bare: 'merkez', plural_definite: 'merkez' } },
-    'price':             { tags: ['money'], met: false,
+    'price':             { tags: ['money'],
                   en: { bare: 'price', definite: 'the price', indefinite: 'a price', plural_bare: 'prices', plural_definite: 'the prices' },
                   es: { bare: 'precio', definite: 'el precio', indefinite: 'un precio', plural_bare: 'precios', plural_definite: 'los precios' },
                   pt: { bare: 'preço', definite: 'o preço', indefinite: 'um preço', plural_bare: 'preços', plural_definite: 'os preços' },
@@ -347,7 +353,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'preț', definite: 'prețul', indefinite: 'un preț', plural_bare: 'prețuri', plural_definite: 'prețurile' },
                   tr: { bare: 'fiyat', definite: 'fiyat', indefinite: 'fiyat', plural_bare: 'fiyat', plural_definite: 'fiyat' } },
     /* Plural-only in BOTH languages – there is no singular 'money'. So the singular and plural slots carry the same plural word. PL genitive is 'pieniędzy' (note the vowel change ą → ę): 'Nie ma pieniędzy.' RO indefinite cannot be 'un/o' here, so I used 'niște bani' (some money), which is what a speaker actually says. */
-    'money':             { tags: ['money'], met: false,
+    'money':             { tags: ['money'],
                   en: { bare: 'money', definite: 'the money', indefinite: 'money', plural_bare: 'money', plural_definite: 'the money' },
                   es: { bare: 'dinero', definite: 'el dinero', indefinite: 'dinero', plural_bare: 'dinero', plural_definite: 'el dinero' },
                   pt: { bare: 'dinheiro', definite: 'o dinheiro', indefinite: 'dinheiro', plural_bare: 'dinheiro', plural_definite: 'o dinheiro' },
@@ -355,7 +361,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'bani', definite: 'banii', indefinite: 'niște bani', plural_bare: 'bani', plural_definite: 'banii' },
                   tr: { bare: 'para', definite: 'para', indefinite: 'para', plural_bare: 'para', plural_definite: 'para' } },
     /* ALSO IN content.js: already in content.js */
-    'card':              { tags: ['money'], met: false,
+    'card':              { tags: ['money'],
                   en: { bare: 'card', definite: 'the card', indefinite: 'a card', plural_bare: 'cards', plural_definite: 'the cards' },
                   es: { bare: 'tarjeta', definite: 'la tarjeta', indefinite: 'una tarjeta', plural_bare: 'tarjetas', plural_definite: 'las tarjetas' },
                   pt: { bare: 'cartão', definite: 'o cartão', indefinite: 'um cartão', plural_bare: 'cartões', plural_definite: 'os cartões' },
@@ -363,7 +369,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'card', definite: 'cardul', indefinite: 'un card', plural_bare: 'carduri', plural_definite: 'cardurile' },
                   tr: { bare: 'kart', definite: 'kart', indefinite: 'kart', plural_bare: 'kart', plural_definite: 'kart' } },
     /* ALSO IN content.js: already in content.js | CLASH: Portuguese uses 'dinheiro' for both 'money' and 'cash' ('pagar em dinheiro'). If the pack needs the two to look different, use 'dinheiro vivo' (everyday) or 'numerário' (formal) for cash. Spanish has no such problem: 'efectivo' vs 'dinero'. | Mass noun in both: plural slots repeat the singular. RO indefinite left without 'un' – 'un numerar' is not said. In practice y */
-    'cash':              { tags: ['money'], met: false,
+    'cash':              { tags: ['money'],
                   en: { bare: 'cash', definite: 'the cash', indefinite: 'cash', plural_bare: 'cash', plural_definite: 'the cash' },
                   es: { bare: 'efectivo', definite: 'el efectivo', indefinite: 'efectivo', plural_bare: 'efectivo', plural_definite: 'el efectivo' },
                   pt: { bare: 'dinheiro vivo', definite: 'dinheiro vivo', indefinite: 'dinheiro vivo', plural_bare: 'dinheiro vivo', plural_definite: 'dinheiro vivo' },
@@ -371,7 +377,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'numerar', definite: 'numerarul', indefinite: 'numerar', plural_bare: 'numerar', plural_definite: 'numerarul' },
                   tr: { bare: 'nakit', definite: 'nakit', indefinite: 'nakit', plural_bare: 'nakit', plural_definite: 'nakit' } },
     /* the till/checkout in a shop | FLAG: RO 'casă' also means 'house', and 'casa' = the house. The till sense is real and common ('plătiți la casă'), but for a vocabulary card shown out of context it is ambiguous. The unambiguous word is 'casierie' (def casieria). Your call. */
-    'checkout':          { tags: ['money'], met: false,
+    'checkout':          { tags: ['money'],
                   en: { bare: 'checkout', definite: 'the checkout', indefinite: 'a checkout', plural_bare: 'checkouts', plural_definite: 'the checkouts' },
                   es: { bare: 'caja', definite: 'la caja', indefinite: 'una caja', plural_bare: 'cajas', plural_definite: 'las cajas' },
                   pt: { bare: 'caixa', definite: 'a caixa', indefinite: 'uma caixa', plural_bare: 'caixas', plural_definite: 'as caixas' },
@@ -379,7 +385,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'casă', definite: 'casa', indefinite: 'o casă', plural_bare: 'case', plural_definite: 'casele' },
                   tr: { bare: 'kasa', definite: 'kasa', indefinite: 'kasa', plural_bare: 'kasa', plural_definite: 'kasa' } },
     /* adjective | Adjectives – same string in all five slots as instructed, but both agree with their noun in real use. PL: tani / tania / tanie. RO: ieftin / ieftină / ieftini / ieftine. 'tania kawa', 'cafea ieftină'. */
-    'cheap':             { tags: ['money'], met: false,
+    'cheap':             { tags: ['money'],
                   en: { bare: 'cheap', definite: 'cheap', indefinite: 'cheap', plural_bare: 'cheap', plural_definite: 'cheap' },
                   es: { bare: 'barato', definite: 'barato', indefinite: 'barato', plural_bare: 'barato', plural_definite: 'barato' },
                   pt: { bare: 'barato', definite: 'barato', indefinite: 'barato', plural_bare: 'barato', plural_definite: 'barato' },
@@ -387,7 +393,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'ieftin', definite: 'ieftin', indefinite: 'ieftin', plural_bare: 'ieftin', plural_definite: 'ieftin' },
                   tr: { bare: 'ucuz', definite: 'ucuz', indefinite: 'ucuz', plural_bare: 'ucuz', plural_definite: 'ucuz' } },
     /* adjective | Same agreement caveat: PL drogi / droga / drogie; RO scump / scumpă / scumpi / scumpe. EXTRA FLAG: the PL feminine form 'droga' is also the noun 'road'. If the app ever shows the feminine form on a card, it will be ambiguous. */
-    'expensive':         { tags: ['money'], met: false,
+    'expensive':         { tags: ['money'],
                   en: { bare: 'expensive', definite: 'expensive', indefinite: 'expensive', plural_bare: 'expensive', plural_definite: 'expensive' },
                   es: { bare: 'caro', definite: 'caro', indefinite: 'caro', plural_bare: 'caro', plural_definite: 'caro' },
                   pt: { bare: 'caro', definite: 'caro', indefinite: 'caro', plural_bare: 'caro', plural_definite: 'caro' },
@@ -395,7 +401,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'scump', definite: 'scump', indefinite: 'scump', plural_bare: 'scump', plural_definite: 'scump' },
                   tr: { bare: 'pahalı', definite: 'pahalı', indefinite: 'pahalı', plural_bare: 'pahalı', plural_definite: 'pahalı' } },
     /* PL 'zniżka' is the everyday word; 'rabat' is the more commercial one. Both are fine. */
-    'discount':          { tags: ['money'], met: false,
+    'discount':          { tags: ['money'],
                   en: { bare: 'discount', definite: 'the discount', indefinite: 'a discount', plural_bare: 'discounts', plural_definite: 'the discounts' },
                   es: { bare: 'descuento', definite: 'el descuento', indefinite: 'un descuento', plural_bare: 'descuentos', plural_definite: 'los descuentos' },
                   pt: { bare: 'desconto', definite: 'o desconto', indefinite: 'um desconto', plural_bare: 'descontos', plural_definite: 'os descontos' },
@@ -403,7 +409,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'reducere', definite: 'reducerea', indefinite: 'o reducere', plural_bare: 'reduceri', plural_definite: 'reducerile' },
                   tr: { bare: 'indirim', definite: 'indirim', indefinite: 'indirim', plural_bare: 'indirim', plural_definite: 'indirim' } },
     /* These are the NOUN 'total/sum'. When a cashier says 'that's ... in total' the PL word is the adverb 'razem' and the RO is 'în total' – different part of speech, so it does not fit the five-slot shape. Check which sense the scenario needs. */
-    'total':             { tags: ['money'], met: false,
+    'total':             { tags: ['money'],
                   en: { bare: 'total', definite: 'the total', indefinite: 'a total', plural_bare: 'totals', plural_definite: 'the totals' },
                   es: { bare: 'total', definite: 'el total', indefinite: 'un total', plural_bare: 'totales', plural_definite: 'los totales' },
                   pt: { bare: 'total', definite: 'o total', indefinite: 'um total', plural_bare: 'totais', plural_definite: 'os totais' },
@@ -411,7 +417,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'total', definite: 'totalul', indefinite: 'un total', plural_bare: 'totaluri', plural_definite: 'totalurile' },
                   tr: { bare: 'toplam', definite: 'toplam', indefinite: 'toplam', plural_bare: 'toplam', plural_definite: 'toplam' } },
     /* 'Uno' is the standalone counting form ('Uno, por favor.'). Before a masculine noun it shortens to 'un' ('un café'), which the indefinite forms already cover. | PL 'jeden' is masculine; feminine 'jedna', neuter 'jedno' – so 'jedna kawa', 'jedno jajko'. RO 'unu' is the counting form said alone; before a noun it becomes 'un' (un ceai) or 'o' (o cafea). Both will be wrong if code concatenates them blindly. */
-    'one':               { tags: ['count'], met: true,
+    'one':               { tags: ['count'],
                   en: { bare: 'one', definite: 'one', indefinite: 'one', plural_bare: 'one', plural_definite: 'one' },
                   es: { bare: 'uno', definite: 'uno', indefinite: 'uno', plural_bare: 'uno', plural_definite: 'uno' },
                   pt: { bare: 'um', definite: 'um', indefinite: 'um', plural_bare: 'um', plural_definite: 'um' },
@@ -419,35 +425,35 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'unu', definite: 'unu', indefinite: 'unu', plural_bare: 'unu', plural_definite: 'unu' },
                   tr: { bare: 'bir', definite: 'bir', indefinite: 'bir', plural_bare: 'bir', plural_definite: 'bir' } },
     /* PL 'dwa' is masc-inanimate/neuter; feminine is 'dwie' – 'dwie kawy', 'dwa jajka'. RO 'doi' is masculine; feminine is 'două' – 'două cafele'. These two numbers are the only ones in the list with a gender split in both languages. */
-    'two':               { tags: ['count'], met: false,
+    'two':               { tags: ['count'],
                   en: { bare: 'two', definite: 'two', indefinite: 'two', plural_bare: 'two', plural_definite: 'two' },
                   es: { bare: 'dos', definite: 'dos', indefinite: 'dos', plural_bare: 'dos', plural_definite: 'dos' },
                   pt: { bare: 'dois', definite: 'dois', indefinite: 'dois', plural_bare: 'dois', plural_definite: 'dois' },
                   pl: { bare: 'dwa', definite: 'dwa', indefinite: 'dwa', plural_bare: 'dwa', plural_definite: 'dwa' },
                   ro: { bare: 'doi', definite: 'doi', indefinite: 'doi', plural_bare: 'doi', plural_definite: 'doi' },
                   tr: { bare: 'iki', definite: 'iki', indefinite: 'iki', plural_bare: 'iki', plural_definite: 'iki' } },
-    'three':             { tags: ['count'], met: false,
+    'three':             { tags: ['count'],
                   en: { bare: 'three', definite: 'three', indefinite: 'three', plural_bare: 'three', plural_definite: 'three' },
                   es: { bare: 'tres', definite: 'tres', indefinite: 'tres', plural_bare: 'tres', plural_definite: 'tres' },
                   pt: { bare: 'três', definite: 'três', indefinite: 'três', plural_bare: 'três', plural_definite: 'três' },
                   pl: { bare: 'trzy', definite: 'trzy', indefinite: 'trzy', plural_bare: 'trzy', plural_definite: 'trzy' },
                   ro: { bare: 'trei', definite: 'trei', indefinite: 'trei', plural_bare: 'trei', plural_definite: 'trei' },
                   tr: { bare: 'üç', definite: 'üç', indefinite: 'üç', plural_bare: 'üç', plural_definite: 'üç' } },
-    'four':              { tags: ['count'], met: false,
+    'four':              { tags: ['count'],
                   en: { bare: 'four', definite: 'four', indefinite: 'four', plural_bare: 'four', plural_definite: 'four' },
                   es: { bare: 'cuatro', definite: 'cuatro', indefinite: 'cuatro', plural_bare: 'cuatro', plural_definite: 'cuatro' },
                   pt: { bare: 'quatro', definite: 'quatro', indefinite: 'quatro', plural_bare: 'quatro', plural_definite: 'quatro' },
                   pl: { bare: 'cztery', definite: 'cztery', indefinite: 'cztery', plural_bare: 'cztery', plural_definite: 'cztery' },
                   ro: { bare: 'patru', definite: 'patru', indefinite: 'patru', plural_bare: 'patru', plural_definite: 'patru' },
                   tr: { bare: 'dört', definite: 'dört', indefinite: 'dört', plural_bare: 'dört', plural_definite: 'dört' } },
-    'five':              { tags: ['count'], met: false,
+    'five':              { tags: ['count'],
                   en: { bare: 'five', definite: 'five', indefinite: 'five', plural_bare: 'five', plural_definite: 'five' },
                   es: { bare: 'cinco', definite: 'cinco', indefinite: 'cinco', plural_bare: 'cinco', plural_definite: 'cinco' },
                   pt: { bare: 'cinco', definite: 'cinco', indefinite: 'cinco', plural_bare: 'cinco', plural_definite: 'cinco' },
                   pl: { bare: 'pięć', definite: 'pięć', indefinite: 'pięć', plural_bare: 'pięć', plural_definite: 'pięć' },
                   ro: { bare: 'cinci', definite: 'cinci', indefinite: 'cinci', plural_bare: 'cinci', plural_definite: 'cinci' },
                   tr: { bare: 'beş', definite: 'beş', indefinite: 'beş', plural_bare: 'beş', plural_definite: 'beş' } },
-    'ten':               { tags: ['count'], met: true,
+    'ten':               { tags: ['count'],
                   en: { bare: 'ten', definite: 'ten', indefinite: 'ten', plural_bare: 'ten', plural_definite: 'ten' },
                   es: { bare: 'diez', definite: 'diez', indefinite: 'diez', plural_bare: 'diez', plural_definite: 'diez' },
                   pt: { bare: 'dez', definite: 'dez', indefinite: 'dez', plural_bare: 'dez', plural_definite: 'dez' },
@@ -455,7 +461,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'zece', definite: 'zece', indefinite: 'zece', plural_bare: 'zece', plural_definite: 'zece' },
                   tr: { bare: 'on', definite: 'on', indefinite: 'on', plural_bare: 'on', plural_definite: 'on' } },
     /* From twenty up, RO inserts 'de' before a counted noun: 'douăzeci de bucăți'. The number alone stays 'douăzeci'. */
-    'twenty':            { tags: ['count'], met: false,
+    'twenty':            { tags: ['count'],
                   en: { bare: 'twenty', definite: 'twenty', indefinite: 'twenty', plural_bare: 'twenty', plural_definite: 'twenty' },
                   es: { bare: 'veinte', definite: 'veinte', indefinite: 'veinte', plural_bare: 'veinte', plural_definite: 'veinte' },
                   pt: { bare: 'vinte', definite: 'vinte', indefinite: 'vinte', plural_bare: 'vinte', plural_definite: 'vinte' },
@@ -463,7 +469,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'douăzeci', definite: 'douăzeci', indefinite: 'douăzeci', plural_bare: 'douăzeci', plural_definite: 'douăzeci' },
                   tr: { bare: 'yirmi', definite: 'yirmi', indefinite: 'yirmi', plural_bare: 'yirmi', plural_definite: 'yirmi' } },
     /* Same RO 'de' rule: 'cincizeci de ...'. */
-    'fifty':             { tags: ['count'], met: false,
+    'fifty':             { tags: ['count'],
                   en: { bare: 'fifty', definite: 'fifty', indefinite: 'fifty', plural_bare: 'fifty', plural_definite: 'fifty' },
                   es: { bare: 'cincuenta', definite: 'cincuenta', indefinite: 'cincuenta', plural_bare: 'cincuenta', plural_definite: 'cincuenta' },
                   pt: { bare: 'cinquenta', definite: 'cinquenta', indefinite: 'cinquenta', plural_bare: 'cinquenta', plural_definite: 'cinquenta' },
@@ -471,7 +477,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'cincizeci', definite: 'cincizeci', indefinite: 'cincizeci', plural_bare: 'cincizeci', plural_definite: 'cincizeci' },
                   tr: { bare: 'elli', definite: 'elli', indefinite: 'elli', plural_bare: 'elli', plural_definite: 'elli' } },
     /* 'Cien' / 'cem' are the forms used alone and before a noun. In compounds they become 'ciento' / 'cento' (ciento veinte, cento e vinte). | RO 'sută' is a feminine noun and is not used bare – it needs 'o', hence 'o sută'. Counted: 'o sută de bucăți'. PL 'sto' stands alone. */
-    'hundred':           { tags: ['count'], met: false,
+    'hundred':           { tags: ['count'],
                   en: { bare: 'hundred', definite: 'hundred', indefinite: 'hundred', plural_bare: 'hundred', plural_definite: 'hundred' },
                   es: { bare: 'cien', definite: 'cien', indefinite: 'cien', plural_bare: 'cien', plural_definite: 'cien' },
                   pt: { bare: 'cem', definite: 'cem', indefinite: 'cem', plural_bare: 'cem', plural_definite: 'cem' },
@@ -479,7 +485,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'o sută', definite: 'o sută', indefinite: 'o sută', plural_bare: 'o sută', plural_definite: 'o sută' },
                   tr: { bare: 'yüz', definite: 'yüz', indefinite: 'yüz', plural_bare: 'yüz', plural_definite: 'yüz' } },
     /* Same as hundred: RO 'mie' needs 'o'. Counted: 'o mie de bucăți'. */
-    'thousand':          { tags: ['count'], met: false,
+    'thousand':          { tags: ['count'],
                   en: { bare: 'thousand', definite: 'thousand', indefinite: 'thousand', plural_bare: 'thousand', plural_definite: 'thousand' },
                   es: { bare: 'mil', definite: 'mil', indefinite: 'mil', plural_bare: 'mil', plural_definite: 'mil' },
                   pt: { bare: 'mil', definite: 'mil', indefinite: 'mil', plural_bare: 'mil', plural_definite: 'mil' },
@@ -487,7 +493,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'o mie', definite: 'o mie', indefinite: 'o mie', plural_bare: 'o mie', plural_definite: 'o mie' },
                   tr: { bare: 'bin', definite: 'bin', indefinite: 'bin', plural_bare: 'bin', plural_definite: 'bin' } },
     /* 'Ir às compras' is European Portuguese; Brazil says 'fazer compras'. | Chcę iść na zakupy. / Vreau să merg la cumpărături. */
-    'to-shop':           { tags: ['doing'], met: false,
+    'to-shop':           { tags: ['doing'],
                   en: { bare: 'go shopping', definite: 'go shopping', indefinite: 'go shopping', plural_bare: 'go shopping', plural_definite: 'go shopping' },
                   es: { bare: 'ir de compras', definite: 'ir de compras', indefinite: 'ir de compras', plural_bare: 'ir de compras', plural_definite: 'ir de compras' },
                   pt: { bare: 'ir às compras', definite: 'ir às compras', indefinite: 'ir às compras', plural_bare: 'ir às compras', plural_definite: 'ir às compras' },
@@ -495,7 +501,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'merg la cumpărături', definite: 'merg la cumpărături', indefinite: 'merg la cumpărături', plural_bare: 'merg la cumpărături', plural_definite: 'merg la cumpărături' },
                   tr: { bare: 'alışveriş yapmak', definite: 'alışveriş yapmak', indefinite: 'alışveriş yapmak', plural_bare: 'alışveriş yapmak', plural_definite: 'alışveriş yapmak' } },
     /* 'Desporto' is European Portuguese; Brazil says 'esporte'. | Chcę ćwiczyć. / Vreau să fac sport. */
-    'to-exercise':       { tags: ['doing'], met: false,
+    'to-exercise':       { tags: ['doing'],
                   en: { bare: 'exercise', definite: 'exercise', indefinite: 'exercise', plural_bare: 'exercise', plural_definite: 'exercise' },
                   es: { bare: 'hacer deporte', definite: 'hacer deporte', indefinite: 'hacer deporte', plural_bare: 'hacer deporte', plural_definite: 'hacer deporte' },
                   pt: { bare: 'fazer desporto', definite: 'fazer desporto', indefinite: 'fazer desporto', plural_bare: 'fazer desporto', plural_definite: 'fazer desporto' },
@@ -503,7 +509,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'fac sport', definite: 'fac sport', indefinite: 'fac sport', plural_bare: 'fac sport', plural_definite: 'fac sport' },
                   tr: { bare: 'spor yapmak', definite: 'spor yapmak', indefinite: 'spor yapmak', plural_bare: 'spor yapmak', plural_definite: 'spor yapmak' } },
     /* Chcę gotować. / Vreau să gătesc. */
-    'to-cook':           { tags: ['doing'], met: false,
+    'to-cook':           { tags: ['doing'],
                   en: { bare: 'cook', definite: 'cook', indefinite: 'cook', plural_bare: 'cook', plural_definite: 'cook' },
                   es: { bare: 'cocinar', definite: 'cocinar', indefinite: 'cocinar', plural_bare: 'cocinar', plural_definite: 'cocinar' },
                   pt: { bare: 'cozinhar', definite: 'cozinhar', indefinite: 'cozinhar', plural_bare: 'cozinhar', plural_definite: 'cozinhar' },
@@ -511,7 +517,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'gătesc', definite: 'gătesc', indefinite: 'gătesc', plural_bare: 'gătesc', plural_definite: 'gătesc' },
                   tr: { bare: 'yemek yapmak', definite: 'yemek yapmak', indefinite: 'yemek yapmak', plural_bare: 'yemek yapmak', plural_definite: 'yemek yapmak' } },
     /* I used 'tomar', not 'beber'. 'Beber un café' is grammatical but sounds clinical; 'tomar un café' / 'tomar um café' is what people actually say in a cafe. Drop the article ('tomar café') if the pack prefers a bare verb phrase. | PL 'kawę' is the accusative, consistent with the coffee entry. Chcę pić kawę. / Vreau să beau cafea. */
-    'to-drink-coffee':   { tags: ['doing'], met: false,
+    'to-drink-coffee':   { tags: ['doing'],
                   en: { bare: 'drink coffee', definite: 'drink coffee', indefinite: 'drink coffee', plural_bare: 'drink coffee', plural_definite: 'drink coffee' },
                   es: { bare: 'tomar un café', definite: 'tomar un café', indefinite: 'tomar un café', plural_bare: 'tomar un café', plural_definite: 'tomar un café' },
                   pt: { bare: 'tomar um café', definite: 'tomar um café', indefinite: 'tomar um café', plural_bare: 'tomar um café', plural_definite: 'tomar um café' },
@@ -519,7 +525,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'beau cafea', definite: 'beau cafea', indefinite: 'beau cafea', plural_bare: 'beau cafea', plural_definite: 'beau cafea' },
                   tr: { bare: 'kahve içmek', definite: 'kahve içmek', indefinite: 'kahve içmek', plural_bare: 'kahve içmek', plural_definite: 'kahve içmek' } },
     /* Chcę wyjść. / Vreau să ies. Both mean leave/go out; for 'go out into town' add PL 'wyjść do miasta' / RO 'ies în oraș'. */
-    'to-go-out':         { tags: ['doing'], met: false,
+    'to-go-out':         { tags: ['doing'],
                   en: { bare: 'go out', definite: 'go out', indefinite: 'go out', plural_bare: 'go out', plural_definite: 'go out' },
                   es: { bare: 'salir', definite: 'salir', indefinite: 'salir', plural_bare: 'salir', plural_definite: 'salir' },
                   pt: { bare: 'sair', definite: 'sair', indefinite: 'sair', plural_bare: 'sair', plural_definite: 'sair' },
@@ -527,7 +533,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'ies', definite: 'ies', indefinite: 'ies', plural_bare: 'ies', plural_definite: 'ies' },
                   tr: { bare: 'dışarı çıkmak', definite: 'dışarı çıkmak', indefinite: 'dışarı çıkmak', plural_bare: 'dışarı çıkmak', plural_definite: 'dışarı çıkmak' } },
     /* Chcę iść do domu. / Vreau să merg acasă. PL 'do domu' is genitive after 'do' – fixed phrase, do not change it. */
-    'to-go-home':        { tags: ['doing'], met: false,
+    'to-go-home':        { tags: ['doing'],
                   en: { bare: 'go home', definite: 'go home', indefinite: 'go home', plural_bare: 'go home', plural_definite: 'go home' },
                   es: { bare: 'ir a casa', definite: 'ir a casa', indefinite: 'ir a casa', plural_bare: 'ir a casa', plural_definite: 'ir a casa' },
                   pt: { bare: 'ir para casa', definite: 'ir para casa', indefinite: 'ir para casa', plural_bare: 'ir para casa', plural_definite: 'ir para casa' },
@@ -535,7 +541,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'merg acasă', definite: 'merg acasă', indefinite: 'merg acasă', plural_bare: 'merg acasă', plural_definite: 'merg acasă' },
                   tr: { bare: 'eve gitmek', definite: 'eve gitmek', indefinite: 'eve gitmek', plural_bare: 'eve gitmek', plural_definite: 'eve gitmek' } },
     /* FLAG on word order: Polish strongly prefers moving the reflexive 'się' earlier – a native says 'Chcę się uczyć', not 'Chcę uczyć się'. The second is grammatical and understandable but sounds stilted. Slotting it into the frame as-is gives the stilted version; if the engine can special-case one entry, this is the one. */
-    'to-study':          { tags: ['doing'], met: false,
+    'to-study':          { tags: ['doing'],
                   en: { bare: 'study', definite: 'study', indefinite: 'study', plural_bare: 'study', plural_definite: 'study' },
                   es: { bare: 'estudiar', definite: 'estudiar', indefinite: 'estudiar', plural_bare: 'estudiar', plural_definite: 'estudiar' },
                   pt: { bare: 'estudar', definite: 'estudar', indefinite: 'estudar', plural_bare: 'estudar', plural_definite: 'estudar' },
@@ -543,7 +549,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'învăț', definite: 'învăț', indefinite: 'învăț', plural_bare: 'învăț', plural_definite: 'învăț' },
                   tr: { bare: 'ders çalışmak', definite: 'ders çalışmak', indefinite: 'ders çalışmak', plural_bare: 'ders çalışmak', plural_definite: 'ders çalışmak' } },
     /* 'Hacer fotos' is Spain; Latin America says 'tomar fotos' or 'sacar fotos'. I kept Spain Spanish to match the European Portuguese elsewhere. | Chcę robić zdjęcia. / Vreau să fac poze. RO 'poze' is the everyday teen word; 'fotografii' is the formal one. */
-    'to-take-photos':    { tags: ['doing'], met: false,
+    'to-take-photos':    { tags: ['doing'],
                   en: { bare: 'take photos', definite: 'take photos', indefinite: 'take photos', plural_bare: 'take photos', plural_definite: 'take photos' },
                   es: { bare: 'hacer fotos', definite: 'hacer fotos', indefinite: 'hacer fotos', plural_bare: 'hacer fotos', plural_definite: 'hacer fotos' },
                   pt: { bare: 'tirar fotos', definite: 'tirar fotos', indefinite: 'tirar fotos', plural_bare: 'tirar fotos', plural_definite: 'tirar fotos' },
@@ -551,7 +557,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'fac poze', definite: 'fac poze', indefinite: 'fac poze', plural_bare: 'fac poze', plural_definite: 'fac poze' },
                   tr: { bare: 'fotoğraf çekmek', definite: 'fotoğraf çekmek', indefinite: 'fotoğraf çekmek', plural_bare: 'fotoğraf çekmek', plural_definite: 'fotoğraf çekmek' } },
     /* Turkish 'gezmek' is wander-and-look-around rather than tourist sightseeing. 'Pasear' / 'passear' carries that. If the scenario means tourist visits, use 'visitar la ciudad' / 'visitar a cidade'. | Turkish 'gezmek' is wander/look around. PL 'zwiedzać' = to sightsee. RO: I used 'vizitez orașul' (visit the town) because bare 'vizitez' needs an object. The closer 'stroll around' is 'mă plimb', but it carries the reflexiv */
-    'to-sightsee':       { tags: ['doing'], met: false,
+    'to-sightsee':       { tags: ['doing'],
                   en: { bare: 'sightsee', definite: 'sightsee', indefinite: 'sightsee', plural_bare: 'sightsee', plural_definite: 'sightsee' },
                   es: { bare: 'pasear', definite: 'pasear', indefinite: 'pasear', plural_bare: 'pasear', plural_definite: 'pasear' },
                   pt: { bare: 'passear', definite: 'passear', indefinite: 'passear', plural_bare: 'passear', plural_definite: 'passear' },
@@ -559,7 +565,7 @@ window.CAFE_PACK = (function () {
                   ro: { bare: 'vizitez orașul', definite: 'vizitez orașul', indefinite: 'vizitez orașul', plural_bare: 'vizitez orașul', plural_definite: 'vizitez orașul' },
                   tr: { bare: 'gezmek', definite: 'gezmek', indefinite: 'gezmek', plural_bare: 'gezmek', plural_definite: 'gezmek' } },
     /* Portuguese 'jogar' = play games or sport, right for teens. 'Brincar' is play as small children do. | Chcę grać. / Vreau să joc. Covers games/sport; for a musical instrument PL also uses 'grać' and RO uses 'cânt'. */
-    'to-play':           { tags: ['doing'], met: false,
+    'to-play':           { tags: ['doing'],
                   en: { bare: 'play', definite: 'play', indefinite: 'play', plural_bare: 'play', plural_definite: 'play' },
                   es: { bare: 'jugar', definite: 'jugar', indefinite: 'jugar', plural_bare: 'jugar', plural_definite: 'jugar' },
                   pt: { bare: 'jogar', definite: 'jogar', indefinite: 'jogar', plural_bare: 'jogar', plural_definite: 'jogar' },

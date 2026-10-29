@@ -1081,7 +1081,7 @@ window.ENGINE = (function () {
        and a perfect learner tops out around 80% for ever. "Nothing is very
        weak" is a statement about the LEARNER, not about one slot. */
     const allWords = (quest.activity.items || []);
-    const phase = masteryPhase(rec, patternIds, allWords);
+    const phase = masteryPhase(rec, patternIds, allWords, quest);
 
     /* Section 8, carrier rotation. On a word phase the WORD is chosen first
        and then a construction that can carry it, because a drill aimed at the
@@ -1114,7 +1114,7 @@ window.ENGINE = (function () {
          Priority is for choosing what to PRACTISE among things already
          taught. What to teach next is the list. */
       pid = phase === 'introduce'
-          ? (patternIds.find(id => !(rec.patterns[id] || {}).introduced) || null)
+          ? nextToTeach(rec, patternIds)
         : phase === 'oneshot'
           ? oneShotOwed(rec, patternIds)
           : null;
@@ -1264,15 +1264,45 @@ window.ENGINE = (function () {
     }) || null;
   }
 
-  function masteryPhase(rec, patternIds, wordIds) {
+  /* The next thing on the list - but a construction the child has just failed
+     is not due for three turns (section 9: "a failure resets the interval to
+     3 turns"), and walking the list without reading that stalls on the first
+     one they cannot do. Taking the first un-introduced pattern alone left a
+     learner who could not manage `where-is-x` being asked it 117 times across
+     eight nights, never seeing constructions six to ten.
+
+     So: the first un-introduced construction that is DUE. A never-attempted
+     one is due at turn zero, so the list still walks in order; a just-failed
+     one steps aside for three turns and the list moves on without it. If none
+     is due, the first un-introduced one anyway - a turn has to be about
+     something, and that is the one they are furthest behind on. */
+  function nextToTeach(rec, patternIds) {
+    const turn = rec.turn || 0;
+    const fresh = patternIds.filter(id => !(rec.patterns[id] || {}).introduced);
+    return fresh.find(id => ((rec.patterns[id] || {}).dueTurn || 0) <= turn)
+        || fresh[0] || null;
+  }
+
+  function masteryPhase(rec, patternIds, wordIds, quest) {
     const M = window.MASTERY;
     const w = id => rec.words[id];
+    /* Which words a construction the child HAS can actually ask for. A very
+       weak word holds the curriculum open until it is drilled, and a word
+       that nothing they know can carry is never drilled - so it held the
+       curriculum open for ever. One wrong answer on `where-is-x` left `hotel`
+       below the floor with no introduced pattern owning a `place` slot, and
+       the next eight nights were 119 consolidation turns on two
+       constructions. The learner never saw constructions six to ten. */
+    const known = patternIds.filter(id => (rec.patterns[id] || {}).introduced);
+    const carryable = new Set();
+    for (const id of known) for (const wid of slotPoolOf(quest, id)) carryable.add(wid);
     /* Above the consolidate inversion below, and only this row is: it is
        scoped to the turn straight after a teach, so it takes one turn and
        then stands aside. A construction taught and never produced is the most
        perishable thing in the record. */
     if (oneShotOwed(rec, patternIds)) return 'oneshot';
-    const veryWeak = wordIds.filter(id => w(id) && w(id).seen && w(id).mastery < VERY_WEAK);
+    const veryWeak = wordIds.filter(id =>
+      carryable.has(id) && w(id) && w(id).seen && w(id).mastery < VERY_WEAK);
     /* B3 first when something met has not landed. This is the inversion of
        the naive reading and it is the whole fix. */
     if (veryWeak.length) return 'consolidate';
