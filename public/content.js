@@ -689,6 +689,55 @@ window.QUEST = (function () {
     'say-again':    { speaker: 'actor',
                       en: 'Sorry?',   es: '¿Cómo?',   pt: 'Como?',
                       tr: 'Efendim?', pl: 'Słucham?',  ro: 'Poftim?' },
+    /* ---------- her answers (the cafe) ----------
+       She said "Alright." after every single answer, all night, both nights:
+       32 times running. In arm A she OPENS the exchange and the cue map gives
+       her a line; in Max's order she answers one, and `ACTOR_REACTIONS` held
+       exactly one line for every correct answer there has ever been. She was
+       scenery, in the one order where she is the reason the child is talking.
+
+       One short answer per construction, because what makes her a person is
+       answering the thing that was said - "Is there milk?" earns "Yes, we
+       have it", not "Alright". Still placeholder scene copy, like the cue map
+       above: short on purpose, and the first thing the scenario spec should
+       replace. es and pt are checkable in house; pl and ro have had no native
+       read. */
+    'reply-coming-up': { speaker: 'actor',
+                      en: 'Coming right up.', es: 'Marchando.',
+                      pt: 'Já vai.', tr: 'Hemen geliyor.',
+                      pl: 'Już podaję.', ro: 'Imediat.' },
+    'reply-we-have-it': { speaker: 'actor',
+                      en: 'Yes, we have it.', es: 'Sí, tenemos.',
+                      pt: 'Sim, temos.', tr: 'Evet, var.',
+                      pl: 'Tak, jest.', ro: 'Da, avem.' },
+    'reply-thats-right': { speaker: 'actor',
+                      en: "That's right.", es: 'Eso es.',
+                      pt: 'Isso mesmo.', tr: 'Doğru.',
+                      pl: 'Zgadza się.', ro: 'Exact.' },
+    'reply-ill-check': { speaker: 'actor',
+                      en: 'Let me check.', es: 'Voy a mirar.',
+                      pt: 'Vou ver.', tr: 'Bakayım.',
+                      pl: 'Sprawdzę.', ro: 'Mă uit.' },
+    'reply-just-there': { speaker: 'actor',
+                      en: 'Just down the road.', es: 'Está aquí al lado.',
+                      pt: 'É aqui ao lado.', tr: 'Hemen şurada.',
+                      pl: 'Tuż obok.', ro: 'Chiar alături.' },
+    'reply-the-price': { speaker: 'actor',
+                      en: 'Two fifty.', es: 'Dos cincuenta.',
+                      pt: 'Dois e cinquenta.', tr: 'İki buçuk.',
+                      pl: 'Dwa pięćdziesiąt.', ro: 'Doi cincizeci.' },
+    'reply-a-number': { speaker: 'actor',
+                      en: 'Two.', es: 'Dos.',
+                      pt: 'Dois.', tr: 'İki.',
+                      pl: 'Dwa.', ro: 'Doi.' },
+    'reply-got-it': { speaker: 'actor',
+                      en: 'Got it.', es: 'Hecho.',
+                      pt: 'Feito.', tr: 'Tamamdır.',
+                      pl: 'Jasne.', ro: 'Gata.' },
+    'reply-enjoy': { speaker: 'actor',
+                      en: 'Enjoy yourself.', es: 'Que lo pases bien.',
+                      pt: 'Diverte-te.', tr: 'İyi eğlenceler.',
+                      pl: 'Miłej zabawy.', ro: 'Distracție plăcută.' },
     /* The learner half of the price exchange. Zero-slot, like `thank-you`. */
     'how-much-is-it': { speaker: 'learner',
                       en: 'How much is it?', es: '¿Cuánto es?',
@@ -816,6 +865,22 @@ window.QUEST = (function () {
      a line in the wrong language. */
   const ACTOR_REACTIONS = { right: 'ok-then', wrong: 'say-again' };
 
+  /* ...and the cafe's, per construction. A miss still falls through to
+     ACTOR_REACTIONS above, so a construction with no answer written for it
+     gets the old one rather than silence. */
+  const CAFE_REPLIES = {
+    'want-x': 'reply-coming-up',
+    'is-there-x': 'reply-we-have-it',
+    'there-is-x': 'reply-thats-right',
+    'there-is-no-x': 'reply-ill-check',
+    'where-is-x': 'reply-just-there',
+    'how-much-x': 'reply-the-price',
+    'how-many-lira': 'reply-the-price',
+    'how-many': 'reply-a-number',
+    'x-items': 'reply-got-it',
+    'want-to-do-x': 'reply-enjoy',
+  };
+
   /* ---------- the three venues ----------
      NJA-3207. One night out, three places to have it. Every venue runs the
      SAME nine constructions — that is the point of the choice: the child meets
@@ -870,7 +935,9 @@ window.QUEST = (function () {
     ? Object.keys(window.CAFE_PACK.patterns) : [];
   /* Hers. Slotless on purpose - see the note on the cafe's `patterns`. */
   const CAFE_ACTORS = ['in-a-minute', 'what-would-you-like', 'anything-else',
-                       'would-you-like-something', 'ok-then', 'say-again'];
+                       'would-you-like-something', 'ok-then', 'say-again']
+                      .concat(Object.values(CAFE_REPLIES)
+                        .filter((v, i, a) => a.indexOf(v) === i));
 
   const VENUES = {
     /* The original night, unchanged but for the person behind the counter. */
@@ -2115,13 +2182,54 @@ Return JSON only.`,
      whichever frame list is being rendered gets this wrong in exactly that
      case ("I like disco" for "I like el disco"), so `forms` is looked up per
      (slot key, language) from that language's own chunked pattern. */
-  function render(frames, lang, fill, inTarget, forms) {
+  /* A word crossing into a sentence that has NOT crossed. The noun changes
+     language; the article it arrives with must not come with it.
+
+     Rendering the target form whole put the target's own article inside the
+     child's sentence: a Spanish child learning English was asked to say
+     "Quiero a tea.", "¿Donde esta the hotel?" and "¿Cuanto cuesta the milk?" -
+     sentences in neither language, and the first words of English they ever
+     read. The article belongs to the frame, so it comes from the frame's
+     language and only the last word crosses.
+
+     Only where the slot is marked `^`, which is the pattern saying the slot
+     opens with an article the sentence can hold. Without it the slot may be a
+     verb phrase ("ir de compras" / "go shopping"), where "all but the last
+     word" is not an article and the blend would be nonsense. */
+  /* `^` is declared per language, because whether a slot opens with an
+     article is a fact about that language: English writes `{place:definite^}`
+     and Polish, which has no articles, writes `{place:definite}`. So both
+     flags matter. The crossing word drops ITS article if it has one, and the
+     sentence supplies its own if its language has one - which is how a Polish
+     child stops reading "Gdzie jest the hotel?" and a Spanish one stops
+     reading "¿Donde esta the hotel?", by two different routes. */
+  function blend(host, crossed, hostLead, crossLead) {
+    const h = String(host).trim().split(/\s+/);
+    const c = String(crossed).trim().split(/\s+/);
+    const noun = (crossLead && c.length > 1) ? c.slice(1).join(' ') : String(crossed);
+    const art = (hostLead && h.length > 1) ? h.slice(0, h.length - 1).join(' ') + ' ' : '';
+    return art + noun;
+  }
+  /* Which slots open with an article, in each of the two frames. */
+  function leadsOf(group) {
+    const out = {};
+    for (const s of slotsOf(group.nativeFrames)) (out[s.key] = out[s.key] || {}).native = !!s.givenLead;
+    for (const s of slotsOf(group.targetFrames)) (out[s.key] = out[s.key] || {}).target = !!s.givenLead;
+    return out;
+  }
+
+  function render(frames, lang, fill, inTarget, forms, frameTarget, leads) {
     const out = frames.map(f => {
       if (f.type === 'text') return f.text;
       const id = fill[f.key];
       if (!id) return '___';
-      const wordLang = (inTarget && inTarget.has(f.key)) ? lang.target : lang.native;
-      return vocabItems[id][wordLang][formOf(forms, f, wordLang)];
+      const crosses = !!(inTarget && inTarget.has(f.key));
+      const wordLang = crosses ? lang.target : lang.native;
+      const word = vocabItems[id][wordLang][formOf(forms, f, wordLang)];
+      if (!crosses || frameTarget || !leads) return word;
+      const L2 = leads[f.key] || {};
+      return blend(vocabItems[id][lang.native][formOf(forms, f, lang.native)],
+                   word, L2.native, L2.target);
     }).join('');
     return openCap(out);
   }
@@ -2300,6 +2408,9 @@ Return JSON only.`,
     })).filter(g => q.groups.some(x => x.id === g.answerId));
 
     q.actorCues = ACTOR_CUES;
+    /* Only the cafe has them; every other venue falls through to the pair in
+       ACTOR_REACTIONS, which is what it has always used. */
+    q.actorReplies = activity.venue === 'cafe' ? CAFE_REPLIES : null;
     q.actorReactions = ACTOR_REACTIONS;
 
     /* ONE actor line, in the target language, its slot filled.
@@ -2500,22 +2611,31 @@ Return JSON only.`,
       },
       /* What sits in each slot, in both languages — each in ITS OWN
          language's form, which is the whole of NJA-3145's grammar context. */
-      items: group.slotKeys.map(key => ({
-        key, id: use[key],
-        native: vocabItems[use[key]][L.native][slotForm(group, key, L.native)],
-        target: vocabItems[use[key]][L.target][slotForm(group, key, L.target)],
-      })),
+      items: group.slotKeys.map(key => {
+        const native = vocabItems[use[key]][L.native][slotForm(group, key, L.native)];
+        const target = vocabItems[use[key]][L.target][slotForm(group, key, L.target)];
+        const ld = leadsOf(group)[key] || {};
+        return {
+          key, id: use[key], native, target,
+          /* The same word as `target`, as it appears inside a sentence that
+             has not crossed yet. `gaps` builds its cells from this so the
+             cells and the sentence agree token for token - they are walked in
+             step, and a blend that shortened or lengthened one of them would
+             put the gap under the wrong word. */
+          crossed: blend(native, target, ld.native, ld.target),
+        };
+      }),
       get item() { return this.items[0] || null; },
 
       allNative: render(group.nativeFrames, L, use, none, group.forms),
-      allTarget: render(group.targetFrames, L, use, all, group.forms),
+      allTarget: render(group.targetFrames, L, use, all, group.forms, true),
       /* Any mix: the frame in one language, a named set of slots in the other.
          This is what replaces the old four fixed renderings — with two slots
          there are six combinations, not four, and with three there are
          sixteen, so they are computed rather than enumerated. */
       say(frameTarget, targetSlots) {
         const frames = frameTarget ? group.targetFrames : group.nativeFrames;
-        return render(frames, L, use, asTarget(targetSlots || []), group.forms);
+        return render(frames, L, use, asTarget(targetSlots || []), group.forms, frameTarget, leadsOf(group));
       },
     };
   }

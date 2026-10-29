@@ -1545,6 +1545,36 @@
      `auditLine`, `stolenWords` and `badPhrases` stay; the coach still runs on
      a model and still needs watching. */
 
+  /* What the coach may legitimately write in the target language, in arm B.
+     `introducedWords` reads arm A's exposure ratchet - `state.items`,
+     `state.patterns` - and arm B never touches it: it ratchets through
+     MASTERY.apply instead. So the set came back EMPTY on every turn, and the
+     audit below threw away every coach line that contained a single English
+     word. It threw away 100% of them. The child read the written floor all
+     night and we were paying for a model call a turn to produce lines nobody
+     ever saw - including good ones: "La leche es milk en inglés" is exactly
+     what the prompt asks for.
+
+     Same rule as arm A, read from the record that arm B actually keeps: every
+     word they have met, every construction they have been taught, and the
+     words this turn is handing over - which the prompt orders the coach to
+     write, so refusing them is asking for a line and rejecting it for being
+     the line we asked for. */
+  function masteryAllowed(fresh) {
+    const out = new Set();
+    const add = str => { for (const w of String(str).split(/\s+/)) { const k = bare(w); if (k) out.add(k); } };
+    const rec = (state && state.mastery) || { words: {}, patterns: {} };
+    for (const [id, w] of Object.entries(rec.words || {})) {
+      const it = w && w.seen && Q.vocabItems[id] && Q.vocabItems[id][TL()];
+      if (it) for (const f of (Q.forms || ['bare', 'definite', 'indefinite'])) if (it[f]) add(it[f]);
+    }
+    for (const [id, pt] of Object.entries(rec.patterns || {}))
+      if (pt && pt.introduced && Q.vocabPatterns[id] && Q.vocabPatterns[id][TL()])
+        add(String(Q.vocabPatterns[id][TL()]).replace(/\{[^}]+\}/g, ' '));
+    for (const f of (fresh || [])) add(f.text);
+    return out;
+  }
+
   /* The coach's line, asked for only once the character's is settled. */
   async function generateCoachLine(plan, actorLine, actorNative, fresh) {
     if (!serverUp) { lastCoachWhy = 'no server'; return null; }
@@ -1565,7 +1595,7 @@
        coach. The one exception is the construction they are introducing, which
        the audit below already allows for. */
     const intro = newThing(plan);
-    const allowed = introducedWords();
+    const allowed = MASTERY_ARM ? masteryAllowed(fresh) : introducedWords();
     if (intro && intro.by === 'coach') for (const w of String(intro.target).split(/\s+/)) allowed.add(bare(w));
     /* NJA-3317 coach AC 1 asks him to say what her words mean, which he cannot
        do without writing them. So the line she just said is allowed through
@@ -1573,6 +1603,23 @@
        one more source of legitimate target-language words in it. */
     for (const w of String(actorLine || '').split(/\s+/)) { const k = bare(w); if (k) allowed.add(k); }
     if (auditLine(j.coachText, allowed).over > 0) { lastCoachWhy = 'wrote in the target language'; return null; }
+    /* On target, or not at all. Told to teach `milk` with no situation to put
+       it in, the model wrote a situation of its own and offered the child a
+       juice, a coffee and a tea on three turns running - all in the child's
+       own language, so the audit above waved them through. A hint that names
+       a thing this turn is not about is worse than the written floor, because
+       the floor at least names the right one. The construction's `goal` now
+       carries the word, so this should be rare; it is the backstop. */
+    if (MASTERY_ARM && plan.itemId) {
+      const it = Q.vocabItems[plan.itemId] || {};
+      const nat = String((it[NL()] || {}).bare || '').toLowerCase();
+      const tgt = String((it[TL()] || {}).bare || '').toLowerCase();
+      const line = String(j.coachText).toLowerCase();
+      if (nat && tgt && line.indexOf(nat) < 0 && line.indexOf(tgt) < 0) {
+        lastCoachWhy = 'named something the turn is not about';
+        return null;
+      }
+    }
     const mixed = mixedQuote(j.coachText);
     if (mixed) { lastCoachWhy = 'quoted a half-translated sentence: ' + mixed; return null; }
     /* Coach AC 3, and the reason the prompt alone was never going to be
@@ -2790,10 +2837,18 @@
      reply to what they said. */
   function reactionLine(wasCorrect) {
     const map = Q.actorReactions || { right: 'ok-then', wrong: 'say-again' };
-    const out = Q.actorSay(map[wasCorrect ? 'right' : 'wrong'], {
+    /* What she says back depends on what was SAID to her, where the scenario
+       has written her an answer for it. A wrong answer is still "Sorry?" -
+       she did not understand, and that is not per-construction. */
+    const own = wasCorrect && Q.actorReplies && plan &&
+                Q.actorReplies[plan.patternId];
+    const out = Q.actorSay(own || map[wasCorrect ? 'right' : 'wrong'], {
       expected: [plan && plan.expected, plan && plan.pair && plan.pair.allTarget],
     });
-    return out ? out.line : null;
+    /* A construction with no answer written for it falls back rather than
+       standing there silent. */
+    const fb = out || (own ? Q.actorSay(map[wasCorrect ? 'right' : 'wrong'], {}) : null);
+    return fb ? fb.line : null;
   }
 
   async function sayReaction(said, wasCorrect) {
@@ -3932,6 +3987,10 @@
        the night should not have to know which arm it is in. */
     rung: () => (plan && plan.kind) || 'production',
     introduced: () => [...introducedWords()],
+    /* What the coach is allowed to say in the target language this turn. It
+       was empty all night in arm B, which is why every coach line was thrown
+       away, so a test can now watch it fill. */
+    coachAllowed: () => [...(MASTERY_ARM ? masteryAllowed(turnFresh) : introducedWords())],
     chatHistory: () => chatLog.map(e => ({ role: e.role, messageFragments: e.messageFragments })),
     events: () => state.events,
     marks: () => marks.slice(),

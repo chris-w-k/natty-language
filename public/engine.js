@@ -691,7 +691,13 @@ window.ENGINE = (function () {
       }
       const inTarget = want.has(f.key);
       const item = pair.items.find(i => i.key === f.key);
-      const text = item ? (inTarget ? item.target : item.native) : '___';
+      /* `crossed` rather than `target` when the sentence around it is still
+         the child's own language: the noun crosses, its article does not.
+         Identical to `target` on a slot with no `^`, and on a frame that has
+         itself crossed the whole sentence is the target language already. */
+      const text = item
+        ? (inTarget ? (frameTarget ? item.target : (item.crossed || item.target)) : item.native)
+        : '___';
       /* A slot marked `^` hands its leading word back to the sentence: "Do
          you have a ___?" rather than "Do you have ___ ___?". The article is
          still the vocabulary's own, so this costs nothing in the languages
@@ -1174,6 +1180,12 @@ window.ENGINE = (function () {
       kind: 'production',
       phase: 'night',
       revision: false,
+      /* The coach's first part - why this exchange is happening - plus WHAT
+         they want this turn. The construction's own goal is a standing
+         situation ("you want to order something"); the word is what makes it
+         this turn's, and without it the coach picked a noun of its own and
+         told a child to order juice. */
+      goal: masteryGoal(quest, pid, itemId),
       /* Max's L0 to L4, on the event, because it is the thing his model
          decides and ours used to hard-code. */
       level: level,
@@ -1281,6 +1293,20 @@ window.ENGINE = (function () {
     const fresh = patternIds.filter(id => !(rec.patterns[id] || {}).introduced);
     return fresh.find(id => ((rec.patterns[id] || {}).dueTurn || 0) <= turn)
         || fresh[0] || null;
+  }
+
+  /* Written for a model that is about to improvise, so it says the thing and
+     then says it again in the words the turn actually needs. */
+  function masteryGoal(quest, pid, itemId) {
+    const g = (quest.vocabPatterns[pid] || {}).goal || '';
+    const it = itemId && quest.vocabItems[itemId];
+    if (!it) return g;
+    const native = (it[quest.nativeLang] || {}).bare || '';
+    const target = (it[quest.targetLang] || {}).bare || '';
+    if (!native) return g;
+    return (g ? g + ' ' : '') +
+      'This turn it is about "' + native + '"' + (target ? ' (' + target + ')' : '') +
+      ' and nothing else - do not name any other thing.';
   }
 
   function masteryPhase(rec, patternIds, wordIds, quest) {
