@@ -1358,6 +1358,10 @@
          sentence does and which thing it is about rather than inferring both
          from a cafe. */
       act: plan.act || '',
+      /* Only when there IS a line of hers. Sent as `false` before she has
+         spoken it reads as "they have heard this before", which is a claim
+         about nothing. */
+      heardNew: (MASTERY_ARM && heardLine) ? heardNew : undefined,
       turnWord: plan.turnWord || null,
       firstTurn: plan.nightIndex === 0 && !plan.revision && !plan.makeup,
       /* NJA-3317. The character's line is in the target language now, so the
@@ -2914,13 +2918,19 @@
      turn's coach line is written - and the coach is the only one who can say
      what it meant. Without this he was writing into a conversation he could
      not see the last line of. */
-  let heardLine = '', heardNative = '';
+  let heardLine = '', heardNative = '', heardNew = false;
+  /* Her lines are a short rotating set, so without this the coach translates
+     "Marchando." every time she says it - which it did, twice in four turns.
+     A line is new once. */
+  const heardBefore = new Set();
 
   async function sayReaction(said, wasCorrect) {
     const cue = reactionLine(wasCorrect);
     const line = cue && cue.line;
     if (!line) return;
     heardLine = line; heardNative = (cue && cue.native) || '';
+    heardNew = !heardBefore.has(line);
+    heardBefore.add(line);
     for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
     const frags = toFragments(line, [line], { allTarget: true });
     say(ACTOR, fragmentsHTML(frags), line, frags);

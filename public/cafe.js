@@ -39,7 +39,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Este {thing:bare}?',
                   tr: '{thing:bare} var mı?' },
     /* Max row 2, positive variant. */
-    'there-is-x': { speaker: 'learner', act: 'tell her it is there - a statement, not a question', goal: 'She has asked what they have got and you are telling her, not ordering: you have spotted it on the counter and you are pointing it out.', slot: 'thing',
+    'there-is-x': { speaker: 'learner', act: 'tell her it is there - a statement, not a question', goal: 'You can see it on the counter from where you are standing, and you are pointing it out to her rather than ordering it.', slot: 'thing',
                   en: 'There is {thing:bare}.',
                   es: 'Hay {thing:bare}.',
                   pt: 'Há {thing:bare}.',
@@ -47,7 +47,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Este {thing:bare}.',
                   tr: '{thing:bare} var.' },
     /* Max row 2, negative variant. */
-    'there-is-no-x': { speaker: 'learner', act: 'tell her it has run out - a statement, not a question', goal: 'They have run out of it and you are saying so.', slot: 'thing',
+    'there-is-no-x': { speaker: 'learner', act: 'tell her it has run out - a statement, not a question', goal: 'You have looked and it is not there - the shelf is empty - and you are telling her so. What you say is a NEGATIVE: there is none.', slot: 'thing',
                   en: 'There is no {thing:bare}.',
                   es: 'No hay {thing:bare}.',
                   pt: 'Não há {thing:bare}.',
@@ -55,7 +55,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Nu este {thing:bare}.',
                   tr: '{thing:bare} yok.' },
     /* Max row 3. Takes a PLACE. */
-    'where-is-x': { speaker: 'learner', act: 'ask her where it is', goal: 'You do not know your way round here and you need directions.', slot: 'place',
+    'where-is-x': { speaker: 'learner', act: 'ask her where it is', goal: 'You are asking for directions to somewhere OUTSIDE - a street, a building - not for something she sells. You do not know the area.', slot: 'place',
                   en: 'Where is {place:definite^}?',
                   es: '¿Dónde está {place:definite^}?',
                   pt: 'Onde fica {place:definite^}?',

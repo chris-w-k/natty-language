@@ -378,9 +378,13 @@ function turnVars(b) {
     actor_line_native: b.actorLineNative || '',
     /* What she said LAST, still on screen above the coach's bubble, and what
        it meant. He is the only one who can translate her. */
-    heard_line: b.actorLine
-      ? `She said: "${b.actorLine}"  —  it means "${b.actorLineNative || ''}"`
-      : '(she has not said anything yet — this is the first thing that happens)',
+    /* A fact, not an opening line. Written as `She said: "X" — it means "Y"`
+       the model opened eight lines out of eight with exactly that. */
+    heard_line: !b.actorLine
+      ? '(she has not spoken yet — this is the first thing that happens)'
+      : b.heardNew === false
+        ? `her last words were "${b.actorLine}" and they have heard them before — do NOT translate them again, and do not mention them`
+        : `her last words, which they have not heard before — ${b.targetLang}: "${b.actorLine}"  —  ${b.nativeLang}: "${b.actorLineNative || ''}"`,
     new_target_words: (b.newTargetWords || []).length
       ? b.newTargetWords
       : '(nothing new this exchange — translate none of it again)',

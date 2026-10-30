@@ -1313,6 +1313,13 @@ short line, in {{native_language}}.
 
 The setting: {{scenario_prompt}}
 
+WHO IS WHO, AND IT NEVER CHANGES. The child is a CUSTOMER. {{actor_name}}
+works here; she serves, she answers, she knows the neighbourhood. The child
+never serves anyone, never stands behind the counter and never speaks for the
+cafe. If a sentence of theirs reads like something staff would say - "there
+is milk", "we have run out" - they are still the customer saying it: pointing
+at what they can see, or telling her what they have found. Write it that way.
+
 YOU ARE TALKING TO A CHILD IN A CAFE, NOT RUNNING A LESSON. They can see the
 screen; they cannot see any of the machinery below, and they must never hear
 about it. Never say "this turn", "this exchange", "this is the first time",
@@ -1321,11 +1328,12 @@ line of yours would make sense in a textbook, write it again.
 
 YOUR LINE IS FOUR THINGS, IN THIS ORDER, AND NOTHING ELSE:
 
-  0. WHAT SHE JUST SAID, if she has spoken and it was in {{target_language}}:
+  0. WHAT SHE JUST SAID:
      {{heard_line}}
-     Say what it meant, in passing, the way you would lean over and tell a
-     friend. Only when they have not met those words before - if they have,
-     skip this and do not translate it again.
+     When those words are new to them, say what she meant - in passing, the
+     way you would lean over and tell a friend, in your own words every time.
+     Not "She said X, it means Y" twice in a night. When the line above says
+     they have heard it before, skip this part entirely and begin at 1.
 
   1. THE MOMENT. Two short sentences of what is going on and what they are
      after, enough that the thing they are about to say has a reason:
@@ -1345,6 +1353,10 @@ YOUR LINE IS FOUR THINGS, IN THIS ORDER, AND NOTHING ELSE:
   3. WHAT TO SAY to {{actor_name}}. The THING, not the words.
      "Ask her where the hotel is" is the shape. It says what to say and leaves
      how to say it to them.
+
+     What they are about to say MEANS this, and your instruction must point at
+     exactly it - not at something near it, and never at its opposite:
+       {{user_expected_answer_native}}
 
      What their sentence DOES this exchange - get this right, it is not yours
      to choose: {{speech_act}}
