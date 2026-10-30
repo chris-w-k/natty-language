@@ -1186,8 +1186,18 @@
      When the two disagreed about whether "no" was Spanish, the audit and the
      highlighting disagreed with each other — the line passed the guard and
      then rendered a blue English word. */
-  const looksForeign = F.looksForeign;
   const AMBIGUOUS = F.AMBIGUOUS;
+  /* Which marks mean "target language" in THIS pair, recomputed whenever the
+     pair changes. Null for a target that has no marks of its own - English
+     next to Spanish - and then a word is target-language only if the
+     vocabulary says so, which is the only honest test there is. */
+  let MARKS = null, marksFor = null;
+  function targetMarks() {
+    if (marksFor === Q) return MARKS;
+    marksFor = Q; MARKS = F.marksFor(NL(), TL());
+    return MARKS;
+  }
+  const looksForeign = tok => F.looksForeign(tok, targetMarks());
   const countsAsTarget = (tok, vocab) => {
     const w = bare(tok);
     return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
@@ -1197,7 +1207,11 @@
      side only: a coach who answers in the language the child is learning is
      not a coach. One shared word is coincidence, two is a pattern. */
   function looksTargetLanguage(text, limit = 2) {
-    if (/[¿¡]/.test(text) || /[áéíóúñü]/i.test(text)) return true;
+    /* Same correction as `looksForeign`: a bare test for Spanish marks said
+       YES to every Spanish sentence, including the ones written for a Spanish
+       child in their own language. */
+    const m = targetMarks();
+    if (m && m.test(text)) return true;
     const v = glossable();
     return String(text).split(/\s+/).filter(t => countsAsTarget(t, v)).length >= limit;
   }

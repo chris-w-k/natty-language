@@ -34,7 +34,39 @@
                              'mira', 'pasa', 'o', 'es', 'la', 'el', 'te',
                              'tu', 'mi', 'y', 'en', 'con', 'toma']);
 
-  const looksForeign = tok => /[¿¡]/.test(tok) || /[áéíóúñü]/i.test(tok);
+  /* Which marks belong to which language. A token "looks foreign" when it
+     carries a mark the TARGET language uses and the NATIVE one does not -
+     which is a fact about the pair, not about Spanish.
+
+     This was `/[¿¡]/ || /[aeiounu accents]/`, hard-coded, from when the pair
+     was always English and Spanish. With the pair reversible it reads the
+     child's OWN language as foreign: every Spanish coach line containing "¿",
+     "está" or "inglés" was counted as English, failed the audit, and was
+     thrown away. A Spanish child learning English never saw a model-written
+     hint - not one, on any turn of any night. */
+  const MARKS = {
+    en: '',
+    es: '¿¡áéíóúñü',
+    pt: 'ãõçáéíóúâêô',
+    pl: 'ąćęłńóśźż',
+    ro: 'ăâîșţțşí',
+    tr: 'çğıöşüâî',
+  };
+  /* The marks that say "target" for this pair: the target's own, less any the
+     native language also uses. A pair that shares all its marks - or a target
+     with none, like English - gets null, and the decision falls to the
+     vocabulary list, which is the honest answer: you cannot tell English from
+     Spanish by looking for accents. */
+  function marksFor(nativeCode, targetCode) {
+    const t = MARKS[targetCode], n = MARKS[nativeCode];
+    if (t == null || n == null) return /[¿¡]|[áéíóúñü]/i;   // unknown pair: as before
+    const own = [...t].filter(c => n.indexOf(c) < 0);
+    if (!own.length) return null;
+    return new RegExp('[' + own.join('').replace(/[\]\\^-]/g, '\\$&') + ']', 'i');
+  }
+  const looksForeign = (tok, marks) =>
+    marks === null ? false
+      : (marks || /[¿¡]|[áéíóúñü]/i).test(tok);
 
   /* Is this token one of the target-language words the child has met?
      `allowed` is the engine's introduced list, bare-keyed. */
@@ -45,7 +77,7 @@
      painted as Spanish, and on a line with no English in it that test only
      costs the child a word they cannot tap: "el", "la", "a" and the rest come
      out as dead text in the middle of a highlighted run. */
-  function isTarget(tok, allowed, allTarget) {
+  function isTarget(tok, allowed, allTarget, marks) {
     const w = bare(tok);
     if (!w) return false;
     /* A token with no letters in it is not a word in any language: the gap
@@ -55,7 +87,7 @@
     if (!allowed.has(w)) return false;
     if (allTarget) return true;
     // "no" inside an English sentence is English, however Spanish it also is
-    return looksForeign(tok) || !AMBIGUOUS.has(w);
+    return looksForeign(tok, marks) || !AMBIGUOUS.has(w);
   }
 
   /* How a phrase is looked up in the table: the same normalisation content
@@ -82,6 +114,12 @@
       : new Set((allowedWords || []).map(bare));
     const table = phrases || null;
     const whole = !!(opts && opts.allTarget);
+    /* Which marks say "target" for this pair. Passed in by the caller, who is
+       the only one that knows the pair; absent, the old Spanish-shaped guess
+       stands, so an existing caller behaves exactly as it did. */
+    const marks = opts && 'marks' in opts ? opts.marks
+      : (opts && opts.native && opts.target) ? marksFor(opts.native, opts.target)
+      : undefined;
     const out = [];
     const push = (type, text, translation) => {
       const last = out[out.length - 1];
@@ -103,7 +141,7 @@
         else out.push({ type: 'text', text: tok });
         continue;
       }
-      if (!isTarget(tok, allowed, whole)) { push('text', tok); continue; }
+      if (!isTarget(tok, allowed, whole, marks)) { push('text', tok); continue; }
 
       /* The longest run starting here that the content can translate, and
          whose every word has been introduced. */
@@ -114,7 +152,7 @@
           const t = toks[j];
           run += t;
           if (!t.trim()) continue;
-          if (!isTarget(t, allowed, whole)) break;
+          if (!isTarget(t, allowed, whole, marks)) break;
           const hit = table[phraseKey(run)];
           if (hit) best = { upto: j, text: run, translation: hit };
         }
@@ -140,5 +178,5 @@
     return t + n ? t / (t + n) : 0;
   }
 
-  return { fragments, plain, targetShare, bare, AMBIGUOUS, looksForeign, isTarget };
+  return { fragments, plain, targetShare, bare, AMBIGUOUS, looksForeign, isTarget, marksFor, MARKS };
 });
