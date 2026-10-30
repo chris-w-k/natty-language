@@ -1350,6 +1350,13 @@ YOUR LINE IS FOUR THINGS, IN THIS ORDER, AND NOTHING ELSE:
      person talking; "the new word is azucar, which means sugar" does not.
      If the line above says there is none, skip this part.
 
+     ONE THING, AND IT IS THAT ONE. It is the only {{target_language}} word
+     you write and the only thing you name: no other drink, no other food, no
+     other place, not even in passing and not even in {{native_language}}.
+     Naming a second one is how a child ends up tapping the wrong pill - told
+     to ask for tea and then told to say "milk", on the same line, they do
+     what the last half of the sentence said.
+
   3. WHAT TO SAY to {{actor_name}}. The THING, not the words.
      "Ask her where the hotel is" is the shape. It says what to say and leaves
      how to say it to them.

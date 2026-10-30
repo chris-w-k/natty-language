@@ -1656,6 +1656,26 @@
         lastCoachWhy = 'named something the turn is not about';
         return null;
       }
+      /* ...and not a SECOND one. Naming the turn's word somewhere and then
+         instructing about a different one is worse than naming neither: the
+         child does what the last half of the sentence said. "Te esta
+         preparando el te. Dile que quieres «milk»" was a tea turn.
+
+         Max's section 8 asks for exactly one target word a turn, so the pool
+         this turn draws from is the list of words that must not appear. */
+      /* Another tray word in the TARGET language only. The native form is
+         scene-setting - "huele a cafe recien hecho" is the life the hint is
+         supposed to have, and refusing it would take back the thing that
+         makes these lines readable. The target form is different: a second
+         English word on the line is a second candidate answer, and the child
+         takes the last one they read. */
+      const pool = (plan.pool || []).filter(id => id !== plan.itemId);
+      const intruder = pool.find(id => {
+        const ot = String(((Q.vocabItems[id] || {})[TL()] || {}).bare || '').toLowerCase();
+        return ot.length > 2 &&
+          new RegExp('(^|[^\\p{L}])' + ot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^\\p{L}])', 'u').test(line);
+      });
+      if (intruder) { lastCoachWhy = 'named another word from the tray: ' + intruder; return null; }
     }
     const mixed = mixedQuote(j.coachText);
     if (mixed) { lastCoachWhy = 'quoted a half-translated sentence: ' + mixed; return null; }
