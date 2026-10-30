@@ -1319,6 +1319,32 @@ window.ENGINE = (function () {
         || fresh[0] || null;
   }
 
+  /* ---------- the staircase ----------
+     A construction is not opened until the ones before it can be USED.
+
+     The list walk alone opened all ten on the first night: introduce fired
+     whenever an un-introduced one existed, so the night was a tour of the
+     whole pack and the learner left with ten things at 10% instead of one
+     thing they could say. Max's own screen shows the opposite - CAN USE 80%,
+     PRACTICING 74%, PRACTICING 10%, then NEW, NEW, NEW - each construction
+     worked up before the next is unwrapped.
+
+     CAN_USE is his own softer threshold (section 2), the one his screen
+     labels "can use", so the gate is his number rather than a new one. The
+     one immediately before the frontier only has to be PRACTISING, which is
+     what lets two be live at once the way his screen shows. */
+  const PRACTISING = 0.35;
+  function teachingOpen(rec, patternIds) {
+    const taught = patternIds.filter(id => (rec.patterns[id] || {}).introduced);
+    if (!taught.length) return true;            // nothing taught yet: open it
+    const m = id => (rec.patterns[id] || {}).mastery || 0;
+    /* everything but the newest must be usable, and the newest practising */
+    const newest = taught[taught.length - 1];
+    const older = taught.slice(0, -1);
+    return older.every(id => m(id) >= CAN_USE_OF(rec)) && m(newest) >= PRACTISING;
+  }
+  const CAN_USE_OF = () => (window.MASTERY ? window.MASTERY.CAN_USE : 0.75);
+
   /* Written for a model that is about to improvise, so it says the thing and
      then says it again in the words the turn actually needs. */
   function masteryGoal(quest, pid, itemId) {
@@ -1360,7 +1386,8 @@ window.ENGINE = (function () {
     if (veryWeak.length) return 'consolidate';
     /* B - teach a construction, on a word they already have, so the turn
        still carries exactly one new thing. */
-    if (patternIds.some(id => !(rec.patterns[id] || {}).introduced)) return 'introduce';
+    if (patternIds.some(id => !(rec.patterns[id] || {}).introduced) &&
+        teachingOpen(rec, patternIds)) return 'introduce';
     /* B2 - vocabulary expansion, once nothing is floundering. */
     if (wordIds.some(id => !w(id) || !w(id).seen)) return 'expand';
     /* B3 again, for the merely shaky. */

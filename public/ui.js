@@ -1401,7 +1401,10 @@
       /* Only when there IS a line of hers. Sent as `false` before she has
          spoken it reads as "they have heard this before", which is a claim
          about nothing. */
-      heardNew: (MASTERY_ARM && heardLine) ? heardNew : undefined,
+      /* She speaks the child's language in arm B, so there is never anything
+         of hers to translate - the coach is told what she said for
+         continuity and told not to gloss it. */
+      heardNew: (MASTERY_ARM && heardLine) ? false : undefined,
       turnWord: plan.turnWord || null,
       firstTurn: plan.nightIndex === 0 && !plan.revision && !plan.makeup,
       /* NJA-3317. The character's line is in the target language now, so the
@@ -1655,7 +1658,11 @@
        the thirty-nine fallbacks in a twenty-run sitting were this: we asked
        for a translation and binned it for being one. Arm A has always
        allowed the actor's line through for exactly this reason. */
-    for (const w of String(heardLine || '').split(/\s+/)) { const k = bare(w); if (k) out.add(k); }
+    /* ...and not hers either, in arm B, for the same reason: she speaks
+       their language now, so there is nothing of hers to allow and painting
+       it would mark English as Spanish. */
+    if (!MASTERY_ARM)
+      for (const w of String(heardLine || '').split(/\s+/)) { const k = bare(w); if (k) out.add(k); }
     return out;
   }
 
@@ -1891,9 +1898,17 @@
   function coachCopy(plan, gen) {
     const fb = fallbackLines(plan);
     const ask = gen && gen.coachText ? gen.coachText : fb.coach_line;
-    const frags = gen && gen.chatHistory && gen.chatHistory[0]
+    let frags = gen && gen.chatHistory && gen.chatHistory[0]
       ? gen.chatHistory[0].messageFragments
       : toFragments(ask);
+    /* The sentence they are reaching for, quoted in their OWN language -
+       «I want to go shopping.» - is the one thing on screen a child cannot
+       ask about. It is not target language, so nothing marks it, so tapping
+       it did nothing; and the coach is forbidden from writing the answer, so
+       there is no other way to see it. Make that quote tappable, carrying
+       the target sentence as its meaning: available on a tap, never on the
+       page by default, which is the same bargain as every other gloss. */
+    if (MASTERY_ARM) frags = markWanted(frags, plan);
 
     const intro = newThing(plan);
     const owed = intro && intro.by === 'coach' &&
@@ -1935,6 +1950,40 @@
         : frags.concat(toFragments(' ' + intro.target, [intro.target]),
                        [{ type: 'text', text: ' — ' + intro.means }]),
     };
+  }
+
+  /* Find the construction, quoted in the child's own language, inside the
+     coach's line, and turn that run into one tappable fragment. Matched on
+     the sentence the engine is asking for rather than on quotation marks, so
+     a line that quotes something else is left alone. */
+  function markWanted(frags, plan) {
+    const want = plan && plan.pair && plan.pair.allNative;
+    const give = plan && plan.pair && plan.pair.allTarget;
+    if (!want || !give) return frags;
+    const needle = E.norm(want);
+    if (!needle) return frags;
+    const out = [];
+    for (const f of (frags || [])) {
+      if (f.type !== 'text' || E.norm(f.text).indexOf(needle) < 0) { out.push(f); continue; }
+      /* locate it in the raw text, punctuation and quotes included */
+      const words = String(f.text).split(/(\s+)/);
+      let hit = -1, len = 0;
+      for (let i = 0; i < words.length && hit < 0; i += 2) {
+        for (let j = i; j < words.length; j += 2) {
+          const run = words.slice(i, j + 1).join('');
+          if (E.norm(run) === needle) { hit = i; len = j - i + 1; break; }
+          if (E.norm(run).length > needle.length) break;
+        }
+      }
+      if (hit < 0) { out.push(f); continue; }
+      const before = words.slice(0, hit).join('');
+      const run = words.slice(hit, hit + len).join('');
+      const after = words.slice(hit + len).join('');
+      if (before) out.push({ type: 'text', text: before });
+      out.push({ type: 'target', text: run, translation: give });
+      if (after) out.push({ type: 'text', text: after });
+    }
+    return out;
   }
 
   /* ---------- tappable Spanish ----------
@@ -2993,15 +3042,39 @@
 
   async function sayReaction(said, wasCorrect) {
     const cue = reactionLine(wasCorrect);
-    const line = cue && cue.line;
-    if (!line) return;
-    heardLine = line; heardNative = (cue && cue.native) || '';
+    if (!cue || !cue.line) return;
+    /* ---------- what language SHE speaks ----------
+       The child's own, except for the words and constructions this scenario
+       teaches. A pre-A1 learner who is answered entirely in the language
+       they are learning cannot tell whether they got it right, and "Esta
+       aqui al lado" taught them nothing because none of it is on the list.
+       The target language should appear where it is BEING taught and
+       nowhere else.
+
+       Her lines carry both renderings already, so this is a choice between
+       two strings rather than a translation: anything of hers that IS on the
+       list still crosses, because the crossing is done per word by the
+       fragment split below against the words the child has met. */
+    const line = MASTERY_ARM ? (cue.native || cue.line) : cue.line;
+    heardLine = line;
+    heardNative = MASTERY_ARM ? '' : (cue.native || '');
     heardNew = !heardBefore.has(line);
     heardBefore.add(line);
-    for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
-    const frags = toFragments(line, [line], { allTarget: true });
+    /* NOT into `metWords` in arm B. That set is "target-language words she
+       has said", and it feeds both the painter and the coach's allow-list -
+       so her line, which is now the child's OWN language, came out blue and
+       tappable with nothing behind it: "Coming" offered a Spanish child a
+       translation of an English word it did not have. */
+    if (!MASTERY_ARM)
+      for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
+    /* NOT `allTarget` in arm B: her line is the child's own language now, so
+       marking the whole of it as target would paint a Spanish sentence blue
+       and offer a Spanish child a translation of their own words. The split
+       decides word by word, which is what lets a list word inside her line
+       still come out in the target language and still be tappable. */
+    const frags = MASTERY_ARM ? toFragments(line) : toFragments(line, [line], { allTarget: true });
     say(ACTOR, fragmentsHTML(frags), line, frags);
-    await V.say(line, { speaker: ACTOR, lang: accentOf(ACTOR) });
+    await V.say(line, { speaker: ACTOR, lang: MASTERY_ARM ? NL() : accentOf(ACTOR) });
   }
 
   async function submit(text, mode) {
@@ -4108,7 +4181,11 @@
      the same signal the scene uses for the bartender, read before the `current`
      guard below, because during the intro there is no turn in progress. */
   V.onSpeaking((speaker, on) => {
-    if (speaker !== 'axel' || !introRig) return;
+    /* Whoever is walking the child in. Pinned to 'axel', the guide's mouth
+       never moved: arm B's intro speaks as `guide`, so the signal arrived
+       under a name this listener was not watching for and she delivered the
+       whole line standing perfectly still. */
+    if (speaker !== GUIDE || !introRig) return;
     clearTimeout(introMouthTimer);
     if (on) introMouth(true);
     else introMouthTimer = setTimeout(() => introMouth(false), 160);
