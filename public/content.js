@@ -1127,8 +1127,10 @@ window.QUEST = (function () {
     id: 'dev_nlt_activity_cafe',
     venue: 'cafe',
     title: 'The cafe',
-    background: 'venue-bar',
-    bed: 'audio/bed-gig.mp3',
+    background: 'venue-cafe',
+    /* No bed. Arm B is silent: see `roomBed` in ui.js and the note on
+       SFX.bed at the title card. */
+    bed: null,
     name: { en: 'The cafe', es: 'La cafeteria', pt: 'O cafe',
             tr: 'Kahveci', pl: 'Kawiarnia', ro: 'Cafeneaua' },
     actor: { id: 'bartender', speaks: 'target', accent: 'target',
@@ -1143,6 +1145,33 @@ window.QUEST = (function () {
        there silent. Only the slotless ones, because the cafe's words do not
        carry the tags the slotted actor lines ask for. */
     patterns: CAFE_PATTERNS.concat(CAFE_ACTORS),
+    /* Arm B's title card. Not the shared `scenario-title`: that one says
+       "A big night out" and belongs to the night club, which is the control
+       arm and must not move. */
+    card: {
+      en: { title: 'GOING TO THE CAFE',
+            sub: 'Learn to order drinks and food, and the other phrases you need.' },
+      es: { title: 'VAMOS A LA CAFETERIA',
+            sub: 'Aprende a pedir bebidas y comida, y las demas frases que necesitas.' },
+      pt: { title: 'VAMOS AO CAFE',
+            sub: 'Aprende a pedir bebidas e comida, e as outras frases de que precisas.' },
+      tr: { title: 'KAHVECIYE GIDIYORUZ',
+            sub: 'Icecek ve yemek siparisi vermeyi ve gereken diger kaliplari ogren.' },
+      pl: { title: 'IDZIEMY DO KAWIARNI',
+            sub: 'Naucz sie zamawiac napoje i jedzenie oraz innych potrzebnych zwrotow.' },
+      ro: { title: 'MERGEM LA CAFENEA',
+            sub: 'Invata sa comanzi bauturi si mancare, si celelalte expresii de care ai nevoie.' },
+    },
+    /* What the guide says on the way in. Hers, not Axel's - see `guide` in
+       ui.js. Written to be heard rather than read. */
+    guideLine: {
+      en: "Welcome to London! I'll take you to my favourite cafe. They only speak English there, but don't worry — I've got you.",
+      es: '¡Bienvenido a Londres! Te llevo a mi cafeteria favorita. Alli solo hablan ingles, pero tranquilo, que yo te ayudo.',
+      pt: 'Bem-vindo a Londres! Vou levar-te ao meu cafe preferido. Ali so falam ingles, mas nao te preocupes, que eu ajudo-te.',
+      tr: "Londra'ya hos geldin! Seni en sevdigim kahveciye goturuyorum. Orada sadece Ingilizce konusuyorlar ama merak etme, ben yanindayim.",
+      pl: 'Witaj w Londynie! Zabiore cie do mojej ulubionej kawiarni. Mowia tam tylko po angielsku, ale spokojnie — jestem z toba.',
+      ro: 'Bine ai venit la Londra! Te duc la cafeneaua mea preferata. Acolo se vorbeste doar engleza, dar stai linistit — sunt cu tine.',
+    },
     intro: {
       en: { title: 'AT THE CAFE', sub: 'Learn the {0} you need to order, ask and pay.', tap: 'Tap to continue' },
       es: { title: 'EN LA CAFETERIA', sub: 'Aprende el {0} para pedir, preguntar y pagar.', tap: 'Toca para continuar' },
@@ -2347,6 +2376,12 @@ Return JSON only.`,
       venue: activity.venue,
       activity: Object.assign({}, activity, {
         intro: resolveIntro(activity, LANGS.native, LANGS.target),
+        /* The title card and the guide's line, resolved for THIS pair like
+           everything else on the screen. Absent on a venue that does not
+           declare them, and the UI falls back to the shared strings. */
+        card: activity.card ? (activity.card[LANGS.native] || activity.card.en) : null,
+        guideLine: activity.guideLine
+          ? (activity.guideLine[LANGS.native] || activity.guideLine.en) : null,
         coach: COACH,
         actor: Object.assign({}, activity.actor, { name: nameIn(activity.actor.name, LANGS.native) }),
         name: nameIn(activity.name, LANGS.native),

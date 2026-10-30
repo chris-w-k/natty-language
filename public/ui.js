@@ -103,6 +103,10 @@
        nothing else. */
     bartender:      { idle: 'anim/cinema-worker-idle.json',   speak: 'anim/cinema-worker-talk.json' },
     stadium_worker: { idle: 'anim/stadium-worker-idle.json',  speak: 'anim/stadium-worker-talk.json' },
+    /* Arm B's guide on the way in. The stadium worker's body, her own voice
+       (see VOICES.guide): the cafe is a daytime scene and Axel is a cockney
+       who belongs to a night out. */
+    guide:          { idle: 'anim/stadium-worker-idle.json',  speak: 'anim/stadium-worker-talk.json' },
     cinema_worker:  { idle: 'anim/cinema-worker-idle.json',   speak: 'anim/cinema-worker-talk.json' },
   };
 
@@ -380,6 +384,13 @@
      the venue and all wrong on a title card, where he is the whole picture and
      nothing else is on stage. */
   let introRig = null;
+  /* Who walks the child in. Arm A keeps Axel; arm B is a daytime cafe and
+     gets the guide instead - different body, different voice, different
+     line. The control arm must not move, so this is the only switch. */
+  const GUIDE = MASTERY_ARM ? 'guide' : 'axel';
+  /* No music, no room tone. The venue says so by declaring no bed, which
+     keeps it a property of the place rather than of the arm. */
+  const SILENT = MASTERY_ARM;
   function introAxel() {
     const host = $('intro-axel');
     if (introRig || typeof window.lottie === 'undefined') return;
@@ -398,7 +409,7 @@
         root.appendChild(box);
         clips[key] = window.lottie.loadAnimation({
           container: box, renderer: 'svg', loop: true, autoplay: false,
-          path: ANIM.axel[key],
+          path: ANIM[GUIDE][key],
           rendererSettings: { preserveAspectRatio: 'xMidYMax slice' },
         });
         clips[key].el = box;
@@ -753,11 +764,19 @@
        no longer a moment between knowing the place and being in it. Only
        `copy.tap` is still read from the venue's intro block. */
     const copy = copyOf();
-    $('intro-title-text').textContent = t('scenario-title') || 'A big night out!';
-    $('intro-sub').textContent = t('scenario-sub') || '';
+    /* The venue may bring its own title card and its own line for whoever
+       walks the child in. The cafe does; the night club does not, and falls
+       through to the shared strings it has always used. */
+    const card = Q.activity.card;
+    const open = Q.activity.guideLine || t('axel-open') || '';
+    $('intro-title-text').textContent = (card && card.title) || t('scenario-title') || 'A big night out!';
+    $('intro-sub').textContent = (card && card.sub) || t('scenario-sub') || '';
     $('intro-tap-1').textContent = copy.tap || 'Tap to continue';
     $('intro-tap-2').textContent = copy.tap || 'Tap to continue';
-    $('intro-bubble').textContent = t('axel-open') || '';
+    $('intro-bubble').textContent = open;
+    /* Daytime: the title card is dressed by the venue too, so arm B does not
+       open on a black street under a night sky. */
+    document.getElementById('intro').dataset.scene = Q.activity.background || '';
 
     showPanel('intro-title');
     SCREEN.at('Title');
@@ -767,7 +786,9 @@
        bed on the first pointerdown — but where the browser allows it the music
        is already there when the title appears, which is the point of a title
        card. */
-    SFX.bed('street', 'audio/title.mp3', { volume: 0.55, fade: 1400 });
+    /* ...unless the venue is silent. Arm B asked for no music and no room
+       tone: a cafe at eleven in the morning, and nothing under it. */
+    if (!SILENT) SFX.bed('street', 'audio/title.mp3', { volume: 0.55, fade: 1400 });
 
     /* The probe starts NOW, under the title card, not on the taxi ride. Until
        it answers, VOICE has not been told the server is there and falls back
@@ -793,7 +814,7 @@
 
        His line waits for the probe, so it is his voice that says it. */
     const said = probe.then(() =>
-      V.say(t('axel-open') || '', { speaker: 'axel', lang: accentOf('axel') }));
+      V.say(open, { speaker: GUIDE, lang: accentOf('axel') }));
 
     /* The buttons arrive when he has finished asking — or when the child taps
        through him, or after a backstop, because a voice that never resolves

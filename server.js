@@ -56,6 +56,11 @@ const VOICES = {
   bartender:      process.env.VOICE_BARTENDER || 'Achernar',
   stadium_worker: process.env.VOICE_STADIUM   || 'Achernar',
   cinema_worker:  process.env.VOICE_CINEMA    || 'Achernar',
+  /* Arm B's guide. She wears the stadium worker's animation, but NOT her
+     voice: that one is Achernar, which is also the cafe server's, and two
+     characters on screen in the same half-hour sounding like one person is
+     worse than either of them sounding wrong. */
+  guide:     process.env.VOICE_GUIDE     || 'Kore',
   fan:       process.env.VOICE_FAN       || 'Callirrhoe',
   learner:   process.env.VOICE_LEARNER   || 'Leda',
 };
