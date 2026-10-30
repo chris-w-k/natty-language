@@ -391,6 +391,17 @@
   /* No music, no room tone. The venue says so by declaring no bed, which
      keeps it a property of the place rather than of the arm. */
   const SILENT = MASTERY_ARM;
+  /* ?mute=1 - a test door, like ?intro=0 and ?learner=new. A headless run
+     plays hundreds of turns and every one of them speaks; without this the
+     only way to watch twenty nights go past is to listen to all of them.
+     Inert without the parameter, and it silences OUTPUT only: every model
+     call, every timing gate and every line still happen. */
+  const MUTED = /[?&]mute=1/.test(location.search);
+  if (MUTED) {
+    V.say = () => Promise.resolve();
+    V.prefetch = () => Promise.resolve();
+    try { SFX.setEnabled(false); } catch {}
+  }
   function introAxel() {
     const host = $('intro-axel');
     if (introRig || typeof window.lottie === 'undefined') return;
