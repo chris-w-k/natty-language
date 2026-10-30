@@ -376,6 +376,11 @@ function turnVars(b) {
        is told. These two are what he is told: the whole line's meaning, and
        the words in it the child has not met before. */
     actor_line_native: b.actorLineNative || '',
+    /* What she said LAST, still on screen above the coach's bubble, and what
+       it meant. He is the only one who can translate her. */
+    heard_line: b.actorLine
+      ? `She said: "${b.actorLine}"  —  it means "${b.actorLineNative || ''}"`
+      : '(she has not said anything yet — this is the first thing that happens)',
     new_target_words: (b.newTargetWords || []).length
       ? b.newTargetWords
       : '(nothing new this exchange — translate none of it again)',
@@ -392,9 +397,12 @@ function turnVars(b) {
        prompt that made the coach write a word of the target language. So on
        three turns in four his line had no target language in it at all, and
        the only English a beginner met was printed on the pills. */
+    /* Phrased as a fact, not as a sentence to copy. Written as "this turn it
+       is about X" the model simply said that: "This turn it is about finding
+       the hotel." A child does not know what a turn is. */
     turn_word: b.turnWord && b.turnWord.target
-      ? `"${b.turnWord.target}" (it means "${b.turnWord.native}")`
-      : '(this construction has no word in its slot — it is the whole sentence that is being practised)',
+      ? `${b.targetLang}: "${b.turnWord.target}"  —  ${b.nativeLang}: "${b.turnWord.native}"`
+      : '(none — the whole sentence is the point this time)',
     /* Max's section 6, as a rule the coach is told rather than a number. The
        level is derived from what the child has shown, never chosen by a
        model, which is the invariant his own stack document states. */
@@ -409,7 +417,7 @@ function coachVars(b) {
   const v = turnVars(b);
   const intro = b.introducing;
   v.new_thing = !intro
-    ? 'Nothing new is being introduced this exchange. Remind them what to say without giving the whole line.'
+    ? 'They have met everything in this one before. Remind them what to say without giving the whole line, and do not remark on it being familiar.'
     : intro.by === 'coach'
       /* A WORD and a CONSTRUCTION are owed differently, and conflating them
          is what left a child picking "entrada" out of four Spanish words
@@ -426,11 +434,11 @@ function coachVars(b) {
              for the first time; nobody else can say what she meant. The
              child's answer is a sentence they can already build, so the hint
              is WHICH one, not how. */
-          ? `NEW THIS EXCHANGE: ${b.actor} has asked her question in ${b.targetLang} for the first time: "${intro.target}" means "${intro.means}". Tell the child what she is asking. They already know how to answer — point them at WHAT to answer, not at how to say it.`
+          ? `She has just asked this in ${b.targetLang} and they have not heard it before: "${intro.target}" means "${intro.means}". Tell them what she is asking. They can already answer it — point them at WHAT to answer, not at how to say it. Do not announce that it is new.`
         : intro.kind === 'item'
-          ? `NEW THIS EXCHANGE: the child meets the ${b.targetLang} word "${intro.target}" ("${intro.means}") for the first time, and ${b.actor} has NOT said it — nothing she says this exchange contains it. Write it, in ${b.targetLang}, and say what it means. You are the only one who can, and a child guessing which word is which learns nothing.`
-          : `NEW THIS EXCHANGE: the child meets the construction "${intro.target}" for the first time. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write the construction out in ${b.targetLang}. The words are on screen for them to find.`)
-      : `NEW THIS EXCHANGE: ${b.actor} has just used the new word "${intro.target}". Tell the child what it means, in ${b.nativeLang}.`;
+          ? `They have not met the ${b.targetLang} word "${intro.target}" ("${intro.means}") before, and ${b.actor} has not said it, so you are the only one who can hand it over. Write it, in ${b.targetLang}, with its meaning, as part of what you are telling them. Do not announce that it is new.`
+          : `They have not used the construction "${intro.target}" before. It means "${intro.means}". Tell them what it LETS THEM ASK, in ${b.nativeLang}, and nothing more — do not write it out in ${b.targetLang}. The words are on screen for them to find. Do not announce that it is new.`)
+      : `${b.actor} has just used "${intro.target}" and they have not met it. Say what it means, in ${b.nativeLang}, in passing. Do not announce that it is new.`;
   /* NJA-3325. A hello is for meeting somebody, and the child meets the coach
      once a night. Everywhere else it is the filler that pushed the hint down
      the screen. */

@@ -2239,7 +2239,9 @@
     if (written) lastCoachWhy = 'written opening';
     const coachPending = written
       ? Promise.resolve(null)
-      : generateCoachLine(plan, actorLine, actorNative, fresh);
+      : generateCoachLine(plan,
+          MASTERY_ARM ? heardLine : actorLine,
+          MASTERY_ARM ? heardNative : actorNative, fresh);
 
     mountBackground($('layer-bg'), Q.activity.background);
     mountCharacter($('character'), { character: ACTOR, state: 'idle' });
@@ -2904,12 +2906,21 @@
     /* A construction with no answer written for it falls back rather than
        standing there silent. */
     const fb = out || (own ? Q.actorSay(map[wasCorrect ? 'right' : 'wrong'], {}) : null);
-    return fb ? fb.line : null;
+    return fb || null;
   }
 
+  /* The last thing she actually said, and what it meant. In Max's order she
+     speaks AFTER the answer, so her line is still on screen when the next
+     turn's coach line is written - and the coach is the only one who can say
+     what it meant. Without this he was writing into a conversation he could
+     not see the last line of. */
+  let heardLine = '', heardNative = '';
+
   async function sayReaction(said, wasCorrect) {
-    const line = reactionLine(wasCorrect);
+    const cue = reactionLine(wasCorrect);
+    const line = cue && cue.line;
     if (!line) return;
+    heardLine = line; heardNative = (cue && cue.native) || '';
     for (const w of String(line).split(/\s+/)) { const k = bare(w); if (k) metWords.add(k); }
     const frags = toFragments(line, [line], { allTarget: true });
     say(ACTOR, fragmentsHTML(frags), line, frags);

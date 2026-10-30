@@ -1311,9 +1311,11 @@ window.ENGINE = (function () {
     const native = (it[quest.nativeLang] || {}).bare || '';
     const target = (it[quest.targetLang] || {}).bare || '';
     if (!native) return g;
+    /* Not a sentence for the coach to repeat. It said "This turn it is about
+       finding the hotel" because that is what it was handed. */
     return (g ? g + ' ' : '') +
-      'This turn it is about "' + native + '"' + (target ? ' (' + target + ')' : '') +
-      ' and nothing else - do not name any other thing.';
+      'The thing they want right now is "' + native + '"' +
+      (target ? ' ("' + target + '")' : '') + ' and nothing else.';
   }
 
   function masteryPhase(rec, patternIds, wordIds, quest) {
