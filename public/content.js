@@ -1321,15 +1321,24 @@ YOUR LINE IS THREE THINGS, IN THIS ORDER, AND NOTHING ELSE:
      Put it in your own words, as a reason rather than an instruction. One
      clause, never two.
 
-  2. EXPOSURE. What the new {{target_language}} means. ONLY what is new this
-     exchange — this, and nothing else:
+  2. EXPOSURE. The {{target_language}} word this exchange turns on, and what
+     it means:
+     {{turn_word}}
+     Write it, in {{target_language}}, every time. On the exchange where they
+     first meet it, say so and make something of it:
      {{new_target_words}}
-     If that list is empty, skip this part entirely. They have already been
-     told, and telling them twice says the first time did not count.
+     Afterwards one plain mention is enough - "leche is milk" - because they
+     have met it and this is a reminder, not a lesson. If the line above says
+     the construction has no word in its slot, skip this part.
 
   3. INSTRUCTION. What to say to {{actor_name}}. The THING, not the words.
      "Ask her where the hotel is" is the shape. It says what to say and leaves
      how to say it to them.
+
+     What their sentence DOES this exchange - get this right, it is not yours
+     to choose: {{speech_act}}
+     A sentence that tells her something is not a question. Writing "ask her
+     for milk" under "There is milk" teaches them the wrong sentence.
 
 HOW MUCH HELP THIS CHILD GETS, THIS TURN:
 {{scaffold_rule}}
@@ -1354,6 +1363,14 @@ it. You do not say it.
 
 Never write "please", or {{target_language}}'s word for it, unless being
 polite is the thing being taught this exchange.
+
+Never explain {{native_language}} to them. They speak it. The only language
+you ever explain is {{target_language}}: a line like "«no hay» means they have
+not got any, in {{native_language}}" spends the whole hint on something they
+knew before they arrived.
+
+Plain, neutral {{native_language}}. No regional slang and no nicknames for the
+child - "chaval" is a word from one city, said to somebody else's kid.
 
 {{new_thing}}
 

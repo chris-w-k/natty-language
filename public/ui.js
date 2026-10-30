@@ -1340,6 +1340,11 @@
          group's own reason for the exchange; `firstTurn` is the only turn all
          night on which the coach may open with a hello. */
       goal: plan.goal || '',
+      /* The turn's speech act and its word, so the coach is told what the
+         sentence does and which thing it is about rather than inferring both
+         from a cafe. */
+      act: plan.act || '',
+      turnWord: plan.turnWord || null,
       firstTurn: plan.nightIndex === 0 && !plan.revision && !plan.makeup,
       /* NJA-3317. The character's line is in the target language now, so the
          coach is told what it meant and which of its words are new — he is

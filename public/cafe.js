@@ -23,7 +23,7 @@ window.CAFE_PACK = (function () {
 
   const patterns = {
     /* Max row 1. Core request pattern. */
-    'want-x': { speaker: 'learner', goal: 'You are at the counter and you want to order something.', slot: 'thing',
+    'want-x': { speaker: 'learner', act: 'ask her for something', goal: 'You are at the counter and you want to order something.', slot: 'thing',
                   en: 'I want {thing:indefinite^}.',
                   es: 'Quiero {thing:indefinite^}.',
                   pt: 'Quero {thing:indefinite^}.',
@@ -31,7 +31,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Vreau {thing:indefinite^}.',
                   tr: '{thing:bare} istiyorum.' },
     /* Max row 2, question variant. */
-    'is-there-x': { speaker: 'learner', goal: 'You do not know whether they have it, so you are asking.', slot: 'thing',
+    'is-there-x': { speaker: 'learner', act: 'ask her whether they have it', goal: 'You do not know whether they have it, so you are asking.', slot: 'thing',
                   en: 'Is there {thing:bare}?',
                   es: '¿Hay {thing:bare}?',
                   pt: 'Há {thing:bare}?',
@@ -39,7 +39,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Este {thing:bare}?',
                   tr: '{thing:bare} var mı?' },
     /* Max row 2, positive variant. */
-    'there-is-x': { speaker: 'learner', goal: 'You have spotted it and you are telling her it is there.', slot: 'thing',
+    'there-is-x': { speaker: 'learner', act: 'tell her it is there - a statement, not a question', goal: 'You have spotted it and you are telling her it is there.', slot: 'thing',
                   en: 'There is {thing:bare}.',
                   es: 'Hay {thing:bare}.',
                   pt: 'Há {thing:bare}.',
@@ -47,7 +47,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Este {thing:bare}.',
                   tr: '{thing:bare} var.' },
     /* Max row 2, negative variant. */
-    'there-is-no-x': { speaker: 'learner', goal: 'They have run out of it and you are saying so.', slot: 'thing',
+    'there-is-no-x': { speaker: 'learner', act: 'tell her it has run out - a statement, not a question', goal: 'They have run out of it and you are saying so.', slot: 'thing',
                   en: 'There is no {thing:bare}.',
                   es: 'No hay {thing:bare}.',
                   pt: 'Não há {thing:bare}.',
@@ -55,7 +55,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Nu este {thing:bare}.',
                   tr: '{thing:bare} yok.' },
     /* Max row 3. Takes a PLACE. */
-    'where-is-x': { speaker: 'learner', goal: 'You do not know your way round here and you need directions.', slot: 'place',
+    'where-is-x': { speaker: 'learner', act: 'ask her where it is', goal: 'You do not know your way round here and you need directions.', slot: 'place',
                   en: 'Where is {place:definite^}?',
                   es: '¿Dónde está {place:definite^}?',
                   pt: 'Onde fica {place:definite^}?',
@@ -63,7 +63,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Unde este {place:definite^}?',
                   tr: '{place:bare} nerede?' },
     /* Max row 4a. */
-    'how-much-x': { speaker: 'learner', goal: 'You want it, but first you want to know what it costs.', slot: 'thing',
+    'how-much-x': { speaker: 'learner', act: 'ask her what it costs', goal: 'You want it, but first you want to know what it costs.', slot: 'thing',
                   en: 'How much is {thing:definite^}?',
                   es: '¿Cuánto cuesta {thing:definite^}?',
                   pt: 'Quanto custa {thing:definite^}?',
@@ -71,7 +71,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Cât costă {thing:definite^}?',
                   tr: '{thing:bare} ne kadar?' },
     /* Currency-neutral. Max's Turkish is kept as written; the rest ask for the total, which keeps the contrast with how-much-x without naming a currency that is wrong for five of six pairs. */
-    'how-many-lira': { speaker: 'learner', goal: 'You are ready to pay and you want the total.', slot: null,
+    'how-many-lira': { speaker: 'learner', act: 'ask her for the total', goal: 'You are ready to pay and you want the total.', slot: null,
                   en: 'How much altogether?',
                   es: '¿Cuánto es en total?',
                   pt: 'Quanto é ao todo?',
@@ -79,7 +79,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Cât face în total?',
                   tr: 'Kaç lira?' },
     /* Max row 5a. No slot. */
-    'how-many': { speaker: 'learner', goal: 'She has said a number you did not catch, so you ask how many.', slot: null,
+    'how-many': { speaker: 'learner', act: 'ask her how many', goal: 'She has said a number you did not catch, so you ask how many.', slot: null,
                   en: 'How many?',
                   es: '¿Cuántos?',
                   pt: 'Quantos?',
@@ -87,7 +87,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Câte?',
                   tr: 'Kaç tane?' },
     /* Counter word dropped outside Turkish: no other pack language has an invariant one. Polish sztuk is only right from five up, Romanian bucati only from two to nineteen. */
-    'x-items': { speaker: 'learner', goal: 'She has asked how many you want, and you answer with the number.', slot: 'count',
+    'x-items': { speaker: 'learner', act: 'answer her with a number', goal: 'She has asked how many you want, and you answer with the number.', slot: 'count',
                   en: '{count:bare}.',
                   es: '{count:bare}.',
                   pt: '{count:bare}.',
@@ -95,7 +95,7 @@ window.CAFE_PACK = (function () {
                   ro: '{count:bare}.',
                   tr: '{count:bare} tane.' },
     /* Max row 6. Takes a VERB PHRASE, which in Turkish already ends -mak/-mek. */
-    'want-to-do-x': { speaker: 'learner', goal: 'You are telling her what you are off to do next.', slot: 'doing',
+    'want-to-do-x': { speaker: 'learner', act: 'tell her what you are off to do - a statement, not a question', goal: 'You are telling her what you are off to do next.', slot: 'doing',
                   en: 'I want to {doing:bare}.',
                   es: 'Quiero {doing:bare}.',
                   pt: 'Quero {doing:bare}.',
@@ -104,7 +104,13 @@ window.CAFE_PACK = (function () {
                   tr: '{doing:bare} istiyorum.' },
   };
 
-  /* `goal` is the first of the coach's three parts: WHY this exchange is
+  /* `act` is what the child's sentence DOES. Without it the coach read the
+     situation and guessed, and guessed "ask her" for a sentence that states:
+     the turn was "There is milk" and the hint was "Pidele leche" - ask her
+     for milk. Twice in one night. A construction knows what it is for; the
+     coach should be told rather than left to infer it from a cafe.
+
+     `goal` is the first of the coach's three parts: WHY this exchange is
      happening. The cafe declares no `qa` groups - the mastery engine is what
      replaces the fixed ladder - so nothing was filling it, the coach was told
      "no particular goal this exchange", and it invented a scene every turn.

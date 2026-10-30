@@ -383,6 +383,18 @@ function turnVars(b) {
        coach cannot say it unless he is told, and the venue prompt is not it —
        it describes the night. */
     exchange_goal: b.goal || '(no particular goal this exchange — skip this part)',
+    /* What the child's sentence DOES. Left to infer it, the coach told a
+       child to ASK for milk on a turn whose sentence was "There is milk". */
+    speech_act: b.act || 'say the sentence the situation calls for',
+    /* The word the turn turns on, in both languages - on EVERY turn, not
+       only the one where it is new. `new_target_words` is empty on roughly
+       three turns in four, by design, and it was the only thing in this
+       prompt that made the coach write a word of the target language. So on
+       three turns in four his line had no target language in it at all, and
+       the only English a beginner met was printed on the pills. */
+    turn_word: b.turnWord && b.turnWord.target
+      ? `"${b.turnWord.target}" (it means "${b.turnWord.native}")`
+      : '(this construction has no word in its slot — it is the whole sentence that is being practised)',
     /* Max's section 6, as a rule the coach is told rather than a number. The
        level is derived from what the child has shown, never chosen by a
        model, which is the invariant his own stack document states. */

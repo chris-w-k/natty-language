@@ -1186,6 +1186,13 @@ window.ENGINE = (function () {
          this turn's, and without it the coach picked a noun of its own and
          told a child to order juice. */
       goal: masteryGoal(quest, pid, itemId),
+      /* What the child's sentence DOES, and the word it turns on - both of
+         them on every turn, not only the turn a word is introduced. */
+      act: (quest.vocabPatterns[pid] || {}).act || '',
+      turnWord: itemId && quest.vocabItems[itemId] ? {
+        target: (quest.vocabItems[itemId][quest.targetLang] || {}).bare || '',
+        native: (quest.vocabItems[itemId][quest.nativeLang] || {}).bare || '',
+      } : null,
       /* Max's L0 to L4, on the event, because it is the thing his model
          decides and ours used to hard-code. */
       level: level,
