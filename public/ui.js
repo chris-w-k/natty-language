@@ -1334,7 +1334,13 @@
       expected: plan.expected,
       expectedNative: plan.pair.allNative,
       // what has crossed over — for highlighting, and for the coach
-      introduced: [...introducedWords()],
+      /* What the server may mark as target language when it splits the
+         coach's line into fragments. Arm B sends the same set the client
+         paints with, or the two disagree about which words are blue. Arm A
+         keeps the narrower list it has always sent: this field also feeds
+         `introduced_words` in both prompts, and widening it there would hand
+         the control arm's character words it was never allowed to say. */
+      introduced: [...(MASTERY_ARM ? shownWords() : introducedWords())],
       /* ...and what each run of it MEANS, so the fragments the server returns
          carry NJA-3149's `translation`. The table is the content's, and the
          server has no content of its own. */
@@ -1681,12 +1687,24 @@
      lines, and the child's own answer — so one renderer serves the lot. */
   /* `opts.allTarget` for a line that is wholly in the target language — the
      character's, since NJA-3317. */
+  /* Every target-language word the child is entitled to see highlighted and
+     tap for its meaning. Arm A keeps its exposure ratchet; arm B reads the
+     record it actually fills - the same set the coach is allowed to write,
+     which is the point: a word he may say is a word they have met, and a word
+     they have met is a word they can tap.
+
+     This was `introducedWords()` for both arms, and in arm B that set is
+     always empty, so NOTHING in a coach or character bubble was ever blue.
+     "ir de compras" sat in the hint as dead text with "go shopping" sitting
+     in the phrase table unused. */
+  function shownWords() {
+    const out = MASTERY_ARM ? masteryAllowed(turnFresh) : introducedWords();
+    for (const w of metWords) out.add(w);
+    return out;
+  }
+
   function toFragments(text, extraAllowed, opts) {
-    const allowed = introducedWords();
-    /* ...plus everything the character has actually said this session. Since
-       NJA-3317 she introduces target-language words herself, and a word she
-       has said is a word the child can tap. */
-    for (const w of metWords) allowed.add(w);
+    const allowed = shownWords();
     for (const w of extraAllowed || []) for (const t of String(w).split(/\s+/)) allowed.add(bare(t));
     return F.fragments(text, allowed, Q.phrases, opts);
   }
