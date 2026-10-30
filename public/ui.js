@@ -1654,7 +1654,18 @@
        sentence the child is about to be marked on. Checked against both the
        step's expected answer and the construction said whole, so wrapping it
        in a native frame does not get it past. */
-    const answer = [plan.expected, plan.pair.allTarget].filter(Boolean);
+    /* ...but NOT against the mixed sentence, in arm B. At L0 and L1
+       `plan.expected` is the child's OWN language with one word swapped into
+       it - "¿Donde esta el hotel?" - so a coach instructing naturally in that
+       language contains it by construction: "Preguntale donde esta el hotel"
+       IS the expected answer with a verb in front. Every where-is-x turn in
+       every language fell back on this, and it was the new rule telling the
+       coach to write the word that pushed it over the line. What must never
+       be handed over is the sentence in the TARGET language, which is the one
+       they are marked on. */
+    const answer = (MASTERY_ARM
+      ? [plan.pair.allTarget]
+      : [plan.expected, plan.pair.allTarget]).filter(Boolean);
     if (answer.some(a => E.norm(j.coachText).includes(E.norm(a)))) {
       lastCoachWhy = 'gave the answer away'; return null;
     }

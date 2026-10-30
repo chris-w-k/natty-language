@@ -39,7 +39,7 @@ window.CAFE_PACK = (function () {
                   ro: 'Este {thing:bare}?',
                   tr: '{thing:bare} var mı?' },
     /* Max row 2, positive variant. */
-    'there-is-x': { speaker: 'learner', act: 'tell her it is there - a statement, not a question', goal: 'You have spotted it and you are telling her it is there.', slot: 'thing',
+    'there-is-x': { speaker: 'learner', act: 'tell her it is there - a statement, not a question', goal: 'She has asked what they have got and you are telling her, not ordering: you have spotted it on the counter and you are pointing it out.', slot: 'thing',
                   en: 'There is {thing:bare}.',
                   es: 'Hay {thing:bare}.',
                   pt: 'Há {thing:bare}.',
