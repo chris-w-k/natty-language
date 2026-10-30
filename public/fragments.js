@@ -34,6 +34,48 @@
                              'mira', 'pasa', 'o', 'es', 'la', 'el', 'te',
                              'tu', 'mi', 'y', 'en', 'con', 'toma']);
 
+  /* ...and that list is SPANISH, which is the same mistake `looksForeign`
+     made: it was written when the pair was always English and Spanish.
+
+     A word is ambiguous when it is ordinary in the language the sentence is
+     WRITTEN in, whatever the glossary thinks. Polish "to" means "is", and it
+     is one of the commonest words in the language - it is also the English
+     "to", which the cafe glossary holds because a construction is "I want to
+     ___". So every Polish hint containing "to" was judged to have been
+     written in English and thrown away. Polish lost 100% of its coach lines
+     to a three-letter word.
+
+     One list per language: the frequent, ordinary words of THAT language that
+     happen to be spelled like English ones. Seeing one is no evidence of
+     anything. Letting an English word through this list is the cheaper
+     mistake by a long way - we have now measured what the other one costs. */
+  const AMBIGUOUS_BY_LANG = {
+    en: ['a', 'no', 'me', 'son', 'solo', 'nada', 'o', 'es', 'la', 'el', 'te',
+         'tu', 'mi', 'y', 'en', 'con'],
+    es: ['a', 'no', 'me', 'son', 'solo', 'nada', 'van', 'mira', 'pasa', 'o',
+         'es', 'la', 'el', 'te', 'tu', 'mi', 'y', 'en', 'con', 'toma', 'ten',
+         'un', 'una', 'de', 'que', 'se', 'si', 'lo', 'al', 'por', 'para'],
+    pt: ['a', 'o', 'e', 'de', 'do', 'da', 'em', 'no', 'na', 'me', 'te', 'se',
+         'um', 'uma', 'com', 'para', 'mas', 'ou', 'ele', 'ela', 'tem', 'tu',
+         'is', 'as', 'os', 'ao', 'por', 'que', 'sim'],
+    pl: ['to', 'a', 'i', 'o', 'w', 'z', 'na', 'nie', 'tak', 'ten', 'ta', 'te',
+         'do', 'od', 'po', 'za', 'jest', 'czy', 'ale', 'co', 'jak', 'my',
+         'ty', 'on', 'ona', 'bo', 'ma', 'sie', 'się', 'go', 'je', 'no', 'mi'],
+    ro: ['a', 'o', 'e', 'de', 'la', 'in', 'în', 'pe', 'cu', 'un', 'si', 'și',
+         'nu', 'da', 'el', 'ea', 'mai', 'ca', 'ce', 'am', 'are', 'te', 'ne',
+         'le', 'mi', 'sa', 'să', 'ii', 'is'],
+    tr: ['o', 'bu', 've', 'bir', 'da', 'de', 'mi', 'ne', 'var', 'yok', 'çok',
+         'ben', 'sen', 'en', 'az', 'an', 'al', 'el', 'at', 'it', 'in', 'on',
+         'kim', 'ile', 'ama', 'için', 'ki', 'bin', 'ay', 'ad', 'son', 'tek'],
+  };
+  /* The native language's list, because that is the language the coach's line
+     is written in. Unknown language: the old list, so nothing that worked
+     before stops working. */
+  function ambiguousFor(nativeCode) {
+    const list = AMBIGUOUS_BY_LANG[nativeCode];
+    return list ? new Set(list) : AMBIGUOUS;
+  }
+
   /* Which marks belong to which language. A token "looks foreign" when it
      carries a mark the TARGET language uses and the NATIVE one does not -
      which is a fact about the pair, not about Spanish.
@@ -77,7 +119,7 @@
      painted as Spanish, and on a line with no English in it that test only
      costs the child a word they cannot tap: "el", "la", "a" and the rest come
      out as dead text in the middle of a highlighted run. */
-  function isTarget(tok, allowed, allTarget, marks) {
+  function isTarget(tok, allowed, allTarget, marks, amb) {
     const w = bare(tok);
     if (!w) return false;
     /* A token with no letters in it is not a word in any language: the gap
@@ -87,7 +129,7 @@
     if (!allowed.has(w)) return false;
     if (allTarget) return true;
     // "no" inside an English sentence is English, however Spanish it also is
-    return looksForeign(tok, marks) || !AMBIGUOUS.has(w);
+    return looksForeign(tok, marks) || !(amb || AMBIGUOUS).has(w);
   }
 
   /* How a phrase is looked up in the table: the same normalisation content
@@ -120,6 +162,7 @@
     const marks = opts && 'marks' in opts ? opts.marks
       : (opts && opts.native && opts.target) ? marksFor(opts.native, opts.target)
       : undefined;
+    const amb = opts && opts.native ? ambiguousFor(opts.native) : null;
     const out = [];
     const push = (type, text, translation) => {
       const last = out[out.length - 1];
@@ -141,7 +184,7 @@
         else out.push({ type: 'text', text: tok });
         continue;
       }
-      if (!isTarget(tok, allowed, whole, marks)) { push('text', tok); continue; }
+      if (!isTarget(tok, allowed, whole, marks, amb)) { push('text', tok); continue; }
 
       /* The longest run starting here that the content can translate, and
          whose every word has been introduced. */
@@ -152,7 +195,7 @@
           const t = toks[j];
           run += t;
           if (!t.trim()) continue;
-          if (!isTarget(t, allowed, whole, marks)) break;
+          if (!isTarget(t, allowed, whole, marks, amb)) break;
           const hit = table[phraseKey(run)];
           if (hit) best = { upto: j, text: run, translation: hit };
         }
@@ -178,5 +221,6 @@
     return t + n ? t / (t + n) : 0;
   }
 
-  return { fragments, plain, targetShare, bare, AMBIGUOUS, looksForeign, isTarget, marksFor, MARKS };
+  return { fragments, plain, targetShare, bare, AMBIGUOUS, looksForeign, isTarget,
+           marksFor, MARKS, ambiguousFor, AMBIGUOUS_BY_LANG };
 });

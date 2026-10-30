@@ -1002,7 +1002,7 @@
       let target = 0, native = 0;
       for (const tok of q.split(/\s+/)) {
         const w = bare(tok);
-        if (!w || AMBIGUOUS.has(w)) continue;
+        if (!w || ambiguous().has(w)) continue;
         /* Deliberately NOT countsAsTarget: that one also counts a token as
            target because it LOOKS foreign — an inverted question mark or an
            accent — which was written when the target was always Spanish. Here
@@ -1071,7 +1071,7 @@
       .filter(tok => {
         const w = bare(tok);
         if (!w || !mine.has(w)) return false;
-        return looksForeign(tok) || !AMBIGUOUS.has(w);
+        return looksForeign(tok) || !ambiguous().has(w);
       })
       .map(bare);
   }
@@ -1186,7 +1186,15 @@
      When the two disagreed about whether "no" was Spanish, the audit and the
      highlighting disagreed with each other — the line passed the guard and
      then rendered a blue English word. */
-  const AMBIGUOUS = F.AMBIGUOUS;
+  /* The ordinary words of the language the line is WRITTEN in - the child's
+     own. A Spanish list judged Polish, and "to" cost Polish every coach line
+     it ever had. */
+  let AMB = null, ambFor = null;
+  function ambiguous() {
+    if (ambFor === Q) return AMB;
+    ambFor = Q; AMB = F.ambiguousFor(NL());
+    return AMB;
+  }
   /* Which marks mean "target language" in THIS pair, recomputed whenever the
      pair changes. Null for a target that has no marks of its own - English
      next to Spanish - and then a word is target-language only if the
@@ -1200,7 +1208,7 @@
   const looksForeign = tok => F.looksForeign(tok, targetMarks());
   const countsAsTarget = (tok, vocab) => {
     const w = bare(tok);
-    return looksForeign(tok) || (vocab.has(w) && !AMBIGUOUS.has(w));
+    return looksForeign(tok) || (vocab.has(w) && !ambiguous().has(w));
   };
 
   /* Is this line written in the language being taught? Used on the coach's
