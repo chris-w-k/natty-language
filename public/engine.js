@@ -1087,6 +1087,7 @@ window.ENGINE = (function () {
        and a perfect learner tops out around 80% for ever. "Nothing is very
        weak" is a statement about the LEARNER, not about one slot. */
     const allWords = (quest.activity.items || []);
+    state.exchanges = (state.exchanges || 0) + 1;
     const phase = masteryPhase(rec, patternIds, allWords, quest);
 
     /* Section 8, carrier rotation. On a word phase the WORD is chosen first
@@ -1151,7 +1152,23 @@ window.ENGINE = (function () {
        comes up empty. A construction with no slot has nothing to hand over
        except itself, so its frame crosses from the first turn. The night sat
        on `how-many` for ever before this. */
-    const frameTarget = slotKey ? level >= 2 : true;
+    /* The frame crosses on what they know of the CONSTRUCTION, not on the
+       weakest thing in the turn.
+
+       `level` is Max's section 6 minimum across pattern and words, and it is
+       the right number for how much the COACH helps. Using it for the frame
+       as well meant that every time a known construction took a new noun, the
+       whole sentence fell back into the child's own language: a learner who
+       could say "I want tea" was handed "Quiero ___" again because `milk` was
+       new. 73% of turns in a first night were that - tap one English word
+       into a Spanish sentence - and a child could play for ten minutes
+       without building an English sentence at all.
+
+       What is new in that turn is the NOUN. The frame is not new, so it
+       crosses, and the child builds the sentence they already know around a
+       word they do not. */
+    const frameLevel = slotKey ? M.scaffold(rec, pid, []) : level;
+    const frameTarget = slotKey ? frameLevel >= 1 : true;
     const askTarget = level >= 3;
 
     const prec = rec.patterns[pid];
@@ -1452,13 +1469,19 @@ window.ENGINE = (function () {
   /* When a night ends. Max runs 15 to 20 blocks; the scenario being finished
      ends it early, which is the point of a mastery session and the thing a
      fixed ladder could never do. */
-  const MASTERY_TURNS = 16;
+  const MASTERY_TURNS = 20;
   function masteryDone(state, quest) {
     const M = window.MASTERY;
     const rec = state.mastery || M.blank();
     const patternIds = (quest.groups || []).map(g => g.id);
     if (M.scenarioMastered(rec, patternIds, reachableWords(quest))) return 'mastered';
-    if ((rec.turn || 0) >= MASTERY_TURNS) return 'turns';
+    /* EXCHANGES, not applies. `rec.turn` is Max's retrieval clock and counts
+       every scored event, a wrong answer included - so a night measured by it
+       got SHORTER the more mistakes the child made. A pre-A1 learner was
+       getting nine exchanges where a confident one got sixteen: the child who
+       needed the practice was given less of it. The clock keeps counting
+       misses, because spacing depends on it; the night does not. */
+    if ((state.exchanges || 0) >= MASTERY_TURNS) return 'turns';
     return null;
   }
 

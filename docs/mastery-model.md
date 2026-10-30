@@ -10,12 +10,38 @@ stripped down version."*
 This is the specification `public/mastery.js` is built to. Where the code and
 this document disagree, this document is right and the code is a bug.
 
-**What we deliberately do NOT take from it.** Max's turn order is
-tutor → user → character. Ours stays **actor → coach → child**: she asks, the
-coach hints, the child answers. Three voices either way; the order is ours and
-it is not up for negotiation. His §10 prompt shapes are his; our actor lines
-are rendered from patterns rather than generated, which already satisfies
-most of what his tutor prompt is written to enforce.
+**Where we knowingly differ.** Four places, and each one is a consequence of
+our input method rather than a disagreement with his model.
+
+1. **Turn order.** Arm B now runs HIS order — tutor → user → character. The
+   note here used to say ours stayed actor → coach → child; that changed when
+   Chris asked for his.
+2. **The gain rates in §4.** His §5 is a free-text scanner, so one typed
+   sentence can credit four or five words at once. Ours is a tray of pills
+   and a turn credits one. Paying his per-word rate for a fifth of his
+   production made a 24-word scenario take nineteen evenings for a pre-A1
+   learner. So the rates are scaled to what a turn actually asks for:
+
+   | | spec | ours |
+   |---|---|---|
+   | valid answer, pattern | 0.10 | 0.14 |
+   | per produced word | 0.25 | 0.34 |
+   | word read only | 0.05 | 0.06 |
+   | one-shot test | 0.25 | 0.34 |
+
+   The bar, the damping ratios, the penalties, the typo exemption, the free
+   retries and the spacing ladder are all unchanged. The numbers were swept
+   against the engine with a pre-A1 error model until a learner finished in
+   the eight sittings Chris asked for; they are not a guess.
+3. **Phases.** Four of his nine are not implemented — warm, contrast,
+   transfer and adaptive — so three of his five gain rates are unreachable.
+4. **The scenario's vocabulary.** The café teaches 24 of the pack's words
+   rather than all 39 reachable ones. The rest are kept for the scenario
+   after it. His list is intact; it is not all taught at once.
+
+His §10 prompt shapes are his; our actor lines are rendered from patterns
+rather than generated, which already satisfies most of what his tutor prompt
+is written to enforce.
 
 ---
 

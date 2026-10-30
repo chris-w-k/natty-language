@@ -59,9 +59,20 @@ window.MASTERY = (function () {
   /* ---------- section 3: how mastery changes ---------- */
   /* The pattern gain depends on how hard the retrieval was. A word produced
      in the open is worth more than the same word read off the screen. */
-  const PATTERN_GAIN = { base: 0.10, warm: 0.15, contrast: 0.15, transfer: 0.20, oneshot: 0.25 };
-  const WORD_PRODUCED = 0.25;   // per produced target word
-  const WORD_READ     = 0.05;   // the actor's target-language words, passive
+  const PATTERN_GAIN = { base: 0.14, warm: 0.20, contrast: 0.20, transfer: 0.27, oneshot: 0.34 };
+  /* DIVERGENCE FROM THE SPEC, and the reason for it.
+     Max's 0.25 assumes a learner typing a whole sentence: his section 5 is a
+     free-text scanner, so one turn can credit four or five words at once.
+     Ours asks for one word on a tray of pills, so a turn credits one. Paying
+     his rate for a fifth of his production made a 24-word scenario take
+     nineteen evenings. The rate is raised to match what a turn actually
+     asks for; the bar, the damping and everything else stay his.
+
+     The numbers are not a guess: they were swept against the real engine
+     with a pre-A1 error model until a learner finished in eight sittings,
+     which is the length Chris asked for. 0.50 finished in four. */
+  const WORD_PRODUCED = 0.34;   // per produced target word
+  const WORD_READ     = 0.06;   // the actor's target-language words, passive
   const WORD_EXCHANGE = 0.20;   // valid but unexpected answer, times damping
   const WRONG_PATTERN = -0.10;  // first failure of the turn
   const WRONG_HINTED  = -0.15;  // ...if two hints were used
@@ -370,7 +381,14 @@ window.MASTERY = (function () {
     return s;
   }
 
-  return { BAR, EPS, CAN_USE, FREE_RETRIES, PATTERN_GAIN, SESSION_GAPS,
+  /* The rates, exported so a test asserts what the model USES rather than a
+     number typed twice, and so a reader can see at a glance where we sit
+     against section 4 of the spec. */
+  const RATES = { WORD_PRODUCED, WORD_READ, WORD_EXCHANGE,
+                  WRONG_PATTERN, WRONG_HINTED, HINT2_DROP,
+                  /* what Max's document specifies, for comparison */
+                  SPEC: { pattern: 0.10, word: 0.25, read: 0.05, oneshot: 0.25 } };
+  return { RATES, BAR, EPS, CAN_USE, FREE_RETRIES, PATTERN_GAIN, SESSION_GAPS,
            blank, blankPattern, apply, nextTurn, nextSession,
            scaffold, levelMastery, scenarioMastered,
            weakness, dueness, fatigue, rotation, unresolved, priority, rank,

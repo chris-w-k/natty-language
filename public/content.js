@@ -934,6 +934,13 @@ window.QUEST = (function () {
   const CAFE_PATTERNS = (typeof window !== 'undefined' && window.CAFE_PACK)
     ? Object.keys(window.CAFE_PACK.patterns) : [];
   /* Hers. Slotless on purpose - see the note on the cafe's `patterns`. */
+  /* 24 of Max's words, chosen so every slot still has a real choice in it. */
+  const CAFE_CORE = CAFE_WORDS.filter(id => [
+    'tea','coffee','milk','sugar','bread','cheese','egg','soup','salad',
+    'hotel','restaurant','bank','toilet','station',
+    'one','two','three','four','five',
+    'to-shop','to-drink-coffee','to-go-home','to-study','to-go-out',
+  ].indexOf(id) >= 0);
   const CAFE_ACTORS = ['in-a-minute', 'what-would-you-like', 'anything-else',
                        'would-you-like-something', 'ok-then', 'say-again']
                       .concat(Object.values(CAFE_REPLIES)
@@ -1138,7 +1145,15 @@ window.QUEST = (function () {
                      tr: 'Garson', pl: 'Kelnerka', ro: 'Ospatarita' } },
     prompt: 'You are behind the counter of a small cafe. You serve drinks and food, you know the neighbourhood, and you have everything a customer asks for. Personality: warm, quick, a queue always building.',
     objectives: ['order something', 'find out what they have', 'ask where things are', 'ask what it costs'],
-    items: CAFE_WORDS,
+    /* What THIS sitting teaches, not everything in the pack.
+       Mastery is measured over the words a construction can ask for, so the
+       size of this list IS the length of the scenario: 39 reachable words
+       took a pre-A1 learner 19 evenings, which is not a scenario, it is a
+       term. The rest of Max's list stays in `vocabItems` for the scenario
+       after this one - nothing is thrown away, it is just not all taught at
+       once. Food and drink is kept whole, because it is a cafe; the numbers,
+       the places and the things-to-do are trimmed to a first sitting. */
+    items: CAFE_CORE,
     /* The learner constructions, plus the character's own. An activity that
        declares no actor patterns has nobody to open a turn: `actorSay` looks
        them up in the activity, so the cue map finds nothing and she stands
@@ -2006,6 +2021,18 @@ Return JSON only.`,
     /* Prepended to the written floor on any turn where she has said something
        the child has not met. One sentence, because the hint that follows it is
        the rest of the budget (NJA-3317 coach AC 5). */
+    /* Shown after a first miss, in the child's own language: what the
+       sentence they are building actually means. The coach's own hint may
+       never contain it - that is the giveaway guard - so a child who has
+       guessed wrong once had nothing new to go on. */
+    'fb-coach-meaning': {
+      en: 'What you are trying to say is: {0}',
+      es: 'Lo que intentas decir es: {0}',
+      pt: 'O que estás a tentar dizer é: {0}',
+      tr: 'Söylemeye çalıştığın şey şu: {0}',
+      pl: 'To, co chcesz powiedzieć, to: {0}',
+      ro: 'Ceea ce încerci să spui este: {0}',
+    },
     'fb-coach-heard': {
       en: '“{0}” means “{1}”.',
       es: '“{0}” significa “{1}”.',

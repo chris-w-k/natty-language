@@ -25,7 +25,15 @@
     if (!MASTERY_ARM) return E.overall(state, Q);
     const M = window.MASTERY, rec = state && state.mastery;
     if (!rec) return 0;
-    return M.levelMastery(rec, (Q.groups || []).map(g => g.id), E.reachableWords(Q));
+    const pats = (Q.groups || []).map(g => g.id), words = E.reachableWords(Q);
+    /* Finished is 100%. `levelMastery` is the MEAN of the numbers, and
+       `scenarioMastered` is Max's per-item test - every construction and
+       every word at or above the bar - so a learner could be handed "you
+       have finished it, all the words and all the phrases" next to
+       "Mastery: 99%". Nobody ever saw 100. They do now, and only when the
+       scenario is genuinely done. */
+    if (M.scenarioMastered(rec, pats, words)) return 1;
+    return M.levelMastery(rec, pats, words);
   }
 
   /* The record outlives the session, which is the entire point of the arm. */
@@ -1641,6 +1649,13 @@
       if (pt && pt.introduced && Q.vocabPatterns[id] && Q.vocabPatterns[id][TL()])
         add(String(Q.vocabPatterns[id][TL()]).replace(/\{[^}]+\}/g, ' '));
     for (const f of (fresh || [])) add(f.text);
+    /* ...and whatever SHE just said. Part 0 of the coach's line is to say
+       what her last words meant, which he cannot do without writing them -
+       and the audit was then refusing the line for containing them. Ten of
+       the thirty-nine fallbacks in a twenty-run sitting were this: we asked
+       for a translation and binned it for being one. Arm A has always
+       allowed the actor's line through for exactly this reason. */
+    for (const w of String(heardLine || '').split(/\s+/)) { const k = bare(w); if (k) out.add(k); }
     return out;
   }
 
@@ -3134,6 +3149,14 @@
       lastMoved = E.masteryApply(state, plan, { correct: false, hints: hinted ? 1 : 0, attempt: attempts });
       saveMastery();
       n = attempts + 1;
+      /* The hint that did not work the first time is not the hint to show
+         the second. After a miss the child is told, in their own language,
+         exactly what the sentence they are reaching for MEANS - which is the
+         one thing the coach is not allowed to put in the hint itself. */
+      if (n === 1 && plan.pair && plan.pair.allNative) {
+        const more = t('fb-coach-meaning', unstop(plan.pair.allNative));
+        if (more) { const fr = toFragments(more); say('axel', fragmentsHTML(fr), more, fr); }
+      }
     } else {
       n = E.applyWrong(state, plan).attempts;
     }
