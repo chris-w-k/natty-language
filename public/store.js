@@ -63,11 +63,22 @@ window.STORE = (function () {
     }
   }
 
-  /* The arm is decided ONCE, from the id, and never recomputed. Hashing the
-     id rather than tossing a coin means the assignment is reproducible: the
-     same learner is always in the same arm, and a test can force an arm by
-     choosing an id. */
+  /* The arm is decided ONCE, from the id, and never recomputed. That is what
+     makes this safe to change: every learner already carrying an arm keeps
+     it, their stored mastery and their scenario, and only somebody arriving
+     for the first time is affected by the line below.
+
+     THE SPLIT IS OVER for new learners: the cafe goes to all of them. The
+     hash is kept, unused but intact, because reopening the split is then one
+     word rather than a rewrite, and because `?arm=scenarios` still has to
+     reach the night club for a tester.
+
+     What this costs, stated plainly: there is no longer a control arm among
+     new learners, so the cohorts already running are the only ones that can
+     still answer whether the mastery ladder beats the fixed one. */
+  const NEW_LEARNER_ARM = 'mastery';
   function armFor(id) {
+    if (NEW_LEARNER_ARM) return NEW_LEARNER_ARM;
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
     return ARMS[Math.abs(h) % ARMS.length];
@@ -75,7 +86,14 @@ window.STORE = (function () {
 
   function fresh() {
     const id = newId();
-    return { v: 1, id, arm: armFor(id), born: Date.now(), plays: 0, lastPlay: 0, days: [], mastery: {} };
+    /* `armBy` is written at birth and never changed. Without it the two
+       cohorts are indistinguishable in the numbers the moment the split
+       closes: a learner in the cafe because a coin landed that way and a
+       learner in the cafe because everybody is now look identical, and only
+       the first kind can answer the ladder question. A record from before
+       this line has no `armBy`, which is itself the answer - it was split. */
+    return { v: 1, id, arm: armFor(id), armBy: NEW_LEARNER_ARM ? 'ship' : 'split',
+             born: Date.now(), plays: 0, lastPlay: 0, days: [], mastery: {} };
   }
 
   let state = null;
@@ -115,6 +133,7 @@ window.STORE = (function () {
       id: state.id,
       arm,
       armForced: arm !== state.arm,
+      armBy: state.armBy || 'split',
       storage: available,
       plays: state.plays,
       /* Not "has played before" — "has played before ON ANOTHER DAY". Two

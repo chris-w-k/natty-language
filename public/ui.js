@@ -343,6 +343,11 @@
           /* The split, on every event. 'scenarios' is the night as it stands;
              'mastery' is the one that keeps the scenario and drills it. */
           arm: LEARNER.arm,
+          /* And HOW they got that arm. The split is closed to new learners,
+             so from here on 'ship' means the cafe was simply handed to them
+             and 'split' means a coin decided - which is the only cohort the
+             two arms can still be compared on. */
+          arm_by: LEARNER.armBy,
           /* How many nights this child has started, and whether tonight is a
              RETURN rather than a second go in one sitting. */
           plays: LEARNER.plays,
