@@ -38,17 +38,23 @@ our input method rather than a disagreement with his model.
 4. **The scenario's vocabulary.** The café teaches 24 of the pack's words
    rather than all 39 reachable ones. The rest are kept for the scenario
    after it. His list is intact; it is not all taught at once.
-5. **What ends a sitting, and what a sitting is worth.** His session runs 15
-   to 20 blocks and the only stated success is the scenario bar — every
-   construction and every word at 0.85. In a product that bar is eight
-   sittings away, so a sitting measured against it can only ever report
-   failure, and the live split proved it: 100% of arm B sessions closed on
-   the turn cap, at about a quarter mastery, and no child had ever passed.
-   A sitting therefore carries its own goal — take ONE construction to
-   CAN_USE, the staircase's own unit — and ends when that is won, with a
-   floor of 16 turns (arm A's night length, so the arms are the same size)
-   and a cap of 22. His scenario bar is untouched and still ends a sitting
-   early when it is reached; it is simply no longer the only way to succeed.
+5. **The length of a sitting.** His session runs 15 to 20 blocks. Ours runs
+   18, fixed. The sitting is not won and the café is not finishable in one:
+   the child plays their exchanges, the mastery is counted and shown, and the
+   bet under test is that a number they moved brings them back tomorrow. That
+   is the contrast with arm A, which hands out a fixed set of exchanges and
+   is over. Only the scenario being finished ends a sitting early, which
+   after eight of them means there is nothing left to come back for.
+   Eighteen, because arm A's night is 15 to 16 and the two arms were being
+   read against each other while arm B ran about a third longer. Simulated
+   against the engine with a pre-A1 error model, eighteen shows a typical
+   learner 22%, 41%, 56%, 65%, 78%, 90%, 96%, 99% across eight sittings.
+
+   There is no pass in arm B, so `passed` is omitted from its events rather
+   than sent as false. A field that can only read false, in an arm never
+   built to be passed, is what put "nobody has ever passed it" on a slide.
+   What a sitting reports instead is `mastery`, `masteryAdded`, `gained` and
+   `rungsWon`.
 
 His §10 prompt shapes are his; our actor lines are rendered from patterns
 rather than generated, which already satisfies most of what his tutor prompt

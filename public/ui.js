@@ -3307,23 +3307,29 @@
     const score = overall();
     const mark = E.passMark(Q);
     if (MASTERY_ARM) saveMastery();
-    /* Arm A passes a night by clearing the night's own mark. Arm B used to
-       be read against the SCENARIO bar - a number seven sittings away - so
-       it failed every night by construction, and the split was comparing a
-       per-session verdict with a per-scenario one. Arm B now answers the
-       same question arm A does: did this sitting do what it set out to? */
+    /* Arm A passes a night by clearing the night's own mark. Arm B does not
+       pass a night at all - it runs its length, counts the mastery and shows
+       it - so `ok` is arm A's question and arm B does not answer it. What
+       arm B reports instead is below: the number, what it added, and which
+       construction crossed into "can use". */
     const won = MASTERY_ARM ? E.masteryWon(state, Q) : [];
-    const ok = MASTERY_ARM ? E.masteryPassed(state, Q) : score >= mark;
+    const gained = MASTERY_ARM ? E.masteryGained(state, Q) : false;
+    const ok = MASTERY_ARM ? null : score >= mark;
     const rows = MASTERY_ARM ? E.masteryReport(state, Q) : E.report(state, Q);
     const left = rows.filter(r => r.verdict !== 'stuck');
 
     E.track(state, 'session_end', {
       turns: state.turn, overall: score, passed: ok, go: state.go, reason,
     });
+    /* `passed` is OMITTED for arm B rather than sent as false. A field that
+       can only ever read false, in an arm that was never built to be passed,
+       is not data - it is a trap, and it is the one the last read of this
+       split fell into. Anything comparing the arms has to compare them on
+       something both of them answer. */
     AN('NovaPals.Activity.End', Object.assign({
-      turns: state.turn, mastery: Math.round(score * 100), passed: ok,
+      turns: state.turn, mastery: Math.round(score * 100),
       go: state.go, reason,
-    }, MASTERY_ARM ? {
+    }, MASTERY_ARM ? {} : { passed: ok }, MASTERY_ARM ? {
       /* What the night was worth, which is the only reading that survives to
          tomorrow. `mastered` means the scenario is finished and there is
          nothing to come back for, which is a result and not a failure. */
@@ -3335,28 +3341,36 @@
       /* The night's own budget, reported so the split can be read without
          guessing which build it ran on: what was asked, what was won, and
          where the child stands on the staircase. */
-      goalRungs: state.goalRungs || 1,
       rungsWon: won.length,
       canUse: E.canUseCount(state.mastery, (Q.groups || []).map(g => g.id)),
       constructions: (Q.groups || []).length,
+      /* what tonight ADDED, which is the thing the bet rests on: a child who
+         moved the number has a reason to come back, and a child who did not
+         is the one to worry about */
+      gained,
+      masteryAdded: Math.round((score - (state.masteryAtStart || 0)) * 100),
     } : {}));
-    AN('NovaPals.Quest.End', { mastery: Math.round(score * 100), passed: ok });
+    AN('NovaPals.Quest.End', Object.assign({ mastery: Math.round(score * 100) },
+      MASTERY_ARM ? { gained } : { passed: ok }));
 
     /* Arm B does not pass or fail a night. It stops, keeps the record, and
        asks them back - which is the behaviour under test, so it gets its own
        ending rather than being squeezed into a pass mark it has no use for. */
     if (MASTERY_ARM) {
       const done = reason === 'mastered';
-      /* Three endings now, not two. Finishing the scenario is the big one;
-         winning the night's construction is the ordinary one and the one a
-         child will see most, so it gets the sentence that names what they
-         can now say. Running out of turns without it keeps the old
-         come-back-tomorrow line, which is what it honestly is. */
+      /* The number is the ending, and the invitation is to raise it. Where a
+         construction crossed into "can use" the number gets a sentence that
+         makes it concrete - "you can say this now" - because 41% means
+         nothing to a thirteen-year-old and a phrase they own does. It is
+         still not a pass; the title is the same either way. */
       const wonPair = won.length ? Q.pairFor(won[won.length - 1], {}) : null;
-      $('end-msg').textContent = t(done ? 'again-done-title' : ok ? 'again-won-title' : 'again-title');
+      /* The sentence is quoted inside another sentence, so its own full stop
+         would double up: "There is tea.". */
+      const naked = x => String(x || '').replace(/[.!?]+\s*$/, '');
+      $('end-msg').textContent = t(done ? 'again-done-title' : 'again-title');
       $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
       $('end-sub').textContent = done ? t('again-done-sub')
-        : ok && wonPair ? t('again-won-sub', wonPair.allTarget)
+        : wonPair ? t('again-won-sub', naked(wonPair.allTarget), Math.round(score * 100))
         : t('again-sub', Math.round(score * 100));
     } else {
       $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
@@ -4118,14 +4132,15 @@
        arm-aware one, and the verdict has to be arm-aware too or the button
        reports a failure the end screen just called a win. */
     const score = Math.round(overall() * 100);
-    const ok = MASTERY_ARM ? E.masteryPassed(state, Q) : score >= Math.round(E.passMark(Q) * 100);
-    AN('NovaPals.Activity.Finished', {
-      mastery: score, passed: ok,
-      turns: state.turn, go: state.go, attempt: B.endSends + 1,
-    });
+    /* Arm B has no pass, so it sends none. The app's own completion is the
+       message landing, not a verdict. */
+    const ok = MASTERY_ARM ? undefined : score >= Math.round(E.passMark(Q) * 100);
+    AN('NovaPals.Activity.Finished', Object.assign({
+      mastery: score, turns: state.turn, go: state.go, attempt: B.endSends + 1,
+    }, MASTERY_ARM ? {} : { passed: ok }));
     B.finish({
       mastery: score,
-      passed: ok,
+      passed: MASTERY_ARM ? true : ok,
       turns: state.turn,
       go: state.go,
       native: Q.nativeLang,

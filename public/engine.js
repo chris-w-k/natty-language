@@ -1494,31 +1494,28 @@ window.ENGINE = (function () {
   }
 
   /* ---------- what a night is FOR ----------
-     A night used to end on a clock and nothing else. The scenario bar is
-     0.85 across every construction and every word, which the simulation puts
-     at seven sittings - so a twenty-turn night measured against it could
-     only ever report failure, and the live data agreed: every arm B session
-     closed on the cap, at about a quarter mastery, and not one child had
-     ever passed. That is not an adaptive ladder losing to a fixed one; it is
-     a session with no reachable end.
+     A night runs a set length and then stops. It is NOT won, and the cafe is
+     not finishable in a sitting: the child plays their eighteen exchanges,
+     the mastery is counted and shown to them, and the bet under test is that
+     a number they moved is reason enough to come back and move it again.
+     That is the whole contrast with the bar, which hands out a fixed set of
+     exchanges and is over.
 
-     So the night gets a goal it can actually reach, and it is the staircase's
-     own unit: take ONE construction to CAN_USE. That is the rung the engine
-     was already climbing, and at the current rates it costs about six correct
-     pattern turns - comfortably inside the budget, even badly. The scenario
-     bar stays exactly where it is and still ends the night early when it is
-     met; it is simply no longer the only way to succeed.
+     So nothing here ends the night early except the scenario itself being
+     finished, which after eight sittings means there is genuinely nothing
+     left to come back for.
 
-     The floor is there so a win cannot make the night trivially short: a
-     child who clears the rung in four exchanges plays out ten, and whatever
-     they pick up past the rung is theirs. The cap stays as the backstop. */
-  /* 22 and 16: the floor is arm A's own night length, so the split is not
-     reading two different-sized sittings, and the cap is two turns of slack
-     above it for the child who has not got there yet. Simulated against the
-     real engine with a pre-A1 error model, that finishes the cafe in eight
-     sittings and wins the rung on about 85% of nights. */
-  const MASTERY_TURNS = 22;
-  const MASTERY_FLOOR = 16;
+     The rung - one construction crossing CAN_USE - is still computed, but it
+     is a thing to SHOW them ("you can say this now") and a thing to count in
+     the numbers. It is not a pass, and it does not stop the night.
+
+     Eighteen, because the bar's night is fifteen to sixteen exchanges and the
+     two arms were being read against each other while arm B ran about a
+     third longer - which is itself a candidate cause of the completion gap.
+     Simulated against the real engine with a pre-A1 error model, eighteen
+     shows a typical learner 22%, 41%, 56%, 65%, 78%, 90%, 96%, 99% across
+     eight sittings. */
+  const MASTERY_TURNS = 18;
   function canUseIds(rec, patternIds) {
     const bar = CAN_USE_OF();
     const pats = (rec && rec.patterns) || {};
@@ -1531,9 +1528,13 @@ window.ENGINE = (function () {
      ones they already had. */
   function masteryBegin(state, quest) {
     const rec = state.mastery || (state.mastery = window.MASTERY.blank());
-    state.goalHad = canUseIds(rec, (quest.groups || []).map(g => g.id));
+    const pats = (quest.groups || []).map(g => g.id);
+    state.goalHad = canUseIds(rec, pats);
     state.goalBase = state.goalHad.length;
     state.goalRungs = 1;
+    /* where they walked in, so the end screen can say what tonight added
+       rather than only where they now stand */
+    state.masteryAtStart = window.MASTERY.levelMastery(rec, pats, reachableWords(quest));
     return state;
   }
   /* Which constructions crossed into CAN_USE tonight - the thing to put on
@@ -1569,21 +1570,23 @@ window.ENGINE = (function () {
     state.goalWonAt = state.exchanges || 0;
     return true;
   }
-  /* The night's verdict, and the only one arm B should be read on. The
-     cumulative mastery number is still what carries to tomorrow; it is not
-     what tonight was asked for. */
-  function masteryPassed(state, quest) {
+  /* There is no pass. A night in arm B is a length of practice and a number
+     that moved, and `masteryPassed` is gone on purpose: a false in that
+     field is what put "nobody has ever passed it" on a slide about an arm
+     that was never built to be passed. What a sitting is worth is
+     `masteryGained` - did the number move at all - and the rung count. */
+  function masteryGained(state, quest) {
     const M = window.MASTERY;
     const rec = (state && state.mastery) || M.blank();
-    if (M.scenarioMastered(rec, (quest.groups || []).map(g => g.id), reachableWords(quest))) return true;
-    return masteryGoalMet(state, quest);
+    const pats = (quest.groups || []).map(g => g.id);
+    if (M.scenarioMastered(rec, pats, reachableWords(quest))) return true;
+    return M.levelMastery(rec, pats, reachableWords(quest)) > (state.masteryAtStart || 0);
   }
   function masteryDone(state, quest) {
     const M = window.MASTERY;
     const rec = state.mastery || M.blank();
     const patternIds = (quest.groups || []).map(g => g.id);
     if (M.scenarioMastered(rec, patternIds, reachableWords(quest))) return 'mastered';
-    if (masteryGoalMet(state, quest) && (state.exchanges || 0) >= MASTERY_FLOOR) return 'goal';
     /* EXCHANGES, not applies. `rec.turn` is Max's retrieval clock and counts
        every scored event, a wrong answer included - so a night measured by it
        got SHORTER the more mistakes the child made. A pre-A1 learner was
@@ -1607,7 +1610,7 @@ window.ENGINE = (function () {
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     masteryTurn, masteryApply, masteryHeard, masteryDone, MASTERY_TURNS, reachableWords,
-    masteryBegin, masteryGoalMet, masteryPassed, masteryWon, canUseCount, MASTERY_FLOOR,
+    masteryBegin, masteryGoalMet, masteryGained, masteryWon, canUseCount,
     masteryPlayable, masteryReport,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,

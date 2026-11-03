@@ -1833,19 +1833,17 @@ Return JSON only.`,
       pl: 'Masz {0}%. Wróć jutro i podnieś wynik.',
       ro: 'Ești la {0}%. Mai vino mâine și urcă mai sus.',
     },
-    /* The ordinary win: one construction taken to "can use". Named, because
-       a child remembers the sentence and not the percentage. */
-    'again-won-title': {
-      en: 'You can say it now', es: 'Ya sabes decirlo', pt: 'J\u00e1 sabes dizer',
-      tr: 'Art\u0131k s\u00f6yleyebilirsin', pl: 'Ju\u017c to umiesz', ro: 'Acum \u0219tii s\u0103 o spui',
-    },
+    /* The same come-back-tomorrow ending, with the number made concrete: one
+       construction crossed into "can use" tonight, and it is named. Not a
+       pass - the title above it does not change - just the percentage said
+       in words a thirteen-year-old can hold on to. */
     'again-won-sub': {
-      en: '\u201c{0}\u201d is yours. Come back tomorrow for the next one.',
-      es: '\u201c{0}\u201d ya es tuyo. Vuelve ma\u00f1ana a por el siguiente.',
-      pt: '\u201c{0}\u201d j\u00e1 \u00e9 teu. Volta amanh\u00e3 para o pr\u00f3ximo.',
-      tr: '\u201c{0}\u201d art\u0131k senin. Yar\u0131n gel, s\u0131rada yenisi var.',
-      pl: '\u201c{0}\u201d ju\u017c masz. Wr\u00f3\u0107 jutro po nast\u0119pne.',
-      ro: '\u201c{0}\u201d e al t\u0103u. Mai vino m\u00e2ine pentru urm\u0103toarea.',
+      en: 'You can say \u201c{0}\u201d now. You\u2019re at {1}%. Come back tomorrow and push it higher.',
+      es: 'Ya sabes decir \u201c{0}\u201d. Vas por el {1}%. Vuelve ma\u00f1ana y s\u00fabelo m\u00e1s.',
+      pt: 'J\u00e1 sabes dizer \u201c{0}\u201d. Est\u00e1s nos {1}%. Volta amanh\u00e3 e sobe mais.',
+      tr: 'Art\u0131k \u201c{0}\u201d diyebilirsin. %{1} seviyesindesin. Yar\u0131n gel ve daha yukar\u0131 \u00e7\u0131kar.',
+      pl: 'Umiesz ju\u017c powiedzie\u0107 \u201c{0}\u201d. Masz {1}%. Wr\u00f3\u0107 jutro i podnie\u015b wynik.',
+      ro: 'Acum \u0219tii s\u0103 spui \u201c{0}\u201d. E\u0219ti la {1}%. Mai vino m\u00e2ine \u0219i urc\u0103 mai sus.',
     },
     'again-done-title': {
       en: 'You finished it', es: 'Lo has terminado', pt: 'Terminaste',
