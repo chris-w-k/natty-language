@@ -3302,7 +3302,13 @@
     const score = overall();
     const mark = E.passMark(Q);
     if (MASTERY_ARM) saveMastery();
-    const ok = score >= mark;
+    /* Arm A passes a night by clearing the night's own mark. Arm B used to
+       be read against the SCENARIO bar - a number seven sittings away - so
+       it failed every night by construction, and the split was comparing a
+       per-session verdict with a per-scenario one. Arm B now answers the
+       same question arm A does: did this sitting do what it set out to? */
+    const won = MASTERY_ARM ? E.masteryWon(state, Q) : [];
+    const ok = MASTERY_ARM ? E.masteryPassed(state, Q) : score >= mark;
     const rows = MASTERY_ARM ? E.masteryReport(state, Q) : E.report(state, Q);
     const left = rows.filter(r => r.verdict !== 'stuck');
 
@@ -3321,6 +3327,13 @@
       introducedPatterns: Object.values(state.mastery.patterns || {}).filter(p => p.introduced).length,
       sessionIndex: state.mastery.sessionIndex,
       finishedScenario: reason === 'mastered',
+      /* The night's own budget, reported so the split can be read without
+         guessing which build it ran on: what was asked, what was won, and
+         where the child stands on the staircase. */
+      goalRungs: state.goalRungs || 1,
+      rungsWon: won.length,
+      canUse: E.canUseCount(state.mastery, (Q.groups || []).map(g => g.id)),
+      constructions: (Q.groups || []).length,
     } : {}));
     AN('NovaPals.Quest.End', { mastery: Math.round(score * 100), passed: ok });
 
@@ -3329,9 +3342,17 @@
        ending rather than being squeezed into a pass mark it has no use for. */
     if (MASTERY_ARM) {
       const done = reason === 'mastered';
-      $('end-msg').textContent = t(done ? 'again-done-title' : 'again-title');
+      /* Three endings now, not two. Finishing the scenario is the big one;
+         winning the night's construction is the ordinary one and the one a
+         child will see most, so it gets the sentence that names what they
+         can now say. Running out of turns without it keeps the old
+         come-back-tomorrow line, which is what it honestly is. */
+      const wonPair = won.length ? Q.pairFor(won[won.length - 1], {}) : null;
+      $('end-msg').textContent = t(done ? 'again-done-title' : ok ? 'again-won-title' : 'again-title');
       $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
-      $('end-sub').textContent = done ? t('again-done-sub') : t('again-sub', Math.round(score * 100));
+      $('end-sub').textContent = done ? t('again-done-sub')
+        : ok && wonPair ? t('again-won-sub', wonPair.allTarget)
+        : t('again-sub', Math.round(score * 100));
     } else {
       $('end-msg').textContent = t(ok ? 'end-passed-title' : 'end-short-title');
       $('end-score').textContent = t('mastery-display-string', Math.round(score * 100));
@@ -4019,6 +4040,10 @@
       state.mastery = carried
         ? M.nextSession(Object.assign(M.blank(), carried))
         : M.blank();
+      /* Tonight's goal is set HERE, against what the child walks in with -
+         after the carry, before the first turn. Set it earlier and a
+         returning child is credited with rungs they won last night. */
+      E.masteryBegin(state, Q);
       /* Said once, and only to somebody who actually left something behind.
          A child whose storage was wiped is a new learner and is not greeted
          as a returning one. */
@@ -4083,14 +4108,19 @@
     if (btn.disabled) return;
     btn.disabled = true;
     V.stop();
-    const score = Math.round(E.overall(state, Q) * 100);
+    /* `E.overall` is arm A's ratchet over the fixed ladder; in arm B it
+       reads a syllabus that is not being walked. The local `overall` is the
+       arm-aware one, and the verdict has to be arm-aware too or the button
+       reports a failure the end screen just called a win. */
+    const score = Math.round(overall() * 100);
+    const ok = MASTERY_ARM ? E.masteryPassed(state, Q) : score >= Math.round(E.passMark(Q) * 100);
     AN('NovaPals.Activity.Finished', {
-      mastery: score, passed: score >= Math.round(E.passMark(Q) * 100),
+      mastery: score, passed: ok,
       turns: state.turn, go: state.go, attempt: B.endSends + 1,
     });
     B.finish({
       mastery: score,
-      passed: score >= Math.round(E.passMark(Q) * 100),
+      passed: ok,
       turns: state.turn,
       go: state.go,
       native: Q.nativeLang,

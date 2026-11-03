@@ -10,7 +10,7 @@ stripped down version."*
 This is the specification `public/mastery.js` is built to. Where the code and
 this document disagree, this document is right and the code is a bug.
 
-**Where we knowingly differ.** Four places, and each one is a consequence of
+**Where we knowingly differ.** Five places, and each one is a consequence of
 our input method rather than a disagreement with his model.
 
 1. **Turn order.** Arm B now runs HIS order — tutor → user → character. The
@@ -38,6 +38,17 @@ our input method rather than a disagreement with his model.
 4. **The scenario's vocabulary.** The café teaches 24 of the pack's words
    rather than all 39 reachable ones. The rest are kept for the scenario
    after it. His list is intact; it is not all taught at once.
+5. **What ends a sitting, and what a sitting is worth.** His session runs 15
+   to 20 blocks and the only stated success is the scenario bar — every
+   construction and every word at 0.85. In a product that bar is eight
+   sittings away, so a sitting measured against it can only ever report
+   failure, and the live split proved it: 100% of arm B sessions closed on
+   the turn cap, at about a quarter mastery, and no child had ever passed.
+   A sitting therefore carries its own goal — take ONE construction to
+   CAN_USE, the staircase's own unit — and ends when that is won, with a
+   floor of 16 turns (arm A's night length, so the arms are the same size)
+   and a cap of 22. His scenario bar is untouched and still ends a sitting
+   early when it is reached; it is simply no longer the only way to succeed.
 
 His §10 prompt shapes are his; our actor lines are rendered from patterns
 rather than generated, which already satisfies most of what his tutor prompt

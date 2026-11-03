@@ -1833,6 +1833,20 @@ Return JSON only.`,
       pl: 'Masz {0}%. Wróć jutro i podnieś wynik.',
       ro: 'Ești la {0}%. Mai vino mâine și urcă mai sus.',
     },
+    /* The ordinary win: one construction taken to "can use". Named, because
+       a child remembers the sentence and not the percentage. */
+    'again-won-title': {
+      en: 'You can say it now', es: 'Ya sabes decirlo', pt: 'J\u00e1 sabes dizer',
+      tr: 'Art\u0131k s\u00f6yleyebilirsin', pl: 'Ju\u017c to umiesz', ro: 'Acum \u0219tii s\u0103 o spui',
+    },
+    'again-won-sub': {
+      en: '\u201c{0}\u201d is yours. Come back tomorrow for the next one.',
+      es: '\u201c{0}\u201d ya es tuyo. Vuelve ma\u00f1ana a por el siguiente.',
+      pt: '\u201c{0}\u201d j\u00e1 \u00e9 teu. Volta amanh\u00e3 para o pr\u00f3ximo.',
+      tr: '\u201c{0}\u201d art\u0131k senin. Yar\u0131n gel, s\u0131rada yenisi var.',
+      pl: '\u201c{0}\u201d ju\u017c masz. Wr\u00f3\u0107 jutro po nast\u0119pne.',
+      ro: '\u201c{0}\u201d e al t\u0103u. Mai vino m\u00e2ine pentru urm\u0103toarea.',
+    },
     'again-done-title': {
       en: 'You finished it', es: 'Lo has terminado', pt: 'Terminaste',
       tr: 'Bitirdin', pl: 'Skończone', ro: 'Ai terminat',

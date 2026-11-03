@@ -1493,15 +1493,97 @@ window.ENGINE = (function () {
     return out.moved;
   }
 
-  /* When a night ends. Max runs 15 to 20 blocks; the scenario being finished
-     ends it early, which is the point of a mastery session and the thing a
-     fixed ladder could never do. */
-  const MASTERY_TURNS = 20;
+  /* ---------- what a night is FOR ----------
+     A night used to end on a clock and nothing else. The scenario bar is
+     0.85 across every construction and every word, which the simulation puts
+     at seven sittings - so a twenty-turn night measured against it could
+     only ever report failure, and the live data agreed: every arm B session
+     closed on the cap, at about a quarter mastery, and not one child had
+     ever passed. That is not an adaptive ladder losing to a fixed one; it is
+     a session with no reachable end.
+
+     So the night gets a goal it can actually reach, and it is the staircase's
+     own unit: take ONE construction to CAN_USE. That is the rung the engine
+     was already climbing, and at the current rates it costs about six correct
+     pattern turns - comfortably inside the budget, even badly. The scenario
+     bar stays exactly where it is and still ends the night early when it is
+     met; it is simply no longer the only way to succeed.
+
+     The floor is there so a win cannot make the night trivially short: a
+     child who clears the rung in four exchanges plays out ten, and whatever
+     they pick up past the rung is theirs. The cap stays as the backstop. */
+  /* 22 and 16: the floor is arm A's own night length, so the split is not
+     reading two different-sized sittings, and the cap is two turns of slack
+     above it for the child who has not got there yet. Simulated against the
+     real engine with a pre-A1 error model, that finishes the cafe in eight
+     sittings and wins the rung on about 85% of nights. */
+  const MASTERY_TURNS = 22;
+  const MASTERY_FLOOR = 16;
+  function canUseIds(rec, patternIds) {
+    const bar = CAN_USE_OF();
+    const pats = (rec && rec.patterns) || {};
+    return (patternIds || []).filter(id => ((pats[id] || {}).mastery || 0) >= bar);
+  }
+  function canUseCount(rec, patternIds) { return canUseIds(rec, patternIds).length; }
+  /* Called once, after yesterday's record is carried in and before the first
+     turn: the goal is relative to where the child STARTS tonight, so a
+     returning child is asked for a new rung rather than credited with the
+     ones they already had. */
+  function masteryBegin(state, quest) {
+    const rec = state.mastery || (state.mastery = window.MASTERY.blank());
+    state.goalHad = canUseIds(rec, (quest.groups || []).map(g => g.id));
+    state.goalBase = state.goalHad.length;
+    state.goalRungs = 1;
+    return state;
+  }
+  /* Which constructions crossed into CAN_USE tonight - the thing to put on
+     the end screen, because "you can say this now" is the win, and a
+     cumulative percentage is not. */
+  function masteryWon(state, quest) {
+    if (!state || !state.goalHad) return [];
+    const had = state.goalHad;
+    const now = canUseIds(state.mastery, (quest.groups || []).map(g => g.id))
+      .filter(id => had.indexOf(id) < 0);
+    /* whatever was won after the latch counts too, so a second rung in one
+       night is not thrown away */
+    for (const id of state.goalWonIds || []) if (now.indexOf(id) < 0) now.push(id);
+    return now;
+  }
+  /* LATCHED, deliberately. Mastery can fall as well as rise, so a child who
+     took the rung at turn twelve and then slipped on it at turn eighteen
+     would otherwise be told they had failed the night - punished for
+     carrying on practising. They did it; it counts. */
+  function masteryGoalMet(state, quest) {
+    if (!state) return false;
+    /* Lazily, for any caller that did not open the session through
+       `masteryBegin` - a harness, a replay. At turn zero it is the same
+       baseline; later it is at least an honest one, rather than a night
+       that can silently never be won. */
+    if (state.goalBase === undefined) masteryBegin(state, quest);
+    if (state.goalWonIds) return true;
+    const patternIds = (quest.groups || []).map(g => g.id);
+    const now = canUseIds(state.mastery, patternIds);
+    if (now.length < state.goalBase + (state.goalRungs || 1)) return false;
+    const had = state.goalHad || [];
+    state.goalWonIds = now.filter(id => had.indexOf(id) < 0);
+    state.goalWonAt = state.exchanges || 0;
+    return true;
+  }
+  /* The night's verdict, and the only one arm B should be read on. The
+     cumulative mastery number is still what carries to tomorrow; it is not
+     what tonight was asked for. */
+  function masteryPassed(state, quest) {
+    const M = window.MASTERY;
+    const rec = (state && state.mastery) || M.blank();
+    if (M.scenarioMastered(rec, (quest.groups || []).map(g => g.id), reachableWords(quest))) return true;
+    return masteryGoalMet(state, quest);
+  }
   function masteryDone(state, quest) {
     const M = window.MASTERY;
     const rec = state.mastery || M.blank();
     const patternIds = (quest.groups || []).map(g => g.id);
     if (M.scenarioMastered(rec, patternIds, reachableWords(quest))) return 'mastered';
+    if (masteryGoalMet(state, quest) && (state.exchanges || 0) >= MASTERY_FLOOR) return 'goal';
     /* EXCHANGES, not applies. `rec.turn` is Max's retrieval clock and counts
        every scored event, a wrong answer included - so a night measured by it
        got SHORTER the more mistakes the child made. A pre-A1 learner was
@@ -1525,6 +1607,7 @@ window.ENGINE = (function () {
     syllabus: stages, stepsIn, advance, stageDone, slotsAtStep, frameAtStep,
     seen, applyCorrect, applyWrong, mercyDue, applyMercy, track, isOpener,
     masteryTurn, masteryApply, masteryHeard, masteryDone, MASTERY_TURNS, reachableWords,
+    masteryBegin, masteryGoalMet, masteryPassed, masteryWon, canUseCount, MASTERY_FLOOR,
     masteryPlayable, masteryReport,
     overall, sessionComplete, mastered, progress, phase, ratio, recOf,
     passMark, keepMark, passed, replay, switchVenue, report, allSteps, stepKey, weakest,
